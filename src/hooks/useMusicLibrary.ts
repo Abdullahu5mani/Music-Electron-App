@@ -1,0 +1,81 @@
+import { useState, useMemo } from 'react'
+import type { MusicFile } from '../../electron/musicScanner'
+import { sortMusicFiles, type SortOption } from '../utils/sortMusicFiles'
+
+interface UseMusicLibraryReturn {
+  musicFiles: MusicFile[]
+  sortedMusicFiles: MusicFile[]
+  loading: boolean
+  error: string | null
+  selectedFolder: string | null
+  sortBy: SortOption
+  setSortBy: (sortBy: SortOption) => void
+  handleSelectFolder: () => Promise<void>
+  scanFolder: (folderPath: string) => Promise<void>
+}
+
+/**
+ * Custom hook for managing music library
+ */
+export function useMusicLibrary(): UseMusicLibraryReturn {
+  const [musicFiles, setMusicFiles] = useState<MusicFile[]>([])
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [selectedFolder, setSelectedFolder] = useState<string | null>(null)
+  const [sortBy, setSortBy] = useState<SortOption>('title')
+
+  // Sort music files based on selected sort option
+  const sortedMusicFiles = useMemo(() => {
+    return sortMusicFiles(musicFiles, sortBy)
+  }, [musicFiles, sortBy])
+
+  const handleSelectFolder = async () => {
+    try {
+      setLoading(true)
+      setError(null)
+      const folderPath = await window.electronAPI.selectMusicFolder()
+      
+      if (folderPath) {
+        setSelectedFolder(folderPath)
+        await scanFolder(folderPath)
+      }
+    } catch (err) {
+      setError('Failed to select folder')
+      console.error('Error selecting folder:', err)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const scanFolder = async (folderPath: string) => {
+    try {
+      setLoading(true)
+      setError(null)
+      const files = await window.electronAPI.scanMusicFolder(folderPath)
+      // Add dateAdded timestamp to each file
+      const filesWithDate = files.map(file => ({
+        ...file,
+        dateAdded: Date.now(), // Use current timestamp for all files scanned together
+      }))
+      setMusicFiles(filesWithDate)
+    } catch (err) {
+      setError('Failed to scan music folder')
+      console.error('Error scanning folder:', err)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return {
+    musicFiles,
+    sortedMusicFiles,
+    loading,
+    error,
+    selectedFolder,
+    sortBy,
+    setSortBy,
+    handleSelectFolder,
+    scanFolder,
+  }
+}
+

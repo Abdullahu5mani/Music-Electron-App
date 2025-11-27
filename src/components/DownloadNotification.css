@@ -1,0 +1,103 @@
+.download-notification {
+  position: fixed;
+  top: 140px;
+  right: 1rem;
+  z-index: 10000;
+  min-width: 320px;
+  max-width: 400px;
+  background: linear-gradient(135deg, #1a1a1a 0%, #2a2a2a 100%);
+  border: 1px solid rgba(255, 107, 157, 0.3);
+  border-radius: 12px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+  padding: 1rem;
+  opacity: 0;
+  transform: translateX(400px);
+  transition: opacity 0.3s ease, transform 0.3s ease;
+  pointer-events: none;
+}
+
+.download-notification.visible {
+  opacity: 1;
+  transform: translateX(0);
+  pointer-events: all;
+}
+
+.notification-content {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.notification-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.notification-icon {
+  font-size: 1.25rem;
+  flex-shrink: 0;
+}
+
+.notification-title {
+  flex: 1;
+  color: white;
+  font-weight: 600;
+  font-size: 0.875rem;
+  line-height: 1.4;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.notification-close {
+  background: transparent;
+  border: none;
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 1.5rem;
+  cursor: pointer;
+  padding: 0;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: color 0.2s;
+}
+
+.notification-close:hover {
+  color: white;
+}
+
+.notification-progress {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.notification-progress-bar {
+  flex: 1;
+  height: 6px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.notification-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #ff6b9d 0%, #c44569 100%);
+  border-radius: 3px;
+  transition: width 0.3s ease;
+}
+
+.notification-progress-text {
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 0.75rem;
+  font-weight: 600;
+  min-width: 35px;
+  text-align: right;
+}
+

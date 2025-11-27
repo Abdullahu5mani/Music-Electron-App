@@ -1,0 +1,93 @@
+.title-bar {
+  height: 32px;
+  background: #94b3c8;
+  display: flex;
+  align-items: center;
+  user-select: none;
+  -webkit-app-region: drag;
+  box-shadow: 0 2px 8px rgba(148, 179, 200, 0.3);
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  width: 100%;
+  z-index: 10000;
+}
+
+.title-bar-content {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 0.5rem;
+  -webkit-app-region: drag;
+}
+
+.title-bar-title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: white;
+  font-weight: 600;
+  font-size: 0.875rem;
+  -webkit-app-region: drag;
+}
+
+.title-icon {
+  width: 18px;
+  height: 18px;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+
+.title-bar-controls {
+  display: flex;
+  gap: 0;
+  -webkit-app-region: no-drag;
+}
+
+.title-bar-button {
+  width: 32px;
+  height: 32px;
+  border: none;
+  background: transparent;
+  color: white;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.25rem;
+  font-weight: 300;
+  transition: background-color 0.2s;
+  padding: 0;
+  margin: 0;
+}
+
+.title-bar-button:hover {
+  background-color: rgba(255, 255, 255, 0.1);
+}
+
+.title-bar-button:active {
+  background-color: rgba(255, 255, 255, 0.2);
+}
+
+.close-button:hover {
+  background-color: rgba(255, 0, 0, 0.5);
+}
+
+.close-button:active {
+  background-color: rgba(255, 0, 0, 0.7);
+}
+
+/* Windows-specific styling */
+@media (prefers-color-scheme: dark) {
+  .title-bar {
+    height: 30px;
+  }
+  
+  .title-bar-button {
+    width: 30px;
+    height: 30px;
+  }
+}
+
