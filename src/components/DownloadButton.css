@@ -1,10 +1,6 @@
 .download-button-container {
-  position: fixed !important;
-  top: 40px;
-  right: 1rem;
+  position: relative;
   z-index: 9999;
-  /* Ensure it stays fixed even when scrolling */
-  transform: none !important;
 }
 
 .download-button {

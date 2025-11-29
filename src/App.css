@@ -1,114 +1,169 @@
+/* CSS Variables for consistent height management */
+:root {
+  --playback-bar-height-mobile: 120px; /* Approximate: 60px art + 24px padding + 36px content */
+  --playback-bar-height-desktop: 150px; /* Approximate: 80px art + 32px padding + 38px content */
+  --title-bar-height: 32px;
+}
+
 #root {
   width: 100%;
+  height: 100vh;
   margin: 0;
   padding: 0;
   box-sizing: border-box;
-  height: 100vh;
   overflow: hidden;
-}
-
-@media (min-width: 768px) {
-  #root {
-    padding: 2rem;
-    padding-top: calc(32px + 2rem); /* Space for title bar + padding */
-  }
 }
 
 .app-container {
   width: 100%;
-  position: relative;
-  margin-top: 0;
   height: 100vh;
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  position: relative;
 }
 
-.app-scroll-container {
-  flex: 1;
-  overflow: hidden;
-  height: 100%;
-}
-
-.app-scroll-container .os-viewport {
-  padding: 1rem;
-  padding-top: calc(32px + 1rem); /* Space for title bar + padding */
-  padding-bottom: 120px; /* Space for playback bar */
-}
-
-@media (min-width: 768px) {
-  .app-scroll-container .os-viewport {
-    padding: 2rem;
-    padding-top: calc(32px + 2rem); /* Space for title bar + padding */
-  }
-}
-
-.app-container h1 {
-  text-align: center;
-  margin-bottom: 1rem;
-  font-size: 1.5rem;
-}
-
-@media (min-width: 768px) {
-  .app-container h1 {
-    margin-bottom: 2rem;
-    font-size: 2rem;
-  }
-}
-
-.controls {
+.app-content {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: 1rem;
-  margin-bottom: 2rem;
+  overflow: hidden;
+  /* Top: title bar height + padding */
+  padding-top: calc(var(--title-bar-height) + 0.75rem);
+  /* Sides */
+  padding-left: 0.75rem;
+  padding-right: 0.75rem;
+  /* Bottom: playback bar height + 5px extra padding */
+  padding-bottom: calc(var(--playback-bar-height-mobile) + 5px);
+  /* Fill remaining space */
+  flex: 1;
+  min-height: 0;
+  /* Ensure content never exceeds available space */
+  max-height: calc(100vh - var(--title-bar-height) - var(--playback-bar-height-mobile) - 5px);
 }
 
-.controls button {
-  padding: 0.75rem 1.5rem;
-  font-size: 1rem;
+@media (min-width: 768px) {
+  .app-content {
+    padding-top: calc(var(--title-bar-height) + 1rem);
+    padding-left: 1rem;
+    padding-right: 1rem;
+    /* Use desktop playback bar height + 5px extra padding */
+    padding-bottom: calc(var(--playback-bar-height-desktop) + 5px);
+    max-height: calc(100vh - var(--title-bar-height) - var(--playback-bar-height-desktop) - 5px);
+  }
+}
+
+.app-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+  gap: 1rem;
+}
+
+.app-header h1 {
+  margin: 0;
+  font-size: 1.5rem;
+  flex: 1;
+}
+
+@media (min-width: 768px) {
+  .app-header h1 {
+    font-size: 1.75rem;
+  }
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.folder-select-button {
+  padding: 0.5rem 1rem;
+  font-size: 0.875rem;
   background-color: #646cff;
   color: white;
   border: none;
   border-radius: 8px;
   cursor: pointer;
   transition: background-color 0.3s;
+  white-space: nowrap;
 }
 
-.controls button:hover:not(:disabled) {
+.folder-select-button:hover:not(:disabled) {
   background-color: #535bf2;
 }
 
-.controls button:disabled {
+.folder-select-button:disabled {
   background-color: #888;
   cursor: not-allowed;
 }
 
+.main-content {
+  flex: 1;
+  min-height: 0; /* Critical for flex child to shrink */
+  /* Ensure main-content never exceeds parent's available space */
+  max-height: 100%;
+  display: flex;
+  gap: 1rem;
+  overflow: hidden;
+}
+
+.music-list-container {
+  flex: 1;
+  min-height: 0; /* Critical for flex child to shrink */
+  min-width: 0; /* Prevent flex item from overflowing */
+  display: flex;
+  flex-direction: column;
+  background-color: #1a1a1a;
+  border: 1px solid #333;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.music-list-scroll {
+  flex: 1;
+  min-height: 0; /* Critical for flex child to shrink */
+  overflow: hidden;
+}
+
+.music-list-scroll .os-viewport {
+  padding: 1rem;
+}
+
 .folder-path {
-  font-size: 0.9rem;
-  color: #666;
+  font-size: 0.85rem;
+  color: #888;
   word-break: break-all;
-  text-align: center;
+  margin-bottom: 0.75rem;
+  padding: 0.5rem;
+  background-color: #1a1a1a;
+  border-radius: 6px;
+  border: 1px solid #333;
 }
 
 .error {
   background-color: #ff4444;
   color: white;
-  padding: 1rem;
+  padding: 0.75rem;
   border-radius: 8px;
-  margin-bottom: 1rem;
+  margin-bottom: 0.75rem;
   text-align: center;
+  font-size: 0.9rem;
 }
 
 .loading {
   text-align: center;
-  padding: 1rem;
+  padding: 0.75rem;
   color: #646cff;
   font-weight: bold;
+  margin-bottom: 0.75rem;
+  font-size: 0.9rem;
 }
 
 .music-list {
-  margin-top: 2rem;
+  margin: 0;
 }
 
 .music-list-header {
@@ -259,15 +314,21 @@
   bottom: 0;
   left: 0;
   right: 0;
+  height: var(--playback-bar-height-mobile); /* Explicit height */
+  min-height: var(--playback-bar-height-mobile); /* Never shrink below this */
   background-color: #1a1a1a;
   border-top: 1px solid #333;
   padding: 0.75rem;
   z-index: 1000;
   box-shadow: 0 -4px 8px rgba(0, 0, 0, 0.3);
+  box-sizing: border-box; /* Include padding in height */
+  overflow: hidden; /* Prevent content overflow */
 }
 
 @media (min-width: 768px) {
   .playback-bar {
+    height: var(--playback-bar-height-desktop);
+    min-height: var(--playback-bar-height-desktop);
     padding: 1rem;
   }
 }
@@ -314,12 +375,11 @@
 }
 
 .playback-art-placeholder {
-  font-size: 1.5rem;
   width: 100%;
   height: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  object-fit: contain;
+  padding: 0.5rem;
+  opacity: 0.6;
 }
 
 .playback-info {
@@ -507,8 +567,21 @@
   opacity: 0.8;
 }
 
-.control-button:active {
+.control-button:active:not(:disabled) {
   transform: scale(0.95);
+}
+
+.control-button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.control-button:disabled:hover::before {
+  opacity: 0;
+}
+
+.control-button:disabled:hover {
+  opacity: 0.4;
 }
 
 .play-pause-button {

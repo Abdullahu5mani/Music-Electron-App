@@ -290,6 +290,109 @@ export function useAudioPlayer(musicFiles: MusicFile[]): UseAudioPlayerReturn {
     }
   }, [togglePlayPause])
 
+  // Get current song for Media Session
+  const currentSong = playingIndex !== null ? musicFiles[playingIndex] : null
+
+  // Update Media Session metadata when song changes
+  useEffect(() => {
+    if ('mediaSession' in navigator && currentSong) {
+      const metadata: MediaMetadataInit = {
+        title: currentSong.metadata?.title || currentSong.name,
+        artist: currentSong.metadata?.artist || 'Unknown Artist',
+        album: currentSong.metadata?.album || 'Unknown Album',
+      }
+
+      // Add album art if available
+      if (currentSong.metadata?.albumArt) {
+        metadata.artwork = [
+          {
+            src: currentSong.metadata.albumArt,
+            sizes: '512x512',
+            type: currentSong.metadata.albumArt.startsWith('data:image/')
+              ? currentSong.metadata.albumArt.split(';')[0].split(':')[1]
+              : 'image/jpeg'
+          }
+        ]
+      }
+
+      navigator.mediaSession.metadata = new MediaMetadata(metadata)
+    } else if ('mediaSession' in navigator && !currentSong) {
+      // Clear metadata when no song is playing
+      navigator.mediaSession.metadata = null
+    }
+  }, [currentSong])
+
+  // Update Media Session playback state
+  useEffect(() => {
+    if ('mediaSession' in navigator) {
+      if (currentSong) {
+        navigator.mediaSession.playbackState = isPlaying ? 'playing' : 'paused'
+      } else {
+        navigator.mediaSession.playbackState = 'none'
+      }
+    }
+  }, [isPlaying, currentSong])
+
+  // Update Media Session position state (for progress bar)
+  // Update when playing or when seeking (to show paused position)
+  useEffect(() => {
+    if ('mediaSession' in navigator && currentSound && currentSong && duration > 0) {
+      try {
+        navigator.mediaSession.setPositionState({
+          duration: duration,
+          playbackRate: isPlaying ? 1.0 : 0.0,
+          position: currentTime
+        })
+      } catch (error) {
+        // Some browsers may not support setPositionState
+        // Ignore errors silently
+      }
+    }
+  }, [currentTime, duration, currentSound, currentSong, isPlaying])
+
+  // Set up Media Session action handlers
+  useEffect(() => {
+    if ('mediaSession' in navigator) {
+      // Play action
+      navigator.mediaSession.setActionHandler('play', () => {
+        togglePlayPause()
+      })
+
+      // Pause action
+      navigator.mediaSession.setActionHandler('pause', () => {
+        togglePlayPause()
+      })
+
+      // Previous track action
+      navigator.mediaSession.setActionHandler('previoustrack', () => {
+        playPrevious()
+      })
+
+      // Next track action
+      navigator.mediaSession.setActionHandler('nexttrack', () => {
+        playNext()
+      })
+
+      // Seek to action (for seeking via media controls)
+      navigator.mediaSession.setActionHandler('seekto', (details) => {
+        if (details.seekTime !== undefined && currentSound) {
+          seek(details.seekTime)
+        }
+      })
+
+      // Cleanup: remove handlers when component unmounts or when handlers change
+      return () => {
+        if ('mediaSession' in navigator) {
+          navigator.mediaSession.setActionHandler('play', null)
+          navigator.mediaSession.setActionHandler('pause', null)
+          navigator.mediaSession.setActionHandler('previoustrack', null)
+          navigator.mediaSession.setActionHandler('nexttrack', null)
+          navigator.mediaSession.setActionHandler('seekto', null)
+        }
+      }
+    }
+  }, [togglePlayPause, playPrevious, playNext, seek, currentSound])
+
   return {
     currentSound,
     playingIndex,

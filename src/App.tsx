@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { OverlayScrollbarsComponent } from 'overlayscrollbars-react'
 import { useMusicLibrary } from './hooks/useMusicLibrary'
 import { useAudioPlayer } from './hooks/useAudioPlayer'
@@ -8,11 +8,34 @@ import { TitleBar } from './components/TitleBar'
 import { DownloadButton } from './components/DownloadButton'
 import { DownloadNotification } from './components/DownloadNotification'
 import { NotificationToast } from './components/NotificationToast'
+import { Sidebar } from './components/Sidebar'
+import type { MusicFile } from '../electron/musicScanner'
 import './App.css'
 
 function App() {
   const { sortedMusicFiles, loading, error, selectedFolder, handleSelectFolder, scanFolder, sortBy, setSortBy } = useMusicLibrary()
-  const { playingIndex, playSong, togglePlayPause, playNext, playPrevious, isPlaying, currentTime, duration, seek, volume, setVolume } = useAudioPlayer(sortedMusicFiles)
+  const [selectedView, setSelectedView] = useState<string>('all')
+  
+  // Filter music files based on selected view
+  const filteredMusicFiles = useMemo(() => {
+    if (selectedView === 'all') {
+      return sortedMusicFiles
+    }
+    
+    if (selectedView.startsWith('artist:')) {
+      const artist = selectedView.replace('artist:', '')
+      return sortedMusicFiles.filter(file => file.metadata?.artist === artist)
+    }
+    
+    if (selectedView.startsWith('album:')) {
+      const album = selectedView.replace('album:', '')
+      return sortedMusicFiles.filter(file => file.metadata?.album === album)
+    }
+    
+    return sortedMusicFiles
+  }, [sortedMusicFiles, selectedView])
+  
+  const { playingIndex, playSong, togglePlayPause, playNext, playPrevious, isPlaying, currentTime, duration, seek, volume, setVolume } = useAudioPlayer(filteredMusicFiles)
   const [isDownloading, setIsDownloading] = useState(false)
   const [downloadProgress, setDownloadProgress] = useState(0)
   const [binaryDownloadStatus, setBinaryDownloadStatus] = useState<string>('')
@@ -104,61 +127,76 @@ function App() {
   return (
     <div className="app-container">
       <TitleBar />
-      <DownloadButton 
-        onDownload={handleDownload}
-        isDownloading={isDownloading}
-        progress={downloadProgress}
-        binaryStatus={binaryDownloadStatus}
-        binaryProgress={binaryDownloadProgress}
-      />
-      <OverlayScrollbarsComponent
-        options={{
-          scrollbars: {
-            theme: 'os-theme-dark',
-            autoHide: 'move',
-            autoHideDelay: 800,
-          },
-        }}
-        className="app-scroll-container"
-      >
-        <h1>Music Sync App</h1>
-        
-        <div className="controls">
-          <button onClick={handleSelectFolder} disabled={loading}>
-            {loading ? 'Scanning...' : 'Select Music Folder'}
-          </button>
-          {selectedFolder && (
-            <p className="folder-path">Folder: {selectedFolder}</p>
-          )}
+      <div className="app-content">
+        <div className="app-header">
+          <h1>Music Sync App</h1>
+          <div className="header-actions">
+            <button 
+              className="folder-select-button"
+              onClick={handleSelectFolder} 
+              disabled={loading}
+            >
+              {loading ? 'Scanning...' : 'Select Music Folder'}
+            </button>
+            <DownloadButton 
+              onDownload={handleDownload}
+              isDownloading={isDownloading}
+              progress={downloadProgress}
+              binaryStatus={binaryDownloadStatus}
+              binaryProgress={binaryDownloadProgress}
+            />
+          </div>
         </div>
+        
+        {selectedFolder && (
+          <p className="folder-path">Folder: {selectedFolder}</p>
+        )}
 
         {error && <div className="error">{error}</div>}
 
         {loading && <div className="loading">Scanning music files...</div>}
 
-        <SongList 
-          songs={sortedMusicFiles} 
-          onSongClick={playSong} 
-          playingIndex={playingIndex}
-          sortBy={sortBy}
-          onSortChange={setSortBy}
-        />
-      </OverlayScrollbarsComponent>
+        <div className="main-content">
+          <Sidebar 
+            selectedView={selectedView}
+            onViewChange={setSelectedView}
+            musicFiles={sortedMusicFiles}
+          />
+          <div className="music-list-container">
+            <OverlayScrollbarsComponent
+              options={{
+                scrollbars: {
+                  theme: 'os-theme-dark',
+                  autoHide: 'move',
+                  autoHideDelay: 800,
+                },
+              }}
+              className="music-list-scroll"
+            >
+              <SongList 
+                songs={filteredMusicFiles} 
+                onSongClick={playSong} 
+                playingIndex={playingIndex}
+                sortBy={sortBy}
+                onSortChange={setSortBy}
+              />
+            </OverlayScrollbarsComponent>
+          </div>
+        </div>
+      </div>
 
-      {playingIndex !== null && sortedMusicFiles[playingIndex] && (
-        <PlaybackBar
-          currentSong={sortedMusicFiles[playingIndex]}
-          isPlaying={isPlaying}
-          onPlayPause={togglePlayPause}
-          onNext={playNext}
-          onPrevious={playPrevious}
-          currentTime={currentTime}
-          duration={duration}
-          onSeek={seek}
-          volume={volume}
-          onVolumeChange={setVolume}
-        />
-      )}
+      <PlaybackBar
+        currentSong={playingIndex !== null && filteredMusicFiles[playingIndex] ? filteredMusicFiles[playingIndex] : null}
+        isPlaying={isPlaying}
+        onPlayPause={togglePlayPause}
+        onNext={playNext}
+        onPrevious={playPrevious}
+        currentTime={currentTime}
+        duration={duration}
+        onSeek={seek}
+        volume={volume}
+        onVolumeChange={setVolume}
+      />
 
       <DownloadNotification
         title={downloadTitle}

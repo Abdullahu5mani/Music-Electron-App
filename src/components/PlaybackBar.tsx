@@ -7,9 +7,10 @@ import pauseButtonIcon from '../assets/pauseButton.svg'
 import backwardButtonIcon from '../assets/backwardButton.svg'
 import forwardButtonIcon from '../assets/forwardButton.svg'
 import volumeControlIcon from '../assets/volumeControl.svg'
+import trayIcon from '../assets/trayIcon.svg'
 
 interface PlaybackBarProps {
-  currentSong: MusicFile
+  currentSong: MusicFile | null
   isPlaying: boolean
   onPlayPause: () => void
   onNext: () => void
@@ -76,22 +77,29 @@ export function PlaybackBar({
     <div className="playback-bar">
       <div className="playback-content">
         <div className="playback-album-art">
-          {currentSong.metadata?.albumArt ? (
+          {currentSong?.metadata?.albumArt ? (
             <img 
               src={currentSong.metadata.albumArt} 
               alt="Album cover"
               className="playback-art"
             />
           ) : (
-            <div className="playback-art-placeholder">🎵</div>
+            <img 
+              src={trayIcon} 
+              alt="No song playing"
+              className="playback-art-placeholder"
+            />
           )}
         </div>
         <div className="playback-info">
           <div className="playback-title">
-            {currentSong.metadata?.title || currentSong.name}
+            {currentSong ? (currentSong.metadata?.title || currentSong.name) : 'No song selected'}
           </div>
           <div className="playback-artist">
-            {currentSong.metadata?.artist || 'Unknown Artist'}
+            {currentSong ? (currentSong.metadata?.artist || 'Unknown Artist') : 'Select a song to play'}
+            {currentSong?.metadata?.album && (
+              <span className="playback-album"> • {currentSong.metadata.album}</span>
+            )}
           </div>
           <div className="seek-bar-container">
             <div className="seek-bar-wrapper">
@@ -102,6 +110,7 @@ export function PlaybackBar({
                 onChange={handleSeekChange}
                 onAfterChange={handleSeekAfterChange}
                 className="seek-bar-slider"
+                disabled={!currentSong}
                 trackStyle={{ backgroundColor: '#646cff', height: 8 }}
                 handleStyle={{
                   borderColor: '#646cff',
@@ -127,6 +136,7 @@ export function PlaybackBar({
               e.stopPropagation()
               onPrevious()
             }}
+            disabled={!currentSong}
             aria-label="Previous"
           >
             <img src={backwardButtonIcon} alt="Previous" className="control-icon" />
@@ -137,6 +147,7 @@ export function PlaybackBar({
               e.stopPropagation()
               onPlayPause()
             }}
+            disabled={!currentSong}
             aria-label={isPlaying ? 'Pause' : 'Play'}
           >
             {isPlaying ? (
@@ -151,6 +162,7 @@ export function PlaybackBar({
               e.stopPropagation()
               onNext()
             }}
+            disabled={!currentSong}
             aria-label="Next"
           >
             <img src={forwardButtonIcon} alt="Next" className="control-icon" />
