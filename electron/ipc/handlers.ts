@@ -2,6 +2,9 @@ import { ipcMain, BrowserWindow, dialog } from 'electron'
 import { scanMusicFiles } from '../musicScanner'
 import { downloadYouTubeAudio } from '../youtubeDownloader'
 import { updatePlaybackState, updateWindowVisibility } from '../tray'
+import { getStoredSettings, saveSettings as saveStoredSettings } from '../settings'
+import { getAllBinaryStatuses } from '../binaryManager'
+import fs from 'fs'
 
 /**
  * Registers all IPC handlers for communication between main and renderer processes
@@ -92,6 +95,74 @@ export function registerIpcHandlers() {
         success: false,
         error: error instanceof Error ? error.message : 'Unknown error',
       }
+    }
+  })
+
+  // Handle get settings
+  ipcMain.handle('get-settings', async () => {
+    try {
+      return getStoredSettings()
+    } catch (error) {
+      console.error('Error getting settings:', error)
+      return {
+        musicFolderPath: null,
+        downloadFolderPath: null,
+      }
+    }
+  })
+
+  // Handle save settings
+  ipcMain.handle('save-settings', async (_event, settings: { musicFolderPath: string | null; downloadFolderPath: string | null }) => {
+    try {
+      saveStoredSettings(settings)
+      return { success: true }
+    } catch (error) {
+      console.error('Error saving settings:', error)
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      }
+    }
+  })
+
+  // Handle download folder selection dialog
+  ipcMain.handle('select-download-folder', async () => {
+    const result = await dialog.showOpenDialog({
+      properties: ['openDirectory'],
+      title: 'Select Download Folder',
+    })
+    if (!result.canceled && result.filePaths.length > 0) {
+      return result.filePaths[0]
+    }
+    return null
+  })
+
+  // Handle get binary statuses
+  ipcMain.handle('get-binary-statuses', async () => {
+    try {
+      return await getAllBinaryStatuses()
+    } catch (error) {
+      console.error('Error getting binary statuses:', error)
+      return []
+    }
+  })
+
+  // Handle get platform info
+  ipcMain.handle('get-platform-info', async () => {
+    return {
+      platform: process.platform,
+      arch: process.arch,
+    }
+  })
+
+  // Handle read file as buffer (for fingerprint generation)
+  ipcMain.handle('read-file-buffer', async (_event, filePath: string) => {
+    try {
+      const buffer = fs.readFileSync(filePath)
+      return Array.from(buffer) // Convert Buffer to array for IPC transfer
+    } catch (error) {
+      console.error('Error reading file:', error)
+      throw error
     }
   })
 }

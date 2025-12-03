@@ -9,6 +9,7 @@ import { DownloadButton } from './components/DownloadButton'
 import { DownloadNotification } from './components/DownloadNotification'
 import { NotificationToast } from './components/NotificationToast'
 import { Sidebar } from './components/Sidebar'
+import { Settings } from './components/Settings'
 import type { MusicFile } from '../electron/musicScanner'
 import './App.css'
 
@@ -35,7 +36,8 @@ function App() {
     return sortedMusicFiles
   }, [sortedMusicFiles, selectedView])
   
-  const { playingIndex, playSong, togglePlayPause, playNext, playPrevious, isPlaying, currentTime, duration, seek, volume, setVolume } = useAudioPlayer(filteredMusicFiles)
+  // Use full library for audio player (not filtered) so playback continues when switching views
+  const { playingIndex, playSong, togglePlayPause, playNext, playPrevious, isPlaying, currentTime, duration, seek, volume, setVolume } = useAudioPlayer(sortedMusicFiles)
   const [isDownloading, setIsDownloading] = useState(false)
   const [downloadProgress, setDownloadProgress] = useState(0)
   const [binaryDownloadStatus, setBinaryDownloadStatus] = useState<string>('')
@@ -45,6 +47,8 @@ function App() {
   const [toastMessage, setToastMessage] = useState<string>('')
   const [toastType, setToastType] = useState<'success' | 'error' | 'warning' | 'info'>('info')
   const [showToast, setShowToast] = useState(false)
+  const [showSettings, setShowSettings] = useState(false)
+  const [downloadFolder, setDownloadFolder] = useState<string | null>(null)
 
   // Listen for download progress updates
   useEffect(() => {
@@ -85,9 +89,45 @@ function App() {
     setShowToast(true)
   }
 
+  // Load settings on mount
+  useEffect(() => {
+    const loadSettings = async () => {
+      try {
+        const settings = await window.electronAPI?.getSettings()
+        if (settings) {
+          setDownloadFolder(settings.downloadFolderPath)
+          // If music folder is set in settings, use it
+          if (settings.musicFolderPath && !selectedFolder) {
+            await scanFolder(settings.musicFolderPath)
+          }
+        }
+      } catch (error) {
+        console.error('Failed to load settings:', error)
+      }
+    }
+    loadSettings()
+  }, [])
+
+  const handleSettingsChange = async () => {
+    // Reload settings after save
+    try {
+      const settings = await window.electronAPI?.getSettings()
+      if (settings) {
+        setDownloadFolder(settings.downloadFolderPath)
+        // If music folder changed, rescan
+        if (settings.musicFolderPath && settings.musicFolderPath !== selectedFolder) {
+          await scanFolder(settings.musicFolderPath)
+        }
+      }
+    } catch (error) {
+      console.error('Failed to reload settings:', error)
+    }
+  }
+
   const handleDownload = async (url: string) => {
-    if (!selectedFolder) {
-      showToastNotification('Please select a music folder first', 'warning')
+    const targetFolder = downloadFolder || selectedFolder
+    if (!targetFolder) {
+      showToastNotification('Please set a download folder in settings', 'warning')
       return
     }
 
@@ -99,16 +139,18 @@ function App() {
     setDownloadTitle('Loading title...')
 
     try {
-      const result = await window.electronAPI?.downloadYouTube?.(url, selectedFolder)
+      const result = await window.electronAPI?.downloadYouTube?.(url, targetFolder)
       
       if (result?.success) {
         console.log('Download completed:', result.filePath)
-        // Refresh the music library to include the new file
-        await scanFolder(selectedFolder)
+        // Refresh the music library if music folder is set
+        if (selectedFolder) {
+          await scanFolder(selectedFolder)
+        }
         showToastNotification('Download completed!', 'success')
-      } else {
+    } else {
         showToastNotification(`Download failed: ${result?.error || 'Unknown error'}`, 'error')
-      }
+    }
     } catch (error) {
       console.error('Download error:', error)
       showToastNotification(`Download error: ${error}`, 'error')
@@ -129,14 +171,22 @@ function App() {
       <TitleBar />
       <div className="app-content">
         <div className="app-header">
-          <h1>Music Sync App</h1>
+      <h1>Music Sync App</h1>
           <div className="header-actions">
             <button 
               className="folder-select-button"
               onClick={handleSelectFolder} 
               disabled={loading}
             >
-              {loading ? 'Scanning...' : 'Select Music Folder'}
+          {loading ? 'Scanning...' : 'Select Music Folder'}
+        </button>
+            <button
+              className="settings-button"
+              onClick={() => setShowSettings(true)}
+              aria-label="Settings"
+              title="Settings"
+            >
+              ⚙️
             </button>
             <DownloadButton 
               onDownload={handleDownload}
@@ -146,15 +196,11 @@ function App() {
               binaryProgress={binaryDownloadProgress}
             />
           </div>
-        </div>
-        
-        {selectedFolder && (
-          <p className="folder-path">Folder: {selectedFolder}</p>
-        )}
+      </div>
 
-        {error && <div className="error">{error}</div>}
+      {error && <div className="error">{error}</div>}
 
-        {loading && <div className="loading">Scanning music files...</div>}
+      {loading && <div className="loading">Scanning music files...</div>}
 
         <div className="main-content">
           <Sidebar 
@@ -175,8 +221,14 @@ function App() {
             >
               <SongList 
                 songs={filteredMusicFiles} 
-                onSongClick={playSong} 
-                playingIndex={playingIndex}
+                onSongClick={(file, index) => {
+                  // Find the actual index in the full library
+                  const actualIndex = sortedMusicFiles.findIndex(f => f.path === file.path)
+                  if (actualIndex !== -1) {
+                    playSong(file, actualIndex)
+                  }
+                }}
+                playingIndex={playingIndex !== null ? filteredMusicFiles.findIndex(f => f.path === sortedMusicFiles[playingIndex]?.path) : null}
                 sortBy={sortBy}
                 onSortChange={setSortBy}
               />
@@ -186,7 +238,7 @@ function App() {
       </div>
 
       <PlaybackBar
-        currentSong={playingIndex !== null && filteredMusicFiles[playingIndex] ? filteredMusicFiles[playingIndex] : null}
+        currentSong={playingIndex !== null && sortedMusicFiles[playingIndex] ? sortedMusicFiles[playingIndex] : null}
         isPlaying={isPlaying}
         onPlayPause={togglePlayPause}
         onNext={playNext}
@@ -209,6 +261,12 @@ function App() {
         type={toastType}
         isVisible={showToast}
         onClose={() => setShowToast(false)}
+      />
+
+      <Settings
+        isOpen={showSettings}
+        onClose={() => setShowSettings(false)}
+        onSettingsChange={handleSettingsChange}
       />
     </div>
   )

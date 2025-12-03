@@ -3,15 +3,201 @@ import path from 'path'
 import fs from 'fs'
 import { app } from 'electron'
 import https from 'https'
+import { execFile } from 'child_process'
+import { promisify } from 'util'
+
+const execFileAsync = promisify(execFile)
 
 let ytDlpWrap: YTDlpWrap | null = null
 let lastDownloadTime: number = 0
 const DOWNLOAD_DELAY_MS = 10000 // 10 seconds
 
 export interface BinaryDownloadProgress {
-  status: 'checking' | 'not-found' | 'downloading' | 'downloaded' | 'installed'
+  status: 'checking' | 'not-found' | 'downloading' | 'downloaded' | 'installed' | 'updating' | 'version-check'
   message: string
   percentage?: number
+}
+
+/**
+ * Gets the version of the installed yt-dlp binary
+ */
+async function getInstalledVersion(binaryPath: string): Promise<string | null> {
+  try {
+    const { stdout } = await execFileAsync(binaryPath, ['--version'])
+    return stdout.trim()
+  } catch (error) {
+    console.error('Failed to get installed version:', error)
+    return null
+  }
+}
+
+/**
+ * Gets the latest version from GitHub releases
+ */
+async function getLatestVersion(): Promise<string | null> {
+  try {
+    return new Promise((resolve, reject) => {
+      https.get('https://api.github.com/repos/yt-dlp/yt-dlp/releases/latest', {
+        headers: { 'User-Agent': 'music-sync-app' }
+      }, (res) => {
+        let data = ''
+        res.on('data', (chunk) => { data += chunk })
+        res.on('end', () => {
+          try {
+            const release = JSON.parse(data)
+            // Version is usually in tag_name (e.g., "2024.01.01")
+            resolve(release.tag_name || null)
+          } catch (e) {
+            reject(e)
+          }
+        })
+      }).on('error', reject)
+    })
+  } catch (error) {
+    console.error('Failed to get latest version:', error)
+    return null
+  }
+}
+
+/**
+ * Checks if the installed binary is up to date
+ */
+async function checkBinaryVersion(
+  binaryPath: string,
+  onProgress?: (progress: BinaryDownloadProgress) => void
+): Promise<{ isUpToDate: boolean; installedVersion?: string; latestVersion?: string; needsUpdate: boolean }> {
+  onProgress?.({
+    status: 'version-check',
+    message: 'Checking yt-dlp version...'
+  })
+  
+  const [installedVersion, latestVersion] = await Promise.all([
+    getInstalledVersion(binaryPath),
+    getLatestVersion()
+  ])
+  
+  if (!installedVersion || !latestVersion) {
+    return { isUpToDate: false, needsUpdate: false }
+  }
+  
+  // Compare versions (simple string comparison works for yt-dlp's date-based versions)
+  const isUpToDate = installedVersion === latestVersion
+  
+  return {
+    isUpToDate,
+    installedVersion,
+    latestVersion,
+    needsUpdate: !isUpToDate
+  }
+}
+
+/**
+ * Determines the correct asset name based on platform and architecture
+ */
+function getAssetNameForPlatform(): string | null {
+  const platform = process.platform
+  const arch = process.arch
+
+  if (platform === 'win32') {
+    // Windows: yt-dlp.exe (x64) or yt-dlp_win_arm64.exe (arm64)
+    if (arch === 'arm64') {
+      return 'yt-dlp_win_arm64.exe'
+    } else {
+      // x64 or ia32 (32-bit) - default to x64
+      return 'yt-dlp.exe'
+    }
+  } else if (platform === 'darwin') {
+    // macOS: yt-dlp_macos (x64) or yt-dlp_macos_arm64 (arm64)
+    if (arch === 'arm64') {
+      return 'yt-dlp_macos_arm64'
+    } else {
+      // x64 (Intel Mac)
+      return 'yt-dlp_macos'
+    }
+  } else if (platform === 'linux') {
+    // Linux: yt-dlp_linux (x64) or yt-dlp_linux_arm64 (arm64)
+    if (arch === 'arm64') {
+      return 'yt-dlp_linux_arm64'
+    } else {
+      return 'yt-dlp_linux'
+    }
+  }
+
+  return null
+}
+
+/**
+ * Finds the correct asset from GitHub release assets
+ */
+function findAssetForPlatform(assets: any[]): any | null {
+  const targetAssetName = getAssetNameForPlatform()
+  
+  if (!targetAssetName) {
+    console.error(`Unsupported platform: ${process.platform} ${process.arch}`)
+    return null
+  }
+
+  // First, try exact match
+  let asset = assets.find((a: any) => a.name === targetAssetName)
+  
+  if (asset) {
+    return asset
+  }
+
+  // Fallback: try partial match (in case naming changes)
+  const platform = process.platform
+  const arch = process.arch
+
+  if (platform === 'win32') {
+    if (arch === 'arm64') {
+      // Look for Windows ARM64
+      asset = assets.find((a: any) => 
+        a.name.includes('yt-dlp') && 
+        a.name.includes('win') && 
+        (a.name.includes('arm64') || a.name.includes('arm'))
+      )
+    } else {
+      // Look for Windows x64 (default .exe)
+      asset = assets.find((a: any) => 
+        a.name === 'yt-dlp.exe' || 
+        (a.name.includes('yt-dlp') && a.name.includes('.exe') && !a.name.includes('arm'))
+      )
+    }
+  } else if (platform === 'darwin') {
+    if (arch === 'arm64') {
+      // Look for macOS ARM64 (Apple Silicon)
+      asset = assets.find((a: any) => 
+        a.name.includes('yt-dlp') && 
+        a.name.includes('macos') && 
+        (a.name.includes('arm64') || a.name.includes('arm') || a.name.includes('m1') || a.name.includes('m2'))
+      )
+    } else {
+      // Look for macOS x64 (Intel)
+      asset = assets.find((a: any) => 
+        a.name.includes('yt-dlp') && 
+        a.name.includes('macos') && 
+        !a.name.includes('arm') && 
+        !a.name.includes('.exe')
+      )
+    }
+  } else if (platform === 'linux') {
+    if (arch === 'arm64') {
+      asset = assets.find((a: any) => 
+        a.name.includes('yt-dlp') && 
+        a.name.includes('linux') && 
+        (a.name.includes('arm64') || a.name.includes('arm'))
+      )
+    } else {
+      asset = assets.find((a: any) => 
+        a.name.includes('yt-dlp') && 
+        a.name.includes('linux') && 
+        !a.name.includes('arm') && 
+        !a.name.includes('.exe')
+      )
+    }
+  }
+
+  return asset || null
 }
 
 /**
@@ -43,17 +229,20 @@ async function downloadBinaryWithProgress(
 
     getLatestRelease()
       .then(async (release) => {
-        // Find the right asset for Windows
-        const asset = release.assets.find((a: any) => 
-          process.platform === 'win32' 
-            ? a.name.includes('yt-dlp.exe')
-            : a.name.includes('yt-dlp') && !a.name.includes('.exe')
-        )
+        // Find the correct asset based on platform and architecture
+        const asset = findAssetForPlatform(release.assets)
 
         if (!asset) {
-          reject(new Error('Binary not found in release'))
+          const platform = process.platform
+          const arch = process.arch
+          const availableAssets = release.assets.map((a: any) => a.name).join(', ')
+          console.error(`Binary not found for platform: ${platform} (${arch})`)
+          console.error(`Available assets: ${availableAssets}`)
+          reject(new Error(`Binary not found for platform: ${platform} (${arch}). Available assets: ${availableAssets}`))
           return
         }
+
+        console.log(`Downloading yt-dlp binary: ${asset.name} for ${process.platform} (${process.arch})`)
 
         onProgress?.({
           status: 'downloading',
@@ -113,6 +302,7 @@ async function downloadBinaryWithProgress(
 
 /**
  * Gets or initializes the yt-dlp-wrap instance
+ * Checks version and updates if needed
  */
 async function getYtDlpWrap(
   onBinaryProgress?: (progress: BinaryDownloadProgress) => void
@@ -126,11 +316,19 @@ async function getYtDlpWrap(
       fs.mkdirSync(binaryDir, { recursive: true })
     }
     
-    // Determine binary filename based on platform
-    const binaryName = process.platform === 'win32' ? 'yt-dlp.exe' : 'yt-dlp'
+    // Determine binary filename based on platform and architecture
+    let binaryName: string
+    if (process.platform === 'win32') {
+      binaryName = process.arch === 'arm64' ? 'yt-dlp_win_arm64.exe' : 'yt-dlp.exe'
+    } else if (process.platform === 'darwin') {
+      binaryName = process.arch === 'arm64' ? 'yt-dlp_macos_arm64' : 'yt-dlp_macos'
+    } else {
+      // Linux
+      binaryName = process.arch === 'arm64' ? 'yt-dlp_linux_arm64' : 'yt-dlp_linux'
+    }
     const binaryPath = path.join(binaryDir, binaryName)
     
-    // Check if binary exists, if not, download it
+    // Check if binary exists
     if (!fs.existsSync(binaryPath)) {
       onBinaryProgress?.({
         status: 'not-found',
@@ -163,6 +361,50 @@ async function getYtDlpWrap(
       } catch (error) {
         console.error('Failed to download yt-dlp binary:', error)
         throw new Error('Failed to download yt-dlp binary. Please check your internet connection.')
+      }
+    } else {
+      // Binary exists, check if it's up to date
+      const versionCheck = await checkBinaryVersion(binaryPath, onBinaryProgress)
+      
+      if (versionCheck.needsUpdate && versionCheck.installedVersion && versionCheck.latestVersion) {
+        onBinaryProgress?.({
+          status: 'updating',
+          message: `Updating yt-dlp from ${versionCheck.installedVersion} to ${versionCheck.latestVersion}...`,
+          percentage: 0
+        })
+        
+        try {
+          // Download latest version (overwrites existing)
+          await downloadBinaryWithProgress(binaryPath, onBinaryProgress)
+          
+          onBinaryProgress?.({
+            status: 'downloaded',
+            message: `yt-dlp updated to ${versionCheck.latestVersion}`,
+            percentage: 100
+          })
+          
+          // Small delay to show the message
+          await new Promise(resolve => setTimeout(resolve, 500))
+          
+          onBinaryProgress?.({
+            status: 'installed',
+            message: 'yt-dlp binary updated'
+          })
+        } catch (error) {
+          console.error('Failed to update yt-dlp binary:', error)
+          // Continue with existing binary if update fails
+          onBinaryProgress?.({
+            status: 'checking',
+            message: 'Update failed, using existing version'
+          })
+        }
+      } else if (versionCheck.isUpToDate && versionCheck.installedVersion) {
+        onBinaryProgress?.({
+          status: 'checking',
+          message: `yt-dlp is up to date (${versionCheck.installedVersion}). Starting download...`
+        })
+        // Small delay to show the message
+        await new Promise(resolve => setTimeout(resolve, 500))
       }
     }
     
@@ -213,6 +455,10 @@ export async function downloadYouTubeAudio(
 ): Promise<{ success: boolean; filePath?: string; error?: string; title?: string }> {
   return new Promise(async (resolve) => {
     try {
+      // First, ensure we have the latest binary version
+      // This will check version and update if needed
+      const ytDlp = await getYtDlpWrap(options.onBinaryProgress)
+      
       // Check if we need to wait before downloading
       const now = Date.now()
       const timeSinceLastDownload = now - lastDownloadTime
@@ -225,8 +471,6 @@ export async function downloadYouTubeAudio(
         })
         await new Promise(resolve => setTimeout(resolve, waitTime))
       }
-      
-      const ytDlp = await getYtDlpWrap(options.onBinaryProgress)
       
       // Update last download time
       lastDownloadTime = Date.now()

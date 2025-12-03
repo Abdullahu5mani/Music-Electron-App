@@ -72,3 +72,11 @@ export function Sidebar({ selectedView, onViewChange, musicFiles }: SidebarProps
   )
 }
 
+
+
+
+
+
+
+
+

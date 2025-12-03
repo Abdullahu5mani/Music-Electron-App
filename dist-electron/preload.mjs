@@ -3,6 +3,13 @@ const electron = require("electron");
 electron.contextBridge.exposeInMainWorld("electronAPI", {
   scanMusicFolder: (folderPath) => electron.ipcRenderer.invoke("scan-music-folder", folderPath),
   selectMusicFolder: () => electron.ipcRenderer.invoke("select-music-folder"),
+  // Settings methods
+  getSettings: () => electron.ipcRenderer.invoke("get-settings"),
+  saveSettings: (settings) => electron.ipcRenderer.invoke("save-settings", settings),
+  selectDownloadFolder: () => electron.ipcRenderer.invoke("select-download-folder"),
+  getBinaryStatuses: () => electron.ipcRenderer.invoke("get-binary-statuses"),
+  getPlatformInfo: () => electron.ipcRenderer.invoke("get-platform-info"),
+  readFileBuffer: (filePath) => electron.ipcRenderer.invoke("read-file-buffer", filePath),
   // Listen for tray play/pause commands
   onTrayPlayPause: (callback) => {
     const handler = () => callback();

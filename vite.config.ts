@@ -25,5 +25,40 @@ export default defineConfig({
         ? undefined
         : {},
     }),
+    // Plugin to handle WASM MIME types
+    {
+      name: 'configure-response-headers',
+      configureServer(server) {
+        server.middlewares.use((req, res, next) => {
+          if (req.url?.endsWith('.wasm')) {
+            res.setHeader('Content-Type', 'application/wasm')
+          }
+          next()
+        })
+      },
+    },
   ],
+  server: {
+    fs: {
+      // Allow serving files from node_modules for WASM files
+      allow: ['..'],
+    },
+  },
+  optimizeDeps: {
+    // Exclude WASM from optimization
+    exclude: ['@unimusic/chromaprint'],
+  },
+  build: {
+    rollupOptions: {
+      output: {
+        // Ensure WASM files are handled correctly
+        assetFileNames: (assetInfo) => {
+          if (assetInfo.name?.endsWith('.wasm')) {
+            return 'assets/[name][extname]'
+          }
+          return 'assets/[name]-[hash][extname]'
+        },
+      },
+    },
+  },
 })

@@ -1,5 +1,8 @@
+import { useState } from 'react'
 import type { MusicFile } from '../../electron/musicScanner'
 import type { SortOption } from '../utils/sortMusicFiles'
+import { generateFingerprint } from '../utils/fingerprintGenerator'
+import { lookupFingerprint } from '../utils/acoustidClient'
 
 interface SongListProps {
   songs: MusicFile[]
@@ -13,6 +16,65 @@ interface SongListProps {
  * Component for displaying the list of songs
  */
 export function SongList({ songs, onSongClick, playingIndex, sortBy, onSortChange }: SongListProps) {
+  const [generatingFingerprint, setGeneratingFingerprint] = useState<string | null>(null)
+
+  const handleGenerateFingerprint = async (e: React.MouseEvent, file: MusicFile) => {
+    e.stopPropagation() // Prevent song click
+    
+    if (generatingFingerprint === file.path) {
+      return // Already generating
+    }
+
+    setGeneratingFingerprint(file.path)
+    console.log('=== Generating Fingerprint ===')
+    console.log('File:', file.name)
+    console.log('Path:', file.path)
+    
+    try {
+      // Step 1: Generate fingerprint
+      const fingerprint = await generateFingerprint(file.path)
+      
+      if (!fingerprint) {
+        console.error('Failed to generate fingerprint')
+        return
+      }
+      
+      console.log('=== Fingerprint Generated ===')
+      console.log('Fingerprint ID:', fingerprint)
+      console.log('Length:', fingerprint.length)
+      console.log('============================')
+      
+      // Step 2: Get audio duration (needed for AcoustID lookup)
+      const duration = file.metadata?.duration || 0
+      
+      if (duration === 0) {
+        console.warn('Duration not available, AcoustID lookup may be less accurate')
+      }
+      
+      // Step 3: Query AcoustID API
+      const acoustidResponse = await lookupFingerprint(fingerprint, duration)
+      
+      if (acoustidResponse && acoustidResponse.results && acoustidResponse.results.length > 0) {
+        const topResult = acoustidResponse.results[0]
+        if (topResult.recordings && topResult.recordings.length > 0) {
+          console.log('\n=== MusicBrainz IDs Found ===')
+          topResult.recordings.forEach((recording, index) => {
+            console.log(`${index + 1}. MBID: ${recording.id}`)
+            console.log(`   Title: ${recording.title || 'N/A'}`)
+            console.log(`   Artists: ${recording.artists?.map(a => a.name).join(', ') || 'N/A'}`)
+          })
+          console.log('=============================')
+        }
+      } else {
+        console.log('No MusicBrainz IDs found for this fingerprint')
+      }
+    } catch (error) {
+      console.error('Error generating fingerprint:', error)
+    } finally {
+      setGeneratingFingerprint(null)
+    }
+  }
+
   if (songs.length === 0) {
     return (
       <div className="music-list">
@@ -63,8 +125,18 @@ export function SongList({ songs, onSongClick, playingIndex, sortBy, onSortChang
                 </div>
               )}
               <div className="song-info">
-                <div className="song-title">
-                  {file.metadata?.title || file.name}
+                <div className="song-title-row">
+                  <div className="song-title">
+                    {file.metadata?.title || file.name}
+                  </div>
+                  <button
+                    className="fingerprint-button"
+                    onClick={(e) => handleGenerateFingerprint(e, file)}
+                    disabled={generatingFingerprint === file.path}
+                    title="Generate fingerprint (check console)"
+                  >
+                    {generatingFingerprint === file.path ? '⏳' : '🔍'}
+                  </button>
                 </div>
                 <div className="song-artist">
                   {file.metadata?.artist || 'Unknown Artist'}

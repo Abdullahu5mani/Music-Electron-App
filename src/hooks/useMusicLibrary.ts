@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import type { MusicFile } from '../../electron/musicScanner'
 import { sortMusicFiles, type SortOption } from '../utils/sortMusicFiles'
 
@@ -28,6 +28,22 @@ export function useMusicLibrary(): UseMusicLibraryReturn {
   const sortedMusicFiles = useMemo(() => {
     return sortMusicFiles(musicFiles, sortBy)
   }, [musicFiles, sortBy])
+
+  // Load saved music folder on mount
+  useEffect(() => {
+    const loadSavedFolder = async () => {
+      try {
+        const settings = await window.electronAPI?.getSettings()
+        if (settings?.musicFolderPath && !selectedFolder) {
+          setSelectedFolder(settings.musicFolderPath)
+          await scanFolder(settings.musicFolderPath)
+        }
+      } catch (error) {
+        console.error('Failed to load saved music folder:', error)
+      }
+    }
+    loadSavedFolder()
+  }, [])
 
   const handleSelectFolder = async () => {
     try {

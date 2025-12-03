@@ -7,9 +7,34 @@ export interface BinaryDownloadProgress {
   percentage?: number
 }
 
+export interface AppSettings {
+  musicFolderPath: string | null
+  downloadFolderPath: string | null
+}
+
+export interface BinaryStatus {
+  name: string
+  installed: boolean
+  version: string | null
+  path: string | null
+  latestVersion: string | null
+  needsUpdate: boolean
+}
+
+export interface PlatformInfo {
+  platform: string
+  arch: string
+}
+
 export interface ElectronAPI {
   scanMusicFolder: (folderPath: string) => Promise<MusicFile[]>
   selectMusicFolder: () => Promise<string | null>
+  getSettings: () => Promise<AppSettings>
+  saveSettings: (settings: AppSettings) => Promise<{ success: boolean; error?: string }>
+  selectDownloadFolder: () => Promise<string | null>
+  getBinaryStatuses: () => Promise<BinaryStatus[]>
+  getPlatformInfo: () => Promise<PlatformInfo>
+  readFileBuffer: (filePath: string) => Promise<number[]>
   onTrayPlayPause: (callback: () => void) => () => void
   sendPlaybackState: (isPlaying: boolean) => void
   sendWindowVisibility: (visible: boolean) => void
@@ -30,6 +55,25 @@ contextBridge.exposeInMainWorld('electronAPI', {
   
   selectMusicFolder: () => 
     ipcRenderer.invoke('select-music-folder'),
+  
+  // Settings methods
+  getSettings: () => 
+    ipcRenderer.invoke('get-settings'),
+  
+  saveSettings: (settings: AppSettings) => 
+    ipcRenderer.invoke('save-settings', settings),
+  
+  selectDownloadFolder: () => 
+    ipcRenderer.invoke('select-download-folder'),
+  
+  getBinaryStatuses: () => 
+    ipcRenderer.invoke('get-binary-statuses'),
+  
+  getPlatformInfo: () => 
+    ipcRenderer.invoke('get-platform-info'),
+  
+  readFileBuffer: (filePath: string) => 
+    ipcRenderer.invoke('read-file-buffer', filePath),
   
   // Listen for tray play/pause commands
   onTrayPlayPause: (callback: () => void) => {
