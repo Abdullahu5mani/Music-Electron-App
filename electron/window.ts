@@ -39,9 +39,13 @@ export function createWindow(): BrowserWindow {
     icon: path.join(process.env.VITE_PUBLIC, 'electron-vite.svg'),
     webPreferences: {
       preload: path.join(__dirname, 'preload.mjs'),
-      webSecurity: false, // Allow loading local files via file:// protocol for audio playback
-      allowRunningInsecureContent: true, // Allow loading local resources
-      devTools: true, // Keep dev tools enabled
+      // Security: Keep webSecurity enabled (default). Audio playback via file:// protocol
+      // works with html5 mode in Howler.js without disabling web security.
+      // webSecurity: true is the default and should not be changed
+      // allowRunningInsecureContent should never be enabled in production
+      contextIsolation: true, // Ensure context isolation is enabled (default in Electron 12+)
+      nodeIntegration: false, // Ensure Node.js integration is disabled in renderer (default)
+      devTools: process.env.NODE_ENV !== 'production', // Only enable dev tools in development
     },
   })
 

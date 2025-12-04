@@ -1,5 +1,5 @@
 import { app, BrowserWindow, Menu, globalShortcut } from 'electron'
-import { createWindow, setupWindowEvents } from './window'
+import { createWindow, setupWindowEvents, VITE_DEV_SERVER_URL } from './window'
 import { registerIpcHandlers } from './ipc/handlers'
 import { createTray, updateWindowVisibility } from './tray'
 
@@ -12,31 +12,35 @@ registerIpcHandlers()
 // Setup window event handlers
 setupWindowEvents()
 
-// Register keyboard shortcut for dev tools (F12)
-app.whenReady().then(() => {
-  globalShortcut.register('F12', () => {
-    const windows = BrowserWindow.getAllWindows()
-    windows.forEach(win => {
-      if (win.webContents.isDevToolsOpened()) {
-        win.webContents.closeDevTools()
-      } else {
-        win.webContents.openDevTools()
-      }
+// Only register dev tools shortcuts in development mode
+// Security: Prevent users from accessing dev tools in production builds
+if (VITE_DEV_SERVER_URL) {
+  app.whenReady().then(() => {
+    // Register keyboard shortcut for dev tools (F12)
+    globalShortcut.register('F12', () => {
+      const windows = BrowserWindow.getAllWindows()
+      windows.forEach(win => {
+        if (win.webContents.isDevToolsOpened()) {
+          win.webContents.closeDevTools()
+        } else {
+          win.webContents.openDevTools()
+        }
+      })
+    })
+    
+    // Also register Ctrl+Shift+I (Windows/Linux) and Cmd+Option+I (Mac)
+    globalShortcut.register('CommandOrControl+Shift+I', () => {
+      const windows = BrowserWindow.getAllWindows()
+      windows.forEach(win => {
+        if (win.webContents.isDevToolsOpened()) {
+          win.webContents.closeDevTools()
+        } else {
+          win.webContents.openDevTools()
+        }
+      })
     })
   })
-  
-  // Also register Ctrl+Shift+I (Windows/Linux) and Cmd+Option+I (Mac)
-  globalShortcut.register('CommandOrControl+Shift+I', () => {
-    const windows = BrowserWindow.getAllWindows()
-    windows.forEach(win => {
-      if (win.webContents.isDevToolsOpened()) {
-        win.webContents.closeDevTools()
-  } else {
-        win.webContents.openDevTools()
-      }
-    })
-  })
-})
+}
 
 // Unregister shortcuts when app quits
 app.on('will-quit', () => {
