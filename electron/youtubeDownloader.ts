@@ -460,17 +460,20 @@ function isValidVideoUrl(url: string): boolean {
     const parsedUrl = new URL(url)
     const hostname = parsedUrl.hostname.toLowerCase()
     
-    // List of allowed hostnames for video downloads
-    const allowedHosts = [
+    // List of allowed hostnames for video downloads - exact matches only
+    const allowedHosts = new Set([
       'youtube.com',
       'www.youtube.com',
       'm.youtube.com',
       'youtu.be',
+      'www.youtu.be',
       'music.youtube.com',
       'www.youtube-nocookie.com',
-    ]
+      'youtube-nocookie.com',
+    ])
     
-    return allowedHosts.some(host => hostname === host || hostname.endsWith('.' + host))
+    // Use exact match only to prevent subdomain spoofing (e.g., evilyoutube.com)
+    return allowedHosts.has(hostname)
   } catch {
     return false
   }

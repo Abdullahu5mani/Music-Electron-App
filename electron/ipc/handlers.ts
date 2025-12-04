@@ -8,7 +8,16 @@ import fs from 'fs'
 import path from 'path'
 
 /**
- * Validates that a file path is a music file and exists
+ * Validates that a file path is a music file and exists.
+ * 
+ * Security considerations:
+ * - This function validates that the path points to an actual music file
+ * - It checks file extension to prevent reading arbitrary files
+ * - While path.resolve() normalizes traversal components, additional protection
+ *   comes from validating that the file is a legitimate music file
+ * - For enhanced security, consider maintaining a list of user-selected directories
+ *   and validating that files are within those directories
+ * 
  * Returns the normalized absolute path if valid, null otherwise
  */
 function validateMusicFilePath(filePath: string): string | null {
@@ -18,6 +27,11 @@ function validateMusicFilePath(filePath: string): string | null {
   
   // Normalize the path to resolve any .. or . components
   const normalizedPath = path.resolve(filePath)
+  
+  // Security: Ensure path doesn't contain null bytes (path injection)
+  if (filePath.includes('\0') || normalizedPath.includes('\0')) {
+    return null
+  }
   
   // Check if file exists
   if (!fs.existsSync(normalizedPath)) {
@@ -44,7 +58,14 @@ function validateMusicFilePath(filePath: string): string | null {
 }
 
 /**
- * Validates that a folder path is a valid directory
+ * Validates that a folder path is a valid directory.
+ * 
+ * Security considerations:
+ * - This function validates that the path points to an existing directory
+ * - path.resolve() normalizes any traversal components (.. or .)
+ * - This is used for user-selected folders via file dialogs, providing an
+ *   additional layer of trust since users explicitly choose directories
+ * 
  * Returns the normalized absolute path if valid, null otherwise
  */
 function validateDirectoryPath(folderPath: string): string | null {
@@ -54,6 +75,11 @@ function validateDirectoryPath(folderPath: string): string | null {
   
   // Normalize the path to resolve any .. or . components
   const normalizedPath = path.resolve(folderPath)
+  
+  // Security: Ensure path doesn't contain null bytes (path injection)
+  if (folderPath.includes('\0') || normalizedPath.includes('\0')) {
+    return null
+  }
   
   // Check if directory exists
   if (!fs.existsSync(normalizedPath)) {
