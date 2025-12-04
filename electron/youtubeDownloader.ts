@@ -448,6 +448,35 @@ export interface DownloadOptions {
 }
 
 /**
+ * Validates that a URL is a supported video URL
+ * Returns true for YouTube, YouTube Music, and other yt-dlp supported sites
+ */
+function isValidVideoUrl(url: string): boolean {
+  if (!url || typeof url !== 'string') {
+    return false
+  }
+  
+  try {
+    const parsedUrl = new URL(url)
+    const hostname = parsedUrl.hostname.toLowerCase()
+    
+    // List of allowed hostnames for video downloads
+    const allowedHosts = [
+      'youtube.com',
+      'www.youtube.com',
+      'm.youtube.com',
+      'youtu.be',
+      'music.youtube.com',
+      'www.youtube-nocookie.com',
+    ]
+    
+    return allowedHosts.some(host => hostname === host || hostname.endsWith('.' + host))
+  } catch {
+    return false
+  }
+}
+
+/**
  * Downloads audio from YouTube using yt-dlp-wrap
  */
 export async function downloadYouTubeAudio(
@@ -455,6 +484,15 @@ export async function downloadYouTubeAudio(
 ): Promise<{ success: boolean; filePath?: string; error?: string; title?: string }> {
   return new Promise(async (resolve) => {
     try {
+      // Security: Validate URL before processing
+      if (!isValidVideoUrl(options.url)) {
+        resolve({
+          success: false,
+          error: 'Invalid URL: only YouTube and YouTube Music URLs are supported',
+        })
+        return
+      }
+      
       // First, ensure we have the latest binary version
       // This will check version and update if needed
       const ytDlp = await getYtDlpWrap(options.onBinaryProgress)

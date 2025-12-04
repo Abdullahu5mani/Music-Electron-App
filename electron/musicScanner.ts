@@ -2,8 +2,8 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { parseFile } from 'music-metadata'
 
-// Common music file extensions
-const MUSIC_EXTENSIONS = [
+// Common music file extensions (exported for validation in IPC handlers)
+export const MUSIC_EXTENSIONS = [
   '.mp3',
   '.flac',
   '.wav',
