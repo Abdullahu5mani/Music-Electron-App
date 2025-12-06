@@ -138,6 +138,7 @@ export function registerIpcHandlers() {
   })
 
   // Handle get binary statuses
+  // Note: FFmpeg binary management was removed. Only yt-dlp status is checked.
   ipcMain.handle('get-binary-statuses', async () => {
     try {
       return await getAllBinaryStatuses()

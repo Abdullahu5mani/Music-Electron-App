@@ -4,20 +4,8 @@ import https from 'https'
 import { app } from 'electron'
 import { execFile } from 'child_process'
 import { promisify } from 'util'
-import { createRequire } from 'module'
 
 const execFileAsync = promisify(execFile)
-
-// Create require function for ES modules compatibility
-const require = createRequire(import.meta.url)
-
-// Try to import @ffmpeg-installer/ffmpeg (may not be available in all environments)
-let ffmpegInstaller: { path: string; version: string } | null = null
-try {
-  ffmpegInstaller = require('@ffmpeg-installer/ffmpeg')
-} catch (error) {
-  console.warn('@ffmpeg-installer/ffmpeg not available:', error)
-}
 
 export interface BinaryStatus {
   name: string
@@ -29,42 +17,34 @@ export interface BinaryStatus {
 }
 
 /**
- * Gets the binary directory path for a given binary name
+ * Gets the binary directory path for yt-dlp
  */
-function getBinaryDir(binaryName: string): string {
+function getBinaryDir(): string {
   const userDataPath = app.getPath('userData')
-  return path.join(userDataPath, `${binaryName}-binaries`)
+  return path.join(userDataPath, 'yt-dlp-binaries')
 }
 
 /**
- * Gets the binary file path for a given binary name
+ * Gets the binary file path for yt-dlp
  */
-function getBinaryPath(binaryName: string): string {
-  const binaryDir = getBinaryDir(binaryName)
+function getBinaryPath(): string {
+  const binaryDir = getBinaryDir()
   let binaryFileName: string
   
-  if (binaryName === 'yt-dlp') {
-    // yt-dlp has architecture-specific names
-    if (process.platform === 'win32') {
-      binaryFileName = process.arch === 'arm64' ? 'yt-dlp_win_arm64.exe' : 'yt-dlp.exe'
-    } else if (process.platform === 'darwin') {
-      binaryFileName = process.arch === 'arm64' ? 'yt-dlp_macos_arm64' : 'yt-dlp_macos'
-    } else {
-      // Linux
-      binaryFileName = process.arch === 'arm64' ? 'yt-dlp_linux_arm64' : 'yt-dlp_linux'
-    }
+  if (process.platform === 'win32') {
+    binaryFileName = process.arch === 'arm64' ? 'yt-dlp_win_arm64.exe' : 'yt-dlp.exe'
+  } else if (process.platform === 'darwin') {
+    binaryFileName = process.arch === 'arm64' ? 'yt-dlp_macos_arm64' : 'yt-dlp_macos'
   } else {
-    // Other binaries use standard naming
-    binaryFileName = process.platform === 'win32' 
-      ? `${binaryName}.exe` 
-      : binaryName
+    // Linux
+    binaryFileName = process.arch === 'arm64' ? 'yt-dlp_linux_arm64' : 'yt-dlp_linux'
   }
   
   return path.join(binaryDir, binaryFileName)
 }
 
 /**
- * Gets the installed version of a binary
+ * Gets the installed version of yt-dlp binary
  */
 async function getInstalledVersion(binaryPath: string): Promise<string | null> {
   try {
@@ -72,13 +52,7 @@ async function getInstalledVersion(binaryPath: string): Promise<string | null> {
       return null
     }
     const { stdout } = await execFileAsync(binaryPath, ['--version'])
-    // FFmpeg outputs version in format: "ffmpeg version 4.4.2..."
-    // Extract just the version number
-    const versionMatch = stdout.match(/version\s+([^\s]+)/i)
-    if (versionMatch) {
-      return versionMatch[1]
-    }
-    return stdout.trim().split('\n')[0] || null
+    return stdout.trim() || null
   } catch (error) {
     console.error(`Failed to get installed version for ${binaryPath}:`, error)
     return null
@@ -88,10 +62,10 @@ async function getInstalledVersion(binaryPath: string): Promise<string | null> {
 /**
  * Gets the latest version from GitHub releases (for yt-dlp)
  */
-async function getLatestVersionFromGitHub(repo: string): Promise<string | null> {
+async function getLatestVersionFromGitHub(): Promise<string | null> {
   try {
     return new Promise((resolve, reject) => {
-      https.get(`https://api.github.com/repos/${repo}/releases/latest`, {
+      https.get('https://api.github.com/repos/yt-dlp/yt-dlp/releases/latest', {
         headers: { 'User-Agent': 'music-sync-app' }
       }, (res) => {
         let data = ''
@@ -107,7 +81,7 @@ async function getLatestVersionFromGitHub(repo: string): Promise<string | null> 
       }).on('error', reject)
     })
   } catch (error) {
-    console.error(`Failed to get latest version from GitHub for ${repo}:`, error)
+    console.error('Failed to get latest version from GitHub:', error)
     return null
   }
 }
@@ -116,8 +90,7 @@ async function getLatestVersionFromGitHub(repo: string): Promise<string | null> 
  * Gets the status of yt-dlp binary
  */
 export async function getYtDlpStatus(): Promise<BinaryStatus> {
-  const binaryName = 'yt-dlp'
-  const binaryPath = getBinaryPath(binaryName)
+  const binaryPath = getBinaryPath()
   const installed = fs.existsSync(binaryPath)
   
   let version: string | null = null
@@ -128,7 +101,7 @@ export async function getYtDlpStatus(): Promise<BinaryStatus> {
   }
   
   // Get latest version from GitHub
-  latestVersion = await getLatestVersionFromGitHub('yt-dlp/yt-dlp')
+  latestVersion = await getLatestVersionFromGitHub()
   
   const needsUpdate = installed && version && latestVersion && version !== latestVersion
   
@@ -143,66 +116,6 @@ export async function getYtDlpStatus(): Promise<BinaryStatus> {
 }
 
 /**
- * Gets the FFmpeg binary path from @ffmpeg-installer/ffmpeg
- * Handles Electron asar packaging
- */
-function getFfmpegPath(): string | null {
-  if (!ffmpegInstaller) {
-    return null
-  }
-  
-  let ffmpegPath = ffmpegInstaller.path
-  
-  // Handle Electron asar packaging (as mentioned in @ffmpeg-installer/ffmpeg docs)
-  if (ffmpegPath.includes('app.asar')) {
-    ffmpegPath = ffmpegPath.replace('app.asar', 'app.asar.unpacked')
-  }
-  
-  // Check if the path actually exists
-  if (fs.existsSync(ffmpegPath)) {
-    return ffmpegPath
-  }
-  
-  return null
-}
-
-/**
- * Gets the status of FFmpeg binary
- */
-export async function getFfmpegStatus(): Promise<BinaryStatus> {
-  const binaryName = 'ffmpeg'
-  const ffmpegPath = getFfmpegPath()
-  const installed = ffmpegPath !== null && fs.existsSync(ffmpegPath)
-  
-  let version: string | null = null
-  let latestVersion: string | null = null
-  
-  if (installed && ffmpegPath) {
-    // Try to get version from the installer first
-    if (ffmpegInstaller?.version) {
-      version = ffmpegInstaller.version
-    } else {
-      // Fallback: run ffmpeg --version
-      version = await getInstalledVersion(ffmpegPath)
-    }
-  }
-  
-  // FFmpeg doesn't have a simple "latest version" API like GitHub releases
-  // The @ffmpeg-installer/ffmpeg package provides a specific version
-  // We'll mark it as "up to date" if installed (since it's managed by the package)
-  latestVersion = version
-  
-  return {
-    name: 'ffmpeg',
-    installed,
-    version,
-    path: installed ? ffmpegPath : null,
-    latestVersion,
-    needsUpdate: false, // Managed by npm package, always up to date
-  }
-}
-
-/**
  * Gets status for all managed binaries
  */
 export async function getAllBinaryStatuses(): Promise<BinaryStatus[]> {
@@ -211,12 +124,5 @@ export async function getAllBinaryStatuses(): Promise<BinaryStatus[]> {
   // Add yt-dlp status
   statuses.push(await getYtDlpStatus())
   
-  // Add FFmpeg status
-  statuses.push(await getFfmpegStatus())
-  
-  // Future binaries can be added here:
-  // statuses.push(await getFpcalcStatus())
-  
   return statuses
 }
-
