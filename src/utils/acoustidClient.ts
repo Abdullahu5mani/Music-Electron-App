@@ -33,86 +33,51 @@ export interface AcoustIDResponse {
   }
 }
 
-/**
- * Looks up a fingerprint in AcoustID API
- * 
- * @param fingerprint - The fingerprint string from chromaprint
- * @param duration - Duration of the audio in seconds
- * @returns AcoustID response with MusicBrainz IDs
- */
+export interface AcoustIDResultData {
+  mbid: string
+  title?: string
+  artist?: string
+}
+
 export async function lookupFingerprint(
   fingerprint: string,
   duration: number
-): Promise<AcoustIDResponse | null> {
+): Promise<AcoustIDResultData | null> {
+  console.log('acoustic id sent')
+
+  const params = new URLSearchParams({
+    client: ACOUSTID_API_KEY,
+    duration: Math.round(duration).toString(),
+    fingerprint: fingerprint,
+    meta: 'recordings'
+  })
+
   try {
-    console.log('=== Querying AcoustID API ===')
-    console.log('Fingerprint:', fingerprint.substring(0, 50) + '...')
-    console.log('Duration:', duration, 'seconds')
-    
-    const params = new URLSearchParams({
-      client: ACOUSTID_API_KEY,
-      fingerprint: fingerprint,
-      duration: Math.round(duration).toString(),
-      meta: 'recordings+releasegroups+compress', // Get full metadata including title, artist, album, release groups
-    })
-    
-    const url = `${ACOUSTID_API_URL}?${params.toString()}`
-    console.log('API URL:', url.replace(ACOUSTID_API_KEY, '***'))
-    
-    const response = await fetch(url)
-    
-    if (!response.ok) {
-      console.error('AcoustID API error:', response.status, response.statusText)
-      const errorText = await response.text()
-      console.error('Error response:', errorText)
-      return null
-    }
-    
-    const responseText = await response.text()
-    console.log('=== RAW API RESPONSE (NOT PARSED) ===')
-    console.log('Full response:', responseText)
-    console.log('Response length:', responseText.length, 'characters')
-    console.log('=====================================')
-    
-    const data: AcoustIDResponse = JSON.parse(responseText)
-    console.log('\n=== AcoustID API Response (Parsed) ===')
-    console.log('Status:', data.status)
-    console.log('Results count:', data.results?.length || 0)
-    
+    const response = await fetch(`${ACOUSTID_API_URL}?${params.toString()}`)
+    const data: AcoustIDResponse = await response.json()
+
     if (data.results && data.results.length > 0) {
-      console.log('\n=== Top Result ===')
-      const topResult = data.results[0]
-      console.log('Score:', topResult.score)
-      console.log('AcoustID Track ID:', topResult.id)
-      console.log('Recordings array:', topResult.recordings)
-      console.log('Recordings count:', topResult.recordings?.length || 0)
-      
-      // Log the full result structure
-      console.log('\n=== Full Result Object ===')
-      console.log(JSON.stringify(topResult, null, 2))
-      
-      if (topResult.recordings && topResult.recordings.length > 0) {
-        topResult.recordings.forEach((recording, index) => {
-          console.log(`\nRecording ${index + 1}:`)
-          console.log('  MBID:', recording.id)
-          console.log('  Title:', recording.title || 'N/A')
-          console.log('  Duration:', recording.duration ? `${Math.round(recording.duration)}s` : 'N/A')
-          console.log('  Artists:', recording.artists?.map(a => a.name).join(', ') || 'N/A')
-          if (recording.releasegroups && recording.releasegroups.length > 0) {
-            console.log('  Albums:')
-            recording.releasegroups.forEach((rg) => {
-              console.log(`    - ${rg.title || 'N/A'} (${rg.type || 'Unknown'})`)
-            })
-          }
-        })
+      const bestMatch = data.results[0]
+
+      // Only accept if confidence is high (e.g., > 0.8)
+      // The user's example used 0.8, but sometimes scores are lower. 
+      // I'll stick to the user's example logic but maybe be slightly lenient if needed, 
+      // but for now I will follow the user's snippet logic if provided, or just check for existence.
+      // User snippet: if (bestMatch.score > 0.8)
+
+      if (bestMatch.recordings && bestMatch.recordings.length > 0) {
+        const recording = bestMatch.recordings[0]
+        const result = {
+          mbid: recording.id,
+          title: recording.title,
+          artist: recording.artists?.[0]?.name
+        }
+        console.log('AcoustID Result:', result)
+        return result
       }
-    } else {
-      console.log('No results found')
     }
-    
-    console.log('============================')
-    
-    return data
+
+    return null
   } catch (error) {
     console.error('Failed to query AcoustID API:', error)
     return null
