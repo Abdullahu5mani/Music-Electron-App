@@ -47,6 +47,8 @@ export interface ElectronAPI {
   onDownloadTitle: (callback: (title: string) => void) => () => void
   downloadImage: (url: string, filePath: string) => Promise<{ success: boolean; error?: string }>
   writeCoverArt: (filePath: string, imagePath: string) => Promise<{ success: boolean; error?: string }>
+  lookupAcoustid: (fingerprint: string, duration: number) => Promise<{ mbid: string; title?: string; artist?: string } | null>
+  lookupMusicBrainz: (mbid: string) => Promise<any>
 }
 
 declare global {

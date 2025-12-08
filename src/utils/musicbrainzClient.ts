@@ -1,15 +1,3 @@
-/**
- * MusicBrainz API Client
- * Fetches metadata for a given MusicBrainz Recording ID (MBID)
- */
-import { MusicBrainzApi } from 'musicbrainz-api'
-
-const mbApi = new MusicBrainzApi({
-    appName: 'Music Sync App',
-    appVersion: '1.0.0',
-    appContactInfo: 'abdullahusmanicod@gmail.com'
-})
-
 export interface MusicBrainzArtist {
     id: string
     name: string
@@ -42,19 +30,20 @@ export interface MusicBrainzRecording {
  */
 export async function lookupRecording(mbid: string): Promise<MusicBrainzRecording | null> {
     try {
-        console.log(`Fetching MusicBrainz metadata for MBID: ${mbid}`)
+        console.log(`Fetching MusicBrainz metadata for MBID: ${mbid} (via IPC)`)
 
-        // Lookup recording with artist and release info
-        const data = await mbApi.lookup('recording', mbid, ['artists', 'releases'])
+        // Call backend handler
+        const data = await window.electronAPI.lookupMusicBrainz(mbid)
 
         console.log('MusicBrainz Data:', data)
         return data as unknown as MusicBrainzRecording
 
     } catch (error) {
-        console.error('Failed to fetch from MusicBrainz:', error)
+        console.error('Failed to fetch from MusicBrainz via IPC:', error)
         return null
     }
 }
+
 
 /**
  * Generates the URL for the smallest available front cover art (250px)

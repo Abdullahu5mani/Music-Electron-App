@@ -71,7 +71,9 @@ electron.contextBridge.exposeInMainWorld("electronAPI", {
     };
   },
   downloadImage: (url, filePath) => electron.ipcRenderer.invoke("download-image", url, filePath),
-  writeCoverArt: (filePath, imagePath) => electron.ipcRenderer.invoke("write-cover-art", filePath, imagePath)
+  writeCoverArt: (filePath, imagePath) => electron.ipcRenderer.invoke("write-cover-art", filePath, imagePath),
+  lookupAcoustid: (fingerprint, duration) => electron.ipcRenderer.invoke("lookup-acoustid", fingerprint, duration),
+  lookupMusicBrainz: (mbid) => electron.ipcRenderer.invoke("lookup-musicbrainz", mbid)
 });
 electron.contextBridge.exposeInMainWorld("ipcRenderer", {
   on(...args) {

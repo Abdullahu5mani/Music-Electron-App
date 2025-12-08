@@ -1,0 +1,111 @@
+import { ipcMain, dialog, app } from 'electron'
+import path from 'path'
+import fs from 'fs'
+import { scanMusicFiles } from '../../musicScanner'
+
+/**
+ * Registers IPC handlers for music file operations
+ * - Folder scanning and selection
+ * - File reading for fingerprinting
+ * - Cover art writing
+ */
+export function registerMusicHandlers() {
+  // Handle music folder scanning
+  ipcMain.handle('scan-music-folder', async (_event, folderPath: string) => {
+    try {
+      return await scanMusicFiles(folderPath)
+    } catch (error) {
+      console.error('Error scanning folder:', error)
+      throw error
+    }
+  })
+
+  // Handle music folder selection dialog
+  ipcMain.handle('select-music-folder', async () => {
+    const result = await dialog.showOpenDialog({
+      properties: ['openDirectory'],
+      title: 'Select Music Folder',
+    })
+    if (!result.canceled && result.filePaths.length > 0) {
+      return result.filePaths[0]
+    }
+    return null
+  })
+
+  // Handle read file as buffer (for fingerprint generation)
+  ipcMain.handle('read-file-buffer', async (_event, filePath: string) => {
+    try {
+      const buffer = fs.readFileSync(filePath)
+      return buffer // Returns Buffer (Uint8Array) efficiently
+    } catch (error) {
+      console.error('Error reading file:', error)
+      throw error
+    }
+  })
+
+  // Handle writing cover art to file
+  ipcMain.handle('write-cover-art', async (_event, filePath: string, imagePath: string) => {
+    try {
+      const { TagLib } = await import('taglib-wasm')
+      const taglib = await TagLib.initialize()
+
+      // Read file into buffer (Sandwich method)
+      // This avoids virtual FS issues by operating on memory buffers
+      const fileBuffer = fs.readFileSync(filePath)
+      const data = new Uint8Array(fileBuffer)
+      const file = await taglib.open(data)
+
+      let resolvedImagePath = imagePath
+      if (imagePath.startsWith('assets/')) {
+        const userDataPath = app.getPath('userData')
+        resolvedImagePath = path.join(userDataPath, imagePath)
+      }
+
+      console.log('File format detected:', file.getFormat())
+
+      const imageBuffer = fs.readFileSync(resolvedImagePath)
+      const imageUint8 = new Uint8Array(imageBuffer)
+
+      // Better MIME detection
+      const ext = path.extname(resolvedImagePath).toLowerCase()
+      const mimeType = ext === '.png' ? 'image/png' : 'image/jpeg'
+
+      const picture: any = {
+        mimeType: mimeType,
+        data: imageUint8,
+        type: 'Cover (front)',
+        description: 'Cover Art'
+      }
+
+      console.log('Writing picture with size:', imageBuffer.length, 'MIME:', mimeType)
+
+      // Force tag creation if empty first
+      const tag = file.tag()
+      if (!tag.title) {
+        console.log('Title empty, setting placeholder to force tag creation (using filename)')
+        tag.setTitle(path.basename(filePath, path.extname(filePath)))
+      }
+
+      // Use setPictures to force replace
+      file.setPictures([picture])
+
+      // Save changes to the memory buffer
+      if (!file.save()) {
+        throw new Error('TagLib failed to save changes to memory buffer')
+      }
+
+      // Retrieve the updated buffer and write it back to disk
+      const updatedBuffer = file.getFileBuffer()
+      fs.writeFileSync(filePath, updatedBuffer)
+
+      file.dispose()
+
+      console.log('Cover art written to disk:', filePath)
+      return { success: true }
+    } catch (error) {
+      console.error('Error writing cover art:', error)
+      return { success: false, error: error instanceof Error ? error.message : 'Unknown error' }
+    }
+  })
+}
+

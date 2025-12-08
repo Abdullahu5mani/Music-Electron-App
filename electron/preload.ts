@@ -46,6 +46,10 @@ export interface ElectronAPI {
   onDownloadProgress: (callback: (progress: { percentage: number; downloaded: number; total: number; speed: string; eta: string }) => void) => () => void
   onBinaryDownloadProgress: (callback: (progress: BinaryDownloadProgress) => void) => () => void
   onDownloadTitle: (callback: (title: string) => void) => () => void
+  downloadImage: (url: string, filePath: string) => Promise<{ success: boolean; error?: string }>
+  writeCoverArt: (filePath: string, imagePath: string) => Promise<{ success: boolean; error?: string }>
+  lookupAcoustid: (fingerprint: string, duration: number) => Promise<any>
+  lookupMusicBrainz: (mbid: string) => Promise<any>
 }
 
 // Expose a typed API to the Renderer process
@@ -153,6 +157,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   writeCoverArt: (filePath: string, imagePath: string) =>
     ipcRenderer.invoke('write-cover-art', filePath, imagePath),
+
+  lookupAcoustid: (fingerprint: string, duration: number) =>
+    ipcRenderer.invoke('lookup-acoustid', fingerprint, duration),
+
+  lookupMusicBrainz: (mbid: string) =>
+    ipcRenderer.invoke('lookup-musicbrainz', mbid),
 } as ElectronAPI)
 
 // Keep the old ipcRenderer for backward compatibility if needed
