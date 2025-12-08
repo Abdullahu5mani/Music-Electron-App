@@ -3,6 +3,7 @@ import type { MusicFile } from '../../electron/musicScanner'
 import type { SortOption } from '../utils/sortMusicFiles'
 import { generateFingerprint } from '../utils/fingerprintGenerator'
 import { lookupFingerprint } from '../utils/acoustidClient'
+import { lookupRecording, getCoverArtUrl } from '../utils/musicbrainzClient'
 
 interface SongListProps {
   songs: MusicFile[]
@@ -10,12 +11,13 @@ interface SongListProps {
   playingIndex: number | null
   sortBy: SortOption
   onSortChange: (sortBy: SortOption) => void
+  onRefreshLibrary?: () => void
 }
 
 /**
  * Component for displaying the list of songs
  */
-export function SongList({ songs, onSongClick, playingIndex, sortBy, onSortChange }: SongListProps) {
+export function SongList({ songs, onSongClick, playingIndex, sortBy, onSortChange, onRefreshLibrary }: SongListProps) {
   const [generatingFingerprint, setGeneratingFingerprint] = useState<string | null>(null)
 
   const handleGenerateFingerprint = async (e: React.MouseEvent, file: MusicFile) => {
@@ -52,16 +54,67 @@ export function SongList({ songs, onSongClick, playingIndex, sortBy, onSortChang
       }
 
       // Step 3: Query AcoustID API
-      const result = await lookupFingerprint(fingerprint, duration)
+      const acoustidResult = await lookupFingerprint(fingerprint, duration)
 
-      if (result) {
-        console.log('=== MBID Received in Component ===')
-        console.log('MBID:', result.mbid)
-        console.log('Title:', result.title)
-        console.log('Artist:', result.artist)
-        console.log('==================================')
+      if (acoustidResult) {
+        console.log('=== AcoustID Match Found ===')
+        console.log('MBID:', acoustidResult.mbid)
+
+        // Step 4: Query MusicBrainz API
+        const mbData = await lookupRecording(acoustidResult.mbid)
+
+        if (mbData) {
+          console.log('=== MusicBrainz Metadata ===')
+          console.log('Title:', mbData.title)
+          console.log('Artist:', mbData['artist-credit']?.[0]?.name)
+          const album = mbData.releases?.[0]
+          console.log('Album:', album?.title)
+
+          if (album) {
+            const coverUrl = getCoverArtUrl(album.id)
+            console.log('Cover Art URL (250px):', coverUrl)
+
+            // Generate a filename for the cover art
+            const safeTitle = mbData.title.replace(/[^a-z0-9]/gi, '_').toLowerCase()
+            const filename = `cover_${safeTitle}_${album.id}.jpg`
+
+            try {
+              // Request download to assets folder (main process resolves path to userData/assets)
+              console.log('Attempting to download cover art to assets...')
+              const targetPath = `assets/${filename}`
+
+              // 1. Download the image
+              const downloadResult = await window.electronAPI.downloadImage(coverUrl, targetPath)
+              if (downloadResult.success) {
+                console.log(`Cover art saved to ${targetPath}`)
+
+                // 2. Embed the image into the audio file
+                console.log('Embedding cover art...')
+                const embedResult = await window.electronAPI.writeCoverArt(file.path, targetPath)
+
+                if (embedResult.success) {
+                  console.log('Cover art embedded successfully!')
+                  // Refresh library to show updated cover art
+                  if (onRefreshLibrary) {
+                    console.log('Refreshing library...')
+                    onRefreshLibrary()
+                  }
+                } else {
+                  console.error('Failed to embed cover art:', embedResult.error)
+                }
+              } else {
+                console.error('Failed to download cover art:', downloadResult.error)
+              }
+            } catch (err) {
+              console.error('Failed to download cover art:', err)
+            }
+          }
+
+          console.log('Full Data:', mbData)
+          console.log('============================')
+        }
       } else {
-        console.log('No MBID found for this fingerprint')
+        console.log('No match found for this fingerprint')
       }
     } catch (error) {
       console.error('Error generating fingerprint:', error)
@@ -144,4 +197,3 @@ export function SongList({ songs, onSongClick, playingIndex, sortBy, onSortChang
     </div>
   )
 }
-

@@ -16,26 +16,26 @@ import './App.css'
 function App() {
   const { sortedMusicFiles, loading, error, selectedFolder, handleSelectFolder, scanFolder, sortBy, setSortBy } = useMusicLibrary()
   const [selectedView, setSelectedView] = useState<string>('all')
-  
+
   // Filter music files based on selected view
   const filteredMusicFiles = useMemo(() => {
     if (selectedView === 'all') {
       return sortedMusicFiles
     }
-    
+
     if (selectedView.startsWith('artist:')) {
       const artist = selectedView.replace('artist:', '')
       return sortedMusicFiles.filter(file => file.metadata?.artist === artist)
     }
-    
+
     if (selectedView.startsWith('album:')) {
       const album = selectedView.replace('album:', '')
       return sortedMusicFiles.filter(file => file.metadata?.album === album)
     }
-    
+
     return sortedMusicFiles
   }, [sortedMusicFiles, selectedView])
-  
+
   // Use full library for audio player (not filtered) so playback continues when switching views
   const { playingIndex, playSong, togglePlayPause, playNext, playPrevious, isPlaying, currentTime, duration, seek, volume, setVolume } = useAudioPlayer(sortedMusicFiles)
   const [isDownloading, setIsDownloading] = useState(false)
@@ -140,7 +140,7 @@ function App() {
 
     try {
       const result = await window.electronAPI?.downloadYouTube?.(url, targetFolder)
-      
+
       if (result?.success) {
         console.log('Download completed:', result.filePath)
         // Refresh the music library if music folder is set
@@ -148,9 +148,9 @@ function App() {
           await scanFolder(selectedFolder)
         }
         showToastNotification('Download completed!', 'success')
-    } else {
+      } else {
         showToastNotification(`Download failed: ${result?.error || 'Unknown error'}`, 'error')
-    }
+      }
     } catch (error) {
       console.error('Download error:', error)
       showToastNotification(`Download error: ${error}`, 'error')
@@ -171,15 +171,15 @@ function App() {
       <TitleBar />
       <div className="app-content">
         <div className="app-header">
-      <h1>Music Sync App</h1>
+          <h1>Music Sync App</h1>
           <div className="header-actions">
-            <button 
+            <button
               className="folder-select-button"
-              onClick={handleSelectFolder} 
+              onClick={handleSelectFolder}
               disabled={loading}
             >
-          {loading ? 'Scanning...' : 'Select Music Folder'}
-        </button>
+              {loading ? 'Scanning...' : 'Select Music Folder'}
+            </button>
             <button
               className="settings-button"
               onClick={() => setShowSettings(true)}
@@ -188,7 +188,7 @@ function App() {
             >
               ⚙️
             </button>
-            <DownloadButton 
+            <DownloadButton
               onDownload={handleDownload}
               isDownloading={isDownloading}
               progress={downloadProgress}
@@ -196,14 +196,14 @@ function App() {
               binaryProgress={binaryDownloadProgress}
             />
           </div>
-      </div>
+        </div>
 
-      {error && <div className="error">{error}</div>}
+        {error && <div className="error">{error}</div>}
 
-      {loading && <div className="loading">Scanning music files...</div>}
+        {loading && <div className="loading">Scanning music files...</div>}
 
         <div className="main-content">
-          <Sidebar 
+          <Sidebar
             selectedView={selectedView}
             onViewChange={setSelectedView}
             musicFiles={sortedMusicFiles}
@@ -219,8 +219,8 @@ function App() {
               }}
               className="music-list-scroll"
             >
-              <SongList 
-                songs={filteredMusicFiles} 
+              <SongList
+                songs={filteredMusicFiles}
                 onSongClick={(file, index) => {
                   // Find the actual index in the full library
                   const actualIndex = sortedMusicFiles.findIndex(f => f.path === file.path)
@@ -231,6 +231,7 @@ function App() {
                 playingIndex={playingIndex !== null ? filteredMusicFiles.findIndex(f => f.path === sortedMusicFiles[playingIndex]?.path) : null}
                 sortBy={sortBy}
                 onSortChange={setSortBy}
+                onRefreshLibrary={() => selectedFolder && scanFolder(selectedFolder)}
               />
             </OverlayScrollbarsComponent>
           </div>

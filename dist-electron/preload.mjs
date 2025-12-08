@@ -69,7 +69,9 @@ electron.contextBridge.exposeInMainWorld("electronAPI", {
     return () => {
       electron.ipcRenderer.removeListener("download-title", handler);
     };
-  }
+  },
+  downloadImage: (url, filePath) => electron.ipcRenderer.invoke("download-image", url, filePath),
+  writeCoverArt: (filePath, imagePath) => electron.ipcRenderer.invoke("write-cover-art", filePath, imagePath)
 });
 electron.contextBridge.exposeInMainWorld("ipcRenderer", {
   on(...args) {

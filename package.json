@@ -13,8 +13,10 @@
   "dependencies": {
     "@babel/runtime": "^7.28.4",
     "@unimusic/chromaprint": "^0.1.4",
+    "axios": "^1.13.2",
     "howler": "^2.2.4",
     "music-metadata": "^11.10.3",
+    "musicbrainz-api": "^0.27.0",
     "npm": "^11.6.4",
     "overlayscrollbars": "^2.13.0",
     "overlayscrollbars-react": "^0.5.6",
@@ -23,6 +25,7 @@
     "react-dom": "^18.2.0",
     "react-slider": "^2.0.6",
     "taglib-wasm": "^0.5.4",
+    "xmlbuilder2": "^4.0.3",
     "yt-dlp-wrap": "^2.3.12"
   },
   "devDependencies": {

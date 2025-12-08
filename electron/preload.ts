@@ -50,31 +50,31 @@ export interface ElectronAPI {
 
 // Expose a typed API to the Renderer process
 contextBridge.exposeInMainWorld('electronAPI', {
-  scanMusicFolder: (folderPath: string) => 
+  scanMusicFolder: (folderPath: string) =>
     ipcRenderer.invoke('scan-music-folder', folderPath),
-  
-  selectMusicFolder: () => 
+
+  selectMusicFolder: () =>
     ipcRenderer.invoke('select-music-folder'),
-  
+
   // Settings methods
-  getSettings: () => 
+  getSettings: () =>
     ipcRenderer.invoke('get-settings'),
-  
-  saveSettings: (settings: AppSettings) => 
+
+  saveSettings: (settings: AppSettings) =>
     ipcRenderer.invoke('save-settings', settings),
-  
-  selectDownloadFolder: () => 
+
+  selectDownloadFolder: () =>
     ipcRenderer.invoke('select-download-folder'),
-  
-  getBinaryStatuses: () => 
+
+  getBinaryStatuses: () =>
     ipcRenderer.invoke('get-binary-statuses'),
-  
-  getPlatformInfo: () => 
+
+  getPlatformInfo: () =>
     ipcRenderer.invoke('get-platform-info'),
-  
-  readFileBuffer: (filePath: string) => 
+
+  readFileBuffer: (filePath: string) =>
     ipcRenderer.invoke('read-file-buffer', filePath),
-  
+
   // Listen for tray play/pause commands
   onTrayPlayPause: (callback: () => void) => {
     const handler = () => callback()
@@ -84,30 +84,30 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.removeListener('tray-play-pause', handler)
     }
   },
-  
+
   // Send playback state to main process
   sendPlaybackState: (isPlaying: boolean) => {
     ipcRenderer.send('playback-state-changed', isPlaying)
   },
-  
+
   // Send window visibility state to main process
   sendWindowVisibility: (visible: boolean) => {
     ipcRenderer.send('window-visibility-changed', visible)
   },
-  
+
   // Window control methods
   minimizeWindow: () => {
     ipcRenderer.send('window-minimize')
   },
-  
+
   maximizeWindow: () => {
     ipcRenderer.send('window-maximize')
   },
-  
+
   closeWindow: () => {
     ipcRenderer.send('window-close')
   },
-  
+
   // Listen for window state changes
   onWindowStateChanged: (callback: (maximized: boolean) => void) => {
     const handler = (_event: any, maximized: boolean) => callback(maximized)
@@ -116,11 +116,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.removeListener('window-state-changed', handler)
     }
   },
-  
+
   // YouTube download method
-  downloadYouTube: (url: string, outputPath: string) => 
+  downloadYouTube: (url: string, outputPath: string) =>
     ipcRenderer.invoke('download-youtube', url, outputPath),
-  
+
   // Listen for download progress updates
   onDownloadProgress: (callback: (progress: any) => void) => {
     const handler = (_event: any, progress: any) => callback(progress)
@@ -129,7 +129,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.removeListener('download-progress', handler)
     }
   },
-  
+
   // Listen for binary download progress updates
   onBinaryDownloadProgress: (callback: (progress: BinaryDownloadProgress) => void) => {
     const handler = (_event: any, progress: BinaryDownloadProgress) => callback(progress)
@@ -138,7 +138,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.removeListener('binary-download-progress', handler)
     }
   },
-  
+
   // Listen for download title updates
   onDownloadTitle: (callback: (title: string) => void) => {
     const handler = (_event: any, title: string) => callback(title)
@@ -147,6 +147,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.removeListener('download-title', handler)
     }
   },
+
+  downloadImage: (url: string, filePath: string) =>
+    ipcRenderer.invoke('download-image', url, filePath),
+
+  writeCoverArt: (filePath: string, imagePath: string) =>
+    ipcRenderer.invoke('write-cover-art', filePath, imagePath),
 } as ElectronAPI)
 
 // Keep the old ipcRenderer for backward compatibility if needed

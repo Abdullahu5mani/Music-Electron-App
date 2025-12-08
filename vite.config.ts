@@ -11,6 +11,13 @@ export default defineConfig({
       main: {
         // Shortcut of `build.lib.entry`.
         entry: 'electron/main.ts',
+        vite: {
+          build: {
+            rollupOptions: {
+              external: ['taglib-wasm', 'axios'], // Externalize both
+            },
+          },
+        },
       },
       preload: {
         // Shortcut of `build.rollupOptions.input`.
@@ -46,7 +53,7 @@ export default defineConfig({
   },
   optimizeDeps: {
     // Exclude WASM from optimization
-    exclude: ['@unimusic/chromaprint'],
+    exclude: ['@unimusic/chromaprint', 'taglib-wasm'],
   },
   build: {
     rollupOptions: {

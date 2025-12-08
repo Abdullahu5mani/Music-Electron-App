@@ -50,7 +50,7 @@ export function useMusicLibrary(): UseMusicLibraryReturn {
       setLoading(true)
       setError(null)
       const folderPath = await window.electronAPI.selectMusicFolder()
-      
+
       if (folderPath) {
         setSelectedFolder(folderPath)
         await scanFolder(folderPath)
