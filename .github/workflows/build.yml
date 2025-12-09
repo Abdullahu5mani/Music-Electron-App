@@ -1,0 +1,58 @@
+name: Build Music App
+
+# Trigger the build whenever you push to the main branch
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  build:
+    name: Build on ${{ matrix.os }}
+    
+    # The "Matrix" Strategy: This runs the job 3 times in parallel
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest, macos-latest]
+
+    steps:
+      # 1. Download your code to the virtual machine
+      - name: Check out Git repository
+        uses: actions/checkout@v4
+
+      # 2. Install Node.js (Using v20 as it matches Electron 39 support)
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      # 3. Install dependencies
+      # This automatically compiles 'better-sqlite3' for the specific OS running the job
+      - name: Install Dependencies
+        run: npm install
+
+      # 4. Build the React Frontend (Vite)
+      - name: Build React (Vite)
+        run: npm run build
+
+      # 5. Build the Electron App
+      # This uses electron-builder to create the .exe, .dmg, etc.
+      - name: Build Electron App
+        run: npx electron-builder --publish never
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # 6. Upload the finished app so you can download it
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: MusicApp-${{ matrix.os }}
+          path: |
+            dist/*.exe
+            dist/*.dmg
+            dist/*.AppImage
+            dist/*.snap
