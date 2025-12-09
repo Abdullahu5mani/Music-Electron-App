@@ -1,7 +1,11 @@
 {
   "name": "music-sync-app",
   "private": true,
-  "version": "0.0.0",
+  "version": "0.0.1",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Abdullahu5mani/Music-Electron-App.git"
+  },
   "type": "module",
   "description": "A modern music player and downloader",
   "author": "Abdullahu5mani",
