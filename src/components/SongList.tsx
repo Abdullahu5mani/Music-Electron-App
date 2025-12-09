@@ -147,11 +147,19 @@ export function SongList({ songs, onSongClick, playingIndex, sortBy, onSortChang
           
           if (releases.length > 0) {
             // Get release group ID if available (for fallback)
-            const releaseGroupId = (mbData as any)['release-group']?.id
+            // Try from top-level first, then from the best release
+            let releaseGroupId = (mbData as any)['release-group']?.id
+            if (!releaseGroupId && releases.length > 0) {
+              // Extract from the first release (which is usually the best one after pickBestRelease)
+              releaseGroupId = releases[0]['release-group']?.id
+            }
             
             // Generate all possible cover art URLs to try
             const coverUrls = getCoverArtUrls(releases, releaseGroupId)
             console.log(`Trying ${coverUrls.length} cover art URLs with fallback...`)
+            if (releaseGroupId) {
+              console.log(`Release Group ID: ${releaseGroupId}`)
+            }
 
             // Generate a filename for the cover art
             const safeTitle = title.replace(/[^a-z0-9]/gi, '_').toLowerCase()
@@ -167,6 +175,7 @@ export function SongList({ songs, onSongClick, playingIndex, sortBy, onSortChang
                 coverArtPath = targetPath
               } else {
                 console.warn('All cover art URLs failed:', downloadResult.error)
+                console.warn(`Tried ${coverUrls.length} URLs:`, coverUrls.slice(0, 5).map(url => url.split('/').pop()).join(', '), coverUrls.length > 5 ? '...' : '')
                 // Show notification that cover art couldn't be found
                 onShowNotification?.(`No cover art found for "${title}"`, 'warning')
               }

@@ -30,7 +30,7 @@ function getBinaryDir(): string {
 function getBinaryPath(): string {
   const binaryDir = getBinaryDir()
   let binaryFileName: string
-  
+
   if (process.platform === 'win32') {
     binaryFileName = process.arch === 'arm64' ? 'yt-dlp_win_arm64.exe' : 'yt-dlp.exe'
   } else if (process.platform === 'darwin') {
@@ -39,7 +39,7 @@ function getBinaryPath(): string {
     // Linux
     binaryFileName = process.arch === 'arm64' ? 'yt-dlp_linux_arm64' : 'yt-dlp_linux'
   }
-  
+
   return path.join(binaryDir, binaryFileName)
 }
 
@@ -107,23 +107,23 @@ async function getLatestVersionFromGitHub(): Promise<string | null> {
 export async function getYtDlpStatus(): Promise<BinaryStatus> {
   const binaryPath = getBinaryPath()
   const fileExists = fs.existsSync(binaryPath)
-  
+
   let version: string | null = null
   let latestVersion: string | null = null
-  
+
   if (fileExists) {
     version = await getInstalledVersion(binaryPath)
   }
-  
+
   // Binary is only truly "installed" if we can get its version
   // (file might exist but be corrupted/not executable)
   const installed = fileExists && version !== null
-  
+
   // Get latest version from GitHub
   latestVersion = await getLatestVersionFromGitHub()
-  
+
   const needsUpdate = installed && version && latestVersion && version !== latestVersion
-  
+
   return {
     name: 'yt-dlp',
     installed,
@@ -139,9 +139,9 @@ export async function getYtDlpStatus(): Promise<BinaryStatus> {
  */
 export async function getAllBinaryStatuses(): Promise<BinaryStatus[]> {
   const statuses: BinaryStatus[] = []
-  
+
   // Add yt-dlp status
   statuses.push(await getYtDlpStatus())
-  
+
   return statuses
 }

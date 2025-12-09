@@ -108,7 +108,7 @@ export function PlaybackBar({
                 max={duration || 0}
                 value={isDragging ? dragTime : currentTime}
                 onChange={handleSeekChange}
-                onAfterChange={handleSeekAfterChange}
+                onChangeComplete={handleSeekAfterChange}
                 className="seek-bar-slider"
                 disabled={!currentSong}
                 trackStyle={{ backgroundColor: '#646cff', height: 8 }}

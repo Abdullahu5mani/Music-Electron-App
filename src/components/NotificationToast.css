@@ -1,6 +1,6 @@
 .notification-toast {
   position: fixed;
-  top: 80px;
+  bottom: 180px; /* Above the playback bar (which is ~150px tall) */
   right: 1rem;
   z-index: 10001;
   min-width: 280px;

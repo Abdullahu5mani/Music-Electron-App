@@ -77,19 +77,19 @@ async function checkBinaryVersion(
     status: 'version-check',
     message: 'Checking yt-dlp version...'
   })
-  
+
   const [installedVersion, latestVersion] = await Promise.all([
     getInstalledVersion(binaryPath),
     getLatestVersion()
   ])
-  
+
   if (!installedVersion || !latestVersion) {
     return { isUpToDate: false, needsUpdate: false }
   }
-  
+
   // Compare versions (simple string comparison works for yt-dlp's date-based versions)
   const isUpToDate = installedVersion === latestVersion
-  
+
   return {
     isUpToDate,
     installedVersion,
@@ -138,7 +138,7 @@ function getAssetNameForPlatform(): string | null {
  */
 function findAssetForPlatform(assets: any[]): any | null {
   const targetAssetName = getAssetNameForPlatform()
-  
+
   if (!targetAssetName) {
     console.error(`Unsupported platform: ${process.platform} ${process.arch}`)
     return null
@@ -146,7 +146,7 @@ function findAssetForPlatform(assets: any[]): any | null {
 
   // First, try exact match
   let asset = assets.find((a: any) => a.name === targetAssetName)
-  
+
   if (asset) {
     return asset
   }
@@ -158,47 +158,47 @@ function findAssetForPlatform(assets: any[]): any | null {
   if (platform === 'win32') {
     if (arch === 'arm64') {
       // Look for Windows ARM64
-      asset = assets.find((a: any) => 
-        a.name.includes('yt-dlp') && 
-        a.name.includes('win') && 
+      asset = assets.find((a: any) =>
+        a.name.includes('yt-dlp') &&
+        a.name.includes('win') &&
         (a.name.includes('arm64') || a.name.includes('arm'))
       )
     } else {
       // Look for Windows x64 (default .exe)
-      asset = assets.find((a: any) => 
-        a.name === 'yt-dlp.exe' || 
+      asset = assets.find((a: any) =>
+        a.name === 'yt-dlp.exe' ||
         (a.name.includes('yt-dlp') && a.name.includes('.exe') && !a.name.includes('arm'))
       )
     }
   } else if (platform === 'darwin') {
     if (arch === 'arm64') {
       // Look for macOS ARM64 (Apple Silicon)
-      asset = assets.find((a: any) => 
-        a.name.includes('yt-dlp') && 
-        a.name.includes('macos') && 
+      asset = assets.find((a: any) =>
+        a.name.includes('yt-dlp') &&
+        a.name.includes('macos') &&
         (a.name.includes('arm64') || a.name.includes('arm') || a.name.includes('m1') || a.name.includes('m2'))
       )
     } else {
       // Look for macOS x64 (Intel)
-      asset = assets.find((a: any) => 
-        a.name.includes('yt-dlp') && 
-        a.name.includes('macos') && 
-        !a.name.includes('arm') && 
+      asset = assets.find((a: any) =>
+        a.name.includes('yt-dlp') &&
+        a.name.includes('macos') &&
+        !a.name.includes('arm') &&
         !a.name.includes('.exe')
       )
     }
   } else if (platform === 'linux') {
     if (arch === 'arm64') {
-      asset = assets.find((a: any) => 
-        a.name.includes('yt-dlp') && 
-        a.name.includes('linux') && 
+      asset = assets.find((a: any) =>
+        a.name.includes('yt-dlp') &&
+        a.name.includes('linux') &&
         (a.name.includes('arm64') || a.name.includes('arm'))
       )
     } else {
-      asset = assets.find((a: any) => 
-        a.name.includes('yt-dlp') && 
-        a.name.includes('linux') && 
-        !a.name.includes('arm') && 
+      asset = assets.find((a: any) =>
+        a.name.includes('yt-dlp') &&
+        a.name.includes('linux') &&
+        !a.name.includes('arm') &&
         !a.name.includes('.exe')
       )
     }
@@ -317,12 +317,12 @@ async function getYtDlpWrap(
   if (!ytDlpWrap) {
     const userDataPath = app.getPath('userData')
     const binaryDir = path.join(userDataPath, 'yt-dlp-binaries')
-    
+
     // Ensure binary directory exists
     if (!fs.existsSync(binaryDir)) {
       fs.mkdirSync(binaryDir, { recursive: true })
     }
-    
+
     // Determine binary filename based on platform and architecture
     let binaryName: string
     if (process.platform === 'win32') {
@@ -334,33 +334,33 @@ async function getYtDlpWrap(
       binaryName = process.arch === 'arm64' ? 'yt-dlp_linux_arm64' : 'yt-dlp_linux'
     }
     const binaryPath = path.join(binaryDir, binaryName)
-    
+
     // Check if binary exists
     if (!fs.existsSync(binaryPath)) {
       onBinaryProgress?.({
         status: 'not-found',
         message: 'yt-dlp binary not found'
       })
-      
+
       onBinaryProgress?.({
         status: 'downloading',
         message: 'yt-dlp binary downloading...',
         percentage: 0
       })
-      
+
       try {
         // Use custom download with progress
         await downloadBinaryWithProgress(binaryPath, onBinaryProgress)
-        
+
         onBinaryProgress?.({
           status: 'downloaded',
           message: 'yt-dlp binary downloaded',
           percentage: 100
         })
-        
+
         // Small delay to show the message
         await new Promise(resolve => setTimeout(resolve, 500))
-        
+
         onBinaryProgress?.({
           status: 'installed',
           message: 'yt-dlp binary installed'
@@ -372,27 +372,27 @@ async function getYtDlpWrap(
     } else {
       // Binary exists, check if it's up to date
       const versionCheck = await checkBinaryVersion(binaryPath, onBinaryProgress)
-      
+
       if (versionCheck.needsUpdate && versionCheck.installedVersion && versionCheck.latestVersion) {
         onBinaryProgress?.({
           status: 'updating',
           message: `Updating yt-dlp from ${versionCheck.installedVersion} to ${versionCheck.latestVersion}...`,
           percentage: 0
         })
-        
+
         try {
           // Download latest version (overwrites existing)
           await downloadBinaryWithProgress(binaryPath, onBinaryProgress)
-          
+
           onBinaryProgress?.({
             status: 'downloaded',
             message: `yt-dlp updated to ${versionCheck.latestVersion}`,
             percentage: 100
           })
-          
+
           // Small delay to show the message
           await new Promise(resolve => setTimeout(resolve, 500))
-          
+
           onBinaryProgress?.({
             status: 'installed',
             message: 'yt-dlp binary updated'
@@ -414,7 +414,7 @@ async function getYtDlpWrap(
         await new Promise(resolve => setTimeout(resolve, 500))
       }
     }
-    
+
     // Initialize with the binary file path (not directory)
     ytDlpWrap = new YTDlpWrap(binaryPath)
   }
@@ -465,11 +465,11 @@ export async function downloadYouTubeAudio(
       // First, ensure we have the latest binary version
       // This will check version and update if needed
       const ytDlp = await getYtDlpWrap(options.onBinaryProgress)
-      
+
       // Check if we need to wait before downloading
       const now = Date.now()
       const timeSinceLastDownload = now - lastDownloadTime
-      
+
       if (timeSinceLastDownload < DOWNLOAD_DELAY_MS && lastDownloadTime > 0) {
         const waitTime = DOWNLOAD_DELAY_MS - timeSinceLastDownload
         options.onBinaryProgress?.({
@@ -478,14 +478,14 @@ export async function downloadYouTubeAudio(
         })
         await new Promise(resolve => setTimeout(resolve, waitTime))
       }
-      
+
       // Update last download time
       lastDownloadTime = Date.now()
-      
+
       // Get video title before downloading
       const videoTitle = await getVideoTitle(options.url, ytDlp)
       options.onTitleReceived?.(videoTitle)
-      
+
       // Ensure output directory exists
       if (!fs.existsSync(options.outputPath)) {
         fs.mkdirSync(options.outputPath, { recursive: true })
@@ -518,7 +518,7 @@ export async function downloadYouTubeAudio(
           const total = progress.total || 0
           const speed = progress.speed || '0 B/s'
           const eta = progress.eta || '--:--'
-          
+
           options.onProgress({
             percentage: percent,
             downloaded,
@@ -572,7 +572,7 @@ export async function downloadYouTubeAudio(
           }))
           .filter(f => f.name.endsWith('.mp3'))
           .sort((a, b) => b.time - a.time)
-        
+
         if (files.length > 0) {
           resolve({
             success: true,

@@ -2,9 +2,12 @@ import { useState, useMemo, useEffect } from 'react'
 import type { MusicFile } from '../../electron/musicScanner'
 import { sortMusicFiles, type SortOption } from '../utils/sortMusicFiles'
 
+// Extend MusicFile locally with an optional dateAdded for UI sorting
+type MusicFileWithDate = MusicFile & { dateAdded?: number }
+
 interface UseMusicLibraryReturn {
-  musicFiles: MusicFile[]
-  sortedMusicFiles: MusicFile[]
+  musicFiles: MusicFileWithDate[]
+  sortedMusicFiles: MusicFileWithDate[]
   loading: boolean
   error: string | null
   selectedFolder: string | null
@@ -19,7 +22,7 @@ interface UseMusicLibraryReturn {
  * Custom hook for managing music library
  */
 export function useMusicLibrary(): UseMusicLibraryReturn {
-  const [musicFiles, setMusicFiles] = useState<MusicFile[]>([])
+  const [musicFiles, setMusicFiles] = useState<MusicFileWithDate[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [selectedFolder, setSelectedFolder] = useState<string | null>(null)
@@ -92,10 +95,10 @@ export function useMusicLibrary(): UseMusicLibraryReturn {
       const updatedFile = await window.electronAPI.readSingleFileMetadata(filePath)
       if (updatedFile) {
         // Update the file in-place in the musicFiles array
-        setMusicFiles(prevFiles => 
-          prevFiles.map(file => 
-            file.path === filePath 
-              ? { ...updatedFile, dateAdded: file.dateAdded || Date.now() }
+        setMusicFiles(prevFiles =>
+          prevFiles.map(file =>
+            file.path === filePath
+              ? { ...updatedFile, dateAdded: file.dateAdded ?? Date.now() }
               : file
           )
         )

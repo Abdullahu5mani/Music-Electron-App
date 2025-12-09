@@ -25,14 +25,14 @@ app.whenReady().then(() => {
       }
     })
   })
-  
+
   // Also register Ctrl+Shift+I (Windows/Linux) and Cmd+Option+I (Mac)
   globalShortcut.register('CommandOrControl+Shift+I', () => {
     const windows = BrowserWindow.getAllWindows()
     windows.forEach(win => {
       if (win.webContents.isDevToolsOpened()) {
         win.webContents.closeDevTools()
-  } else {
+      } else {
         win.webContents.openDevTools()
       }
     })
@@ -50,19 +50,19 @@ app.on('will-quit', () => {
 app.whenReady().then(async () => {
   // Initialize the metadata cache database
   initializeDatabase()
-  
+
   const window = createWindow()
   createTray()
-  
+
   // Also track the specific window instance
   window.on('show', () => {
     updateWindowVisibility(true)
   })
-  
+
   window.on('hide', () => {
     updateWindowVisibility(false)
   })
-  
+
   // Optional: Auto-scan on startup (can be removed if you want user to select folder)
   // const musicFolderPath = 'C:\\Users\\abdul\\Music'
   // await scanAndLogMusicFiles(musicFolderPath)

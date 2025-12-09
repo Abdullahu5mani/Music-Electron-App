@@ -1,6 +1,6 @@
 .batch-scan-progress {
   position: fixed;
-  top: 50px;
+  top: 120px; /* Below header buttons (title bar ~32px + padding ~12px + header ~60px = ~104px, so 120px is safe) */
   right: 16px;
   width: 280px;
   background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);

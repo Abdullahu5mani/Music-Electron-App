@@ -12,9 +12,9 @@ interface SettingsProps {
   totalSongCount?: number
 }
 
-export function Settings({ 
-  isOpen, 
-  onClose, 
+export function Settings({
+  isOpen,
+  onClose,
   onSettingsChange,
   onScanAll,
   isBatchScanning = false,
@@ -241,17 +241,17 @@ export function Settings({
                       <div className="platform-info">
                         <span className="platform-label">Platform:</span>
                         <span className="platform-value">
-                          {platformInfo.platform === 'win32' ? 'Windows' : 
-                           platformInfo.platform === 'darwin' ? 'macOS' : 
-                           platformInfo.platform === 'linux' ? 'Linux' : 
-                           platformInfo.platform}
+                          {platformInfo.platform === 'win32' ? 'Windows' :
+                            platformInfo.platform === 'darwin' ? 'macOS' :
+                              platformInfo.platform === 'linux' ? 'Linux' :
+                                platformInfo.platform}
                         </span>
                         <span className="platform-label">Architecture:</span>
                         <span className="platform-value">
-                          {platformInfo.arch === 'x64' ? 'x64 (64-bit)' : 
-                           platformInfo.arch === 'arm64' ? 'ARM64' : 
-                           platformInfo.arch === 'ia32' ? 'x86 (32-bit)' : 
-                           platformInfo.arch}
+                          {platformInfo.arch === 'x64' ? 'x64 (64-bit)' :
+                            platformInfo.arch === 'arm64' ? 'ARM64' :
+                              platformInfo.arch === 'ia32' ? 'x86 (32-bit)' :
+                                platformInfo.arch}
                         </span>
                       </div>
                     )}

@@ -77,28 +77,48 @@ export function getCoverArtUrl(releaseMbid: string): string {
 export function getCoverArtUrls(releases: MusicBrainzRelease[], releaseGroupId?: string): string[] {
     const urls: string[] = []
     
+    if (releases.length === 0) {
+        // If no releases, try release group only
+        if (releaseGroupId) {
+            urls.push(`https://coverartarchive.org/release-group/${releaseGroupId}/front-250`)
+            urls.push(`https://coverartarchive.org/release-group/${releaseGroupId}/front-500`)
+            urls.push(`https://coverartarchive.org/release-group/${releaseGroupId}/front`)
+        }
+        return urls
+    }
+    
     // Priority 1: Try 250px front cover for each release (best quality/size ratio)
+    // Try all releases, not just the first one
     for (const release of releases) {
         urls.push(`https://coverartarchive.org/release/${release.id}/front-250`)
     }
     
-    // Priority 2: Try 500px front cover for first release (higher quality)
-    if (releases.length > 0) {
-        urls.push(`https://coverartarchive.org/release/${releases[0].id}/front-500`)
+    // Priority 2: Try 500px front cover for each release (higher quality)
+    for (const release of releases) {
+        urls.push(`https://coverartarchive.org/release/${release.id}/front-500`)
     }
     
-    // Priority 3: Try original size for first release (largest)
-    if (releases.length > 0) {
-        urls.push(`https://coverartarchive.org/release/${releases[0].id}/front`)
+    // Priority 3: Try original size for each release (largest)
+    for (const release of releases) {
+        urls.push(`https://coverartarchive.org/release/${release.id}/front`)
     }
     
-    // Priority 4: Try release group if available (some albums only have art here)
-    if (releaseGroupId) {
-        urls.push(`https://coverartarchive.org/release-group/${releaseGroupId}/front-250`)
-        urls.push(`https://coverartarchive.org/release-group/${releaseGroupId}/front`)
+    // Priority 4: Try release group if available (some albums only have art at group level)
+    // Also try to extract from releases if not provided
+    let rgId = releaseGroupId
+    if (!rgId && releases.length > 0) {
+        // Try to get release group ID from the first release
+        rgId = releases[0]['release-group']?.id
     }
     
-    return urls
+    if (rgId) {
+        urls.push(`https://coverartarchive.org/release-group/${rgId}/front-250`)
+        urls.push(`https://coverartarchive.org/release-group/${rgId}/front-500`)
+        urls.push(`https://coverartarchive.org/release-group/${rgId}/front`)
+    }
+    
+    // Remove duplicates (in case same release appears multiple times)
+    return Array.from(new Set(urls))
 }
 
 /**
