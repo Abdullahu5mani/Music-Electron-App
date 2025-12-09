@@ -23,6 +23,7 @@ export interface MusicFile {
   name: string
   extension: string
   size: number
+  dateAdded?: number // file mtimeMs for stable added/sort ordering
   metadata?: {
     title?: string
     artist?: string
@@ -126,6 +127,7 @@ async function scanDirectory(dirPath: string, musicFiles: MusicFile[]): Promise<
               name: entry.name,
               extension: ext,
               size: stats.size,
+              dateAdded: stats.mtimeMs,
               metadata,
             })
           }
@@ -262,6 +264,7 @@ export async function readSingleFileMetadata(filePath: string): Promise<MusicFil
       name,
       extension: ext,
       size: stats.size,
+    dateAdded: stats.mtimeMs,
       metadata,
     }
   } catch (error) {

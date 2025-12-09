@@ -29,10 +29,10 @@ let win: BrowserWindow | null = null
  */
 export function createWindow(): BrowserWindow {
   win = new BrowserWindow({
-    width: 800,           // Default width
-    height: 700,          // Default height
-    minWidth: 450,        // Minimum width
-    minHeight: 600,       // Minimum height
+    width: 820,           // Default width
+    height: 720,          // Default height
+    minWidth: 820,        // Minimum width
+    minHeight: 720,       // Minimum height
     frame: false,         // Remove default frame
     titleBarStyle: 'hidden', // Hide title bar (macOS)
     backgroundColor: '#1a1a1a', // Match app background

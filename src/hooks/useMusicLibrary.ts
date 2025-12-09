@@ -72,10 +72,10 @@ export function useMusicLibrary(): UseMusicLibraryReturn {
       setLoading(true)
       setError(null)
       const files = await window.electronAPI.scanMusicFolder(folderPath)
-      // Add dateAdded timestamp to each file
+      // Use file mtimeMs (dateAdded from backend); fallback to current time if missing
       const filesWithDate = files.map(file => ({
         ...file,
-        dateAdded: Date.now(), // Use current timestamp for all files scanned together
+        dateAdded: file.dateAdded ?? Date.now(),
       }))
       setMusicFiles(filesWithDate)
     } catch (err) {
@@ -98,7 +98,7 @@ export function useMusicLibrary(): UseMusicLibraryReturn {
         setMusicFiles(prevFiles =>
           prevFiles.map(file =>
             file.path === filePath
-              ? { ...updatedFile, dateAdded: file.dateAdded ?? Date.now() }
+              ? { ...updatedFile, dateAdded: updatedFile.dateAdded ?? file.dateAdded ?? Date.now() }
               : file
           )
         )

@@ -3,6 +3,8 @@ import { Howl } from 'howler'
 import type { MusicFile } from '../../electron/musicScanner'
 import { pathToFileURL } from '../pathResolver'
 
+type RepeatMode = 'off' | 'all' | 'one'
+
 interface UseAudioPlayerReturn {
   currentSound: Howl | null
   playingIndex: number | null
@@ -10,6 +12,10 @@ interface UseAudioPlayerReturn {
   togglePlayPause: () => void
   playNext: () => void
   playPrevious: () => void
+  shuffle: boolean
+  repeatMode: RepeatMode
+  toggleShuffle: () => void
+  cycleRepeatMode: () => void
   isPlaying: boolean
   currentTime: number
   duration: number
@@ -28,13 +34,23 @@ export function useAudioPlayer(musicFiles: MusicFile[]): UseAudioPlayerReturn {
   const [duration, setDuration] = useState<number>(0)
   const [volume, setVolumeState] = useState<number>(1.0) // Volume range: 0.0 to 1.0
   const [isPlaying, setIsPlaying] = useState<boolean>(false)
+  const [shuffle, setShuffle] = useState<boolean>(false)
+  const [repeatMode, setRepeatMode] = useState<RepeatMode>('off')
   const intervalRef = useRef<NodeJS.Timeout | null>(null)
   const isSeekingRef = useRef<boolean>(false)
-  const playNextRef = useRef<() => void>()
-  const playSongRef = useRef<(file: MusicFile, index: number) => void>()
+  const playNextRef = useRef<(auto?: boolean) => void>()
+  const playSongRef = useRef<(file: MusicFile, index: number, recordHistory?: boolean) => void>()
   const currentFilePathRef = useRef<string | null>(null)
+  const historyRef = useRef<number[]>([])
 
-  const playSong = (file: MusicFile, index: number) => {
+  const recordHistory = (index: number) => {
+    const history = historyRef.current
+    if (history[history.length - 1] !== index) {
+      history.push(index)
+    }
+  }
+
+  const playSong = (file: MusicFile, index: number, record = true) => {
     // Ensure only one Howler instance exists - stop and cleanup current one
     if (currentSound) {
       currentSound.stop()
@@ -65,7 +81,7 @@ export function useAudioPlayer(musicFiles: MusicFile[]): UseAudioPlayerReturn {
         // Auto-play next song when current ends
         setIsPlaying(false)
         if (playNextRef.current) {
-          playNextRef.current()
+          playNextRef.current(true)
         }
       },
       onloaderror: () => {
@@ -83,6 +99,9 @@ export function useAudioPlayer(musicFiles: MusicFile[]): UseAudioPlayerReturn {
     sound.play()
     setCurrentSound(sound)
     setPlayingIndex(index)
+    if (record) {
+      recordHistory(index)
+    }
     setIsPlaying(true)
     currentFilePathRef.current = file.path
     setCurrentTime(0)
@@ -114,22 +133,52 @@ export function useAudioPlayer(musicFiles: MusicFile[]): UseAudioPlayerReturn {
     playSongRef.current = playSong
   }, [currentSound, musicFiles])
 
-  const playNext = () => {
-    if (musicFiles.length === 0 || playingIndex === null) return
-    
+  const getRandomIndex = (excludeIndex: number | null, max: number): number | null => {
+    if (max <= 0) return null
+    if (max === 1) return excludeIndex ?? 0
+    let candidate = excludeIndex
+    while (candidate === excludeIndex) {
+      candidate = Math.floor(Math.random() * max)
+    }
+    return candidate
+  }
+
+  const playNext = (auto = false) => {
+    if (musicFiles.length === 0) return
+
+    if (playingIndex === null) {
+      playSong(musicFiles[0], 0)
+      return
+    }
+
+    // Repeat one: replay same track when auto-advancing
+    if (auto && repeatMode === 'one') {
+      playSong(musicFiles[playingIndex], playingIndex)
+      return
+    }
+
+    if (shuffle) {
+      const randomIndex = getRandomIndex(playingIndex, musicFiles.length)
+      if (randomIndex !== null) {
+        playSong(musicFiles[randomIndex], randomIndex)
+      }
+      return
+    }
+
     const nextIndex = playingIndex + 1
     if (nextIndex < musicFiles.length) {
       playSong(musicFiles[nextIndex], nextIndex)
-    } else {
-      // Wrap around to first song
+    } else if (repeatMode === 'all') {
       playSong(musicFiles[0], 0)
+    } else {
+      setIsPlaying(false)
     }
   }
 
   // Keep playNext ref in sync
   useEffect(() => {
     playNextRef.current = playNext
-  }, [musicFiles, playingIndex, currentSound])
+  }, [musicFiles, playingIndex, currentSound, shuffle, repeatMode])
 
   const togglePlayPause = () => {
     if (currentSound && playingIndex !== null) {
@@ -145,14 +194,42 @@ export function useAudioPlayer(musicFiles: MusicFile[]): UseAudioPlayerReturn {
 
   const playPrevious = () => {
     if (musicFiles.length === 0 || playingIndex === null) return
-    
+
+    if (shuffle && historyRef.current.length > 1) {
+      historyRef.current.pop()
+      const previousIndex = historyRef.current[historyRef.current.length - 1]
+      if (previousIndex !== undefined && musicFiles[previousIndex]) {
+        playSong(musicFiles[previousIndex], previousIndex, false)
+        return
+      }
+    }
+
     const prevIndex = playingIndex - 1
     if (prevIndex >= 0) {
       playSong(musicFiles[prevIndex], prevIndex)
-    } else {
-      // Wrap around to last song
+    } else if (repeatMode === 'all' && musicFiles.length > 0) {
       playSong(musicFiles[musicFiles.length - 1], musicFiles.length - 1)
     }
+  }
+
+  const toggleShuffle = () => {
+    setShuffle((prev) => {
+      const next = !prev
+      if (playingIndex !== null) {
+        historyRef.current = [playingIndex]
+      } else {
+        historyRef.current = []
+      }
+      return next
+    })
+  }
+
+  const cycleRepeatMode = () => {
+    setRepeatMode((prev) => {
+      if (prev === 'off') return 'all'
+      if (prev === 'all') return 'one'
+      return 'off'
+    })
   }
 
   const seek = (time: number) => {
@@ -400,6 +477,10 @@ export function useAudioPlayer(musicFiles: MusicFile[]): UseAudioPlayerReturn {
     togglePlayPause,
     playNext,
     playPrevious,
+    shuffle,
+    repeatMode,
+    toggleShuffle,
+    cycleRepeatMode,
     isPlaying,
     currentTime,
     duration,

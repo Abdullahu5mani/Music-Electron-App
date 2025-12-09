@@ -18,6 +18,7 @@ import './App.css'
 function App() {
   const { sortedMusicFiles, loading, error, selectedFolder, handleSelectFolder, scanFolder, sortBy, setSortBy, updateSingleFile } = useMusicLibrary()
   const [selectedView, setSelectedView] = useState<string>('all')
+  const [searchTerm, setSearchTerm] = useState<string>('')
   const [scanStatuses, setScanStatuses] = useState<Record<string, ScanStatusType>>({})
   const [toastMessage, setToastMessage] = useState<string>('')
   const [toastType, setToastType] = useState<'success' | 'error' | 'warning' | 'info'>('info')
@@ -44,25 +45,45 @@ function App() {
 
   // Filter music files based on selected view
   const filteredMusicFiles = useMemo(() => {
-    if (selectedView === 'all') {
-      return sortedMusicFiles
-    }
+    let base = sortedMusicFiles
 
     if (selectedView.startsWith('artist:')) {
       const artist = selectedView.replace('artist:', '')
-      return sortedMusicFiles.filter(file => file.metadata?.artist === artist)
-    }
-
-    if (selectedView.startsWith('album:')) {
+      base = base.filter(file => file.metadata?.artist === artist)
+    } else if (selectedView.startsWith('album:')) {
       const album = selectedView.replace('album:', '')
-      return sortedMusicFiles.filter(file => file.metadata?.album === album)
+      base = base.filter(file => file.metadata?.album === album)
     }
 
-    return sortedMusicFiles
-  }, [sortedMusicFiles, selectedView])
+    const query = searchTerm.trim().toLowerCase()
+    if (!query) return base
+
+    return base.filter(file => {
+      const title = (file.metadata?.title || file.name || '').toLowerCase()
+      const artist = (file.metadata?.artist || '').toLowerCase()
+      const album = (file.metadata?.album || '').toLowerCase()
+      return title.includes(query) || artist.includes(query) || album.includes(query)
+    })
+  }, [sortedMusicFiles, selectedView, searchTerm])
 
   // Use full library for audio player (not filtered) so playback continues when switching views
-  const { playingIndex, playSong, togglePlayPause, playNext, playPrevious, isPlaying, currentTime, duration, seek, volume, setVolume } = useAudioPlayer(sortedMusicFiles)
+  const {
+    playingIndex,
+    playSong,
+    togglePlayPause,
+    playNext,
+    playPrevious,
+    shuffle,
+    repeatMode,
+    toggleShuffle,
+    cycleRepeatMode,
+    isPlaying,
+    currentTime,
+    duration,
+    seek,
+    volume,
+    setVolume
+  } = useAudioPlayer(sortedMusicFiles)
   const [isDownloading, setIsDownloading] = useState(false)
   const [downloadProgress, setDownloadProgress] = useState(0)
   const [binaryDownloadStatus, setBinaryDownloadStatus] = useState<string>('')
@@ -228,6 +249,15 @@ function App() {
       <div className="app-content">
         <div className="app-header">
           <h1>Music Sync App</h1>
+        <div className="search-container" title="Search by title, artist, or album">
+          <input
+            type="text"
+            className="search-input"
+            placeholder="Search title, artist, album..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+          />
+        </div>
           <div className="header-actions">
             <button
               className="folder-select-button"
@@ -301,6 +331,10 @@ function App() {
         onPlayPause={togglePlayPause}
         onNext={playNext}
         onPrevious={playPrevious}
+        shuffle={shuffle}
+        repeatMode={repeatMode}
+        onToggleShuffle={toggleShuffle}
+        onCycleRepeatMode={cycleRepeatMode}
         currentTime={currentTime}
         duration={duration}
         onSeek={seek}

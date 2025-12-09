@@ -3,6 +3,37 @@ import path from 'path'
 import fs from 'fs'
 import axios from 'axios'
 
+function getAssetsDir() {
+  const userDataPath = app.getPath('userData')
+  return path.join(userDataPath, 'assets')
+}
+
+function cleanupOldAssets(maxAgeDays = 30) {
+  try {
+    const assetsDir = getAssetsDir()
+    if (!fs.existsSync(assetsDir)) return
+
+    const entries = fs.readdirSync(assetsDir, { withFileTypes: true })
+    const now = Date.now()
+    const maxAgeMs = maxAgeDays * 24 * 60 * 60 * 1000
+
+    for (const entry of entries) {
+      const fullPath = path.join(assetsDir, entry.name)
+      try {
+        const stat = fs.statSync(fullPath)
+        if (now - stat.mtimeMs > maxAgeMs) {
+          fs.unlinkSync(fullPath)
+          console.log('Removed old asset:', fullPath)
+        }
+      } catch (err) {
+        console.warn('Failed to inspect/remove asset:', fullPath, err)
+      }
+    }
+  } catch (err) {
+    console.warn('Asset cleanup skipped:', err)
+  }
+}
+
 /**
  * Registers IPC handlers for external API operations
  * - AcoustID fingerprint lookup
@@ -84,8 +115,7 @@ export function registerApiHandlers() {
 
       // If saving to assets, resolve relative to userData
       if (filePath.startsWith('assets/')) {
-        const userDataPath = app.getPath('userData')
-        targetPath = path.join(userDataPath, filePath)
+        targetPath = path.join(getAssetsDir(), path.basename(filePath))
 
         // Ensure directory exists
         const dir = path.dirname(targetPath)
@@ -96,6 +126,7 @@ export function registerApiHandlers() {
 
       fs.writeFileSync(targetPath, buffer)
       console.log('Image saved to:', targetPath)
+      cleanupOldAssets()
       return { success: true }
     } catch (error) {
       console.error('Error downloading image:', error)
@@ -122,8 +153,7 @@ export function registerApiHandlers() {
 
         // If saving to assets, resolve relative to userData
         if (filePath.startsWith('assets/')) {
-          const userDataPath = app.getPath('userData')
-          targetPath = path.join(userDataPath, filePath)
+          targetPath = path.join(getAssetsDir(), path.basename(filePath))
 
           // Ensure directory exists
           const dir = path.dirname(targetPath)
@@ -134,6 +164,7 @@ export function registerApiHandlers() {
 
         fs.writeFileSync(targetPath, buffer)
         console.log('Cover art saved from:', url)
+        cleanupOldAssets()
         return { success: true, url } // Return which URL worked
       } catch (error) {
         if (axios.isAxiosError(error)) {

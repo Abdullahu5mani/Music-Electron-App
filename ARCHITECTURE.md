@@ -61,7 +61,7 @@ This means you can create a desktop app that looks like a website but can access
 | **Audio Playback** | Howler.js | Cross-platform audio |
 | **Metadata** | music-metadata | Extract ID3 tags & album art |
 | **YouTube** | yt-dlp-wrap | Download audio from YouTube |
-| **Audio Fingerprinting** | @unimusic/chromaprint | Generate audio fingerprints |
+| **Audio Fingerprinting** | @unimusic/chromaprint (WASM) | Generate audio fingerprints (renderer-thread, reset per file) |
 | **Tag Writing** | taglib-wasm | Write cover art to files |
 | **Database** | better-sqlite3 | SQLite metadata cache |
 | **Sliders** | rc-slider | Seek bar & volume control |
@@ -256,6 +256,12 @@ The preload script securely exposes specific APIs to the renderer via `contextBr
 ### 4. `electron/ipc/handlers.ts` - IPC Handler Registration
 
 Handlers are organized into **modular files** for better maintainability.
+
+**Renderer Type Safety (`src/electron.d.ts`)**
+
+- Provides TypeScript definitions for `window.electronAPI` that the renderer uses.
+- It is **compile-time only**: it does not enforce runtime checks.
+- Keep it in sync with what `preload.ts` exposes and what main-process handlers implement to avoid runtime “function not found” errors.
 
 **Modular Structure:**
 
@@ -629,13 +635,22 @@ Manages all audio state using **Howler.js**.
 - `isPlaying` - Is audio playing?
 - `currentTime` / `duration` - Position tracking
 - `volume` - Volume level (0.0 - 1.0)
+- `shuffle` - Whether random playback is enabled
+- `repeatMode` - `off | all | one`
 
 **Actions:**
 - `playSong(file, index)` - Create Howl, start playback
 - `togglePlayPause()` - Pause/Resume
 - `playNext()` / `playPrevious()` - Navigate playlist
+- `toggleShuffle()` - Enable/disable random track selection
+- `cycleRepeatMode()` - Cycle Off → Repeat All → Repeat One
 - `seek(time)` - Jump to position
 - `setVolume(volume)` - Adjust volume
+
+**Playback behaviors:**
+- **Shuffle:** `playNext()` chooses a random different track; history is tracked so `playPrevious()` steps back through shuffled selections.
+- **Repeat All:** Auto-advance from the last track wraps to the first.
+- **Repeat One:** Auto-advance replays the current track.
 
 ---
 
@@ -947,6 +962,7 @@ Error: Failed processing file: memory access out of bounds
 | **File Size Limit** | Skip files > 50MB | Large files exhaust memory faster |
 | **Micro Delays** | 100ms before each fingerprint | Allow GC to run |
 | **Error Reset** | Reset counter on batch start | Fresh start for each batch |
+| **Per-File Reinit** | Reset WASM instance after each file | Release WASM memory aggressively |
 | **User Warning** | Notify when scanning 50+ files | Set expectations |
 
 **Implementation:** `src/utils/fingerprintGenerator.ts`
@@ -961,6 +977,11 @@ const MAX_FILE_SIZE = 50 * 1024 * 1024 // 50MB
 
 // Allow GC time between operations
 await smallDelay(100)
+
+// Reset WASM instance after each file to release memory
+if (filesSinceInit >= MAX_FILES_BEFORE_RESET) {
+  await resetChromaprintModule() // drops module reference, re-imports next call
+}
 ```
 
 **Flow:**
@@ -983,14 +1004,20 @@ await smallDelay(100)
 │       │                   │                                      │
 │       │                   └──► consecutiveErrors++              │
 │       │                        Return null                       │
+│       │                                                          │
+│       ├──► filesSinceInit++                                      │
+│       │                                                          │
+│       ├──► filesSinceInit >= MAX_FILES_BEFORE_RESET?             │
+│       │        │                                                 │
+│       │        └──► resetChromaprintModule()  // free WASM mem   │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
 **Recommendations for Large Libraries:**
 
-1. **Scan in batches** - Process 30-40 files, restart app, continue
-2. **Restart on errors** - If consecutive errors occur, restart app
-3. **Future improvement** - Consider using `fpcalc` binary in main process for production
+1. Current state resets the WASM module after *every* file to keep memory usage low.
+2. Fingerprinting still runs on the renderer thread; long batches can make the UI feel sluggish.
+3. Future improvement: move fingerprinting to the main process using the `fpcalc`/chromaprint CLI, or to a Web Worker, to avoid UI blocking and WASM limits.
 
 ---
 
@@ -1043,8 +1070,8 @@ The Cover Art Archive often returns 404 for specific releases. To handle this, t
 
 **URL Priority:**
 1. **250px front cover** for each release (best quality/size ratio)
-2. **500px front cover** for first release (higher quality)
-3. **Original size** for first release (largest)
+2. **500px front cover** for each release (higher quality)
+3. **Original size** for each release (largest)
 4. **Release group** covers (some albums only have art at group level)
 
 ---
@@ -1390,6 +1417,20 @@ A corrupted binary (exists but can't run) is automatically deleted and marked as
 15. **Circuit Breaker** - Stop WASM fingerprinting after consecutive failures to prevent crash loops
 16. **WASM Memory Management** - File size limits and micro-delays to mitigate WASM memory exhaustion
 17. **In-Place Metadata Updates** - Update single file metadata without full library refresh to preserve scroll position and prevent list jumping
+18. **WASM Per-File Reinit** - Reset chromaprint WASM instance after each file to release memory
+
+---
+
+## Known Limitations & Future Work
+
+- **Fingerprinting still on renderer thread:** Even with per-file WASM reset, long batches can make the UI feel sluggish. Best path is to move fingerprinting to a main-process chromaprint/`fpcalc` CLI or a Web Worker.
+- **Playback/UX gaps:** No shuffle/repeat, queue/playlist management, or persisted playback/volume state across sessions.
+- **Library UX:** Search bar added (title/artist/album); still no multi-select for bulk actions; “dateAdded” now uses file modification time (mtime) for stable ordering.
+- **Downloads:** No download queue/history; single-link flow with a fixed inter-download delay; minimal retry/visibility for failures.
+- **Cover art management:** No manual upload/fix; downloaded art in `userData/assets` now auto-cleans files older than ~30 days (no UI yet for manual cleanup).
+- **Incremental updates:** No file-system watch; rescans are manual.
+- **Accessibility/shortcuts:** No renderer keyboard shortcuts (play/pause, next/prev, scan); limited accessibility affordances.
+- **Testing/observability:** No automated tests; limited structured logging/telemetry for API and tagging failures.
 
 ---
 

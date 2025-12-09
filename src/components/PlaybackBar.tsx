@@ -15,6 +15,10 @@ interface PlaybackBarProps {
   onPlayPause: () => void
   onNext: () => void
   onPrevious: () => void
+  shuffle: boolean
+  repeatMode: 'off' | 'all' | 'one'
+  onToggleShuffle: () => void
+  onCycleRepeatMode: () => void
   currentTime: number
   duration: number
   onSeek: (time: number) => void
@@ -43,6 +47,10 @@ export function PlaybackBar({
   onPlayPause,
   onNext,
   onPrevious,
+  shuffle,
+  repeatMode,
+  onToggleShuffle,
+  onCycleRepeatMode,
   currentTime,
   duration,
   onSeek,
@@ -72,6 +80,9 @@ export function PlaybackBar({
     setIsDragging(false)
     onSeek(newTime)
   }
+
+  const repeatIcon = repeatMode === 'one' ? '🔂' : repeatMode === 'all' ? '🔁' : '↻'
+  const repeatLabel = repeatMode === 'one' ? 'Repeat 1' : repeatMode === 'all' ? 'Repeat All' : 'Repeat Off'
 
   return (
     <div className="playback-bar">
@@ -130,6 +141,28 @@ export function PlaybackBar({
           </div>
         </div>
         <div className="playback-controls">
+          <button
+            className={`control-button toggle-button ${shuffle ? 'active' : ''}`}
+            onClick={(e) => {
+              e.stopPropagation()
+              onToggleShuffle()
+            }}
+            aria-label="Toggle shuffle"
+            title={shuffle ? 'Shuffle On' : 'Shuffle Off'}
+          >
+            <span className="toggle-icon">🔀</span>
+          </button>
+          <button
+            className={`control-button toggle-button ${repeatMode !== 'off' ? 'active' : ''}`}
+            onClick={(e) => {
+              e.stopPropagation()
+              onCycleRepeatMode()
+            }}
+            aria-label={`Cycle repeat mode (${repeatLabel})`}
+            title={repeatLabel}
+          >
+            <span className="toggle-icon">{repeatIcon}</span>
+          </button>
           <button 
             className="control-button prev-button"
             onClick={(e) => {
