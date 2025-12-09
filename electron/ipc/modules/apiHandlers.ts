@@ -64,7 +64,7 @@ export function registerApiHandlers() {
 
       // Lookup recording with artist, release, and release-group info
       // release-groups gives us type info (Album, Single, Compilation, Soundtrack, etc.)
-      const data = await mbApi.lookup('recording', mbid, ['artists', 'releases', 'release-groups'])
+      const data = await mbApi.lookup('recording' as any, mbid, ['artists', 'releases', 'release-groups'] as any)
 
       console.log('MusicBrainz Data fetched successfully')
       return data

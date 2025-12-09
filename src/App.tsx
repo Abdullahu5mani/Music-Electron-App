@@ -12,7 +12,6 @@ import { NotificationToast } from './components/NotificationToast'
 import { BatchScanProgress } from './components/BatchScanProgress'
 import { Sidebar } from './components/Sidebar'
 import { Settings } from './components/Settings'
-import type { MusicFile } from '../electron/musicScanner'
 import type { ScanStatusType } from './electron.d'
 import './App.css'
 
@@ -141,7 +140,7 @@ function App() {
       showToastNotification('All songs have already been scanned', 'info')
       return
     }
-    
+
     console.log(`Starting batch scan of ${unscannedFiles.length} songs...`)
     await scanBatch(unscannedFiles)
   }, [unscannedFiles, scanBatch, showToastNotification])
@@ -278,7 +277,7 @@ function App() {
             >
               <SongList
                 songs={filteredMusicFiles}
-                onSongClick={(file, index) => {
+                onSongClick={(file) => {
                   // Find the actual index in the full library
                   const actualIndex = sortedMusicFiles.findIndex(f => f.path === file.path)
                   if (actualIndex !== -1) {
