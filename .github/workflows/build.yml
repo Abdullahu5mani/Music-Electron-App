@@ -37,7 +37,7 @@ jobs:
 
       # 4. Build the React Frontend (Vite)
       - name: Build React (Vite)
-        run: npm run build
+        run: npm run build:web
 
       # 5. Build the Electron App
       # This uses electron-builder to create the .exe, .dmg, etc.
