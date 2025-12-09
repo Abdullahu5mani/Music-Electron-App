@@ -2,6 +2,7 @@ import { app, BrowserWindow, Menu, globalShortcut } from 'electron'
 import { createWindow, setupWindowEvents } from './window'
 import { registerIpcHandlers } from './ipc/handlers'
 import { createTray, updateWindowVisibility } from './tray'
+import { initializeDatabase, closeDatabase } from './metadataCache'
 
 // Remove the menu bar completely
 Menu.setApplicationMenu(null)
@@ -38,13 +39,18 @@ app.whenReady().then(() => {
   })
 })
 
-// Unregister shortcuts when app quits
+// Unregister shortcuts and cleanup when app quits
 app.on('will-quit', () => {
   globalShortcut.unregisterAll()
+  // Close the metadata cache database
+  closeDatabase()
 })
 
 // Initialize app when ready
 app.whenReady().then(async () => {
+  // Initialize the metadata cache database
+  initializeDatabase()
+  
   const window = createWindow()
   createTray()
   

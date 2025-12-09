@@ -14,6 +14,7 @@
     "@babel/runtime": "^7.28.4",
     "@unimusic/chromaprint": "^0.1.4",
     "axios": "^1.13.2",
+    "better-sqlite3": "^12.5.0",
     "howler": "^2.2.4",
     "music-metadata": "^11.10.3",
     "musicbrainz-api": "^0.27.0",
@@ -29,6 +30,7 @@
     "yt-dlp-wrap": "^2.3.12"
   },
   "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
     "@types/howler": "^2.2.12",
     "@types/react": "^18.2.64",
     "@types/react-dom": "^18.2.21",

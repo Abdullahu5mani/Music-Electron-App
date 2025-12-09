@@ -6,9 +6,21 @@ interface SettingsProps {
   isOpen: boolean
   onClose: () => void
   onSettingsChange: () => void
+  onScanAll?: () => void
+  isBatchScanning?: boolean
+  unscannedCount?: number
+  totalSongCount?: number
 }
 
-export function Settings({ isOpen, onClose, onSettingsChange }: SettingsProps) {
+export function Settings({ 
+  isOpen, 
+  onClose, 
+  onSettingsChange,
+  onScanAll,
+  isBatchScanning = false,
+  unscannedCount = 0,
+  totalSongCount = 0
+}: SettingsProps) {
   const [settings, setSettings] = useState<AppSettings>({
     musicFolderPath: null,
     downloadFolderPath: null,
@@ -175,6 +187,44 @@ export function Settings({ isOpen, onClose, onSettingsChange }: SettingsProps) {
                     className="settings-select-button"
                   >
                     Browse
+                  </button>
+                </div>
+              </div>
+
+              {/* Library Scan Section */}
+              <div className="settings-section scan-library-section">
+                <label className="settings-label">Library Scanner</label>
+                <p className="settings-description">
+                  Scan your entire library to identify songs and fetch metadata
+                </p>
+                <div className="scan-library-info">
+                  <div className="scan-stats">
+                    <span className="scan-stat">
+                      <strong>{totalSongCount}</strong> total songs
+                    </span>
+                    <span className="scan-stat">
+                      <strong>{unscannedCount}</strong> unscanned
+                    </span>
+                    <span className="scan-stat">
+                      <strong>{totalSongCount - unscannedCount}</strong> already scanned
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onScanAll?.()
+                      onClose()
+                    }}
+                    className="scan-all-button"
+                    disabled={isBatchScanning || unscannedCount === 0}
+                  >
+                    {isBatchScanning ? (
+                      <>⏳ Scanning...</>
+                    ) : unscannedCount === 0 ? (
+                      <>✅ All songs scanned</>
+                    ) : (
+                      <>🔍 Scan {unscannedCount} Unscanned Songs</>
+                    )}
                   </button>
                 </div>
               </div>

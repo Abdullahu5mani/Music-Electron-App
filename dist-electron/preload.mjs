@@ -71,9 +71,20 @@ electron.contextBridge.exposeInMainWorld("electronAPI", {
     };
   },
   downloadImage: (url, filePath) => electron.ipcRenderer.invoke("download-image", url, filePath),
+  downloadImageWithFallback: (urls, filePath) => electron.ipcRenderer.invoke("download-image-with-fallback", urls, filePath),
   writeCoverArt: (filePath, imagePath) => electron.ipcRenderer.invoke("write-cover-art", filePath, imagePath),
+  writeMetadata: (filePath, metadata) => electron.ipcRenderer.invoke("write-metadata", filePath, metadata),
   lookupAcoustid: (fingerprint, duration) => electron.ipcRenderer.invoke("lookup-acoustid", fingerprint, duration),
-  lookupMusicBrainz: (mbid) => electron.ipcRenderer.invoke("lookup-musicbrainz", mbid)
+  lookupMusicBrainz: (mbid) => electron.ipcRenderer.invoke("lookup-musicbrainz", mbid),
+  // Metadata cache operations
+  cacheGetFileStatus: (filePath) => electron.ipcRenderer.invoke("cache-get-file-status", filePath),
+  cacheMarkFileScanned: (filePath, mbid, hasMetadata) => electron.ipcRenderer.invoke("cache-mark-file-scanned", filePath, mbid, hasMetadata),
+  cacheGetBatchStatus: (filePaths) => electron.ipcRenderer.invoke("cache-get-batch-status", filePaths),
+  cacheGetUnscannedFiles: (filePaths) => electron.ipcRenderer.invoke("cache-get-unscanned-files", filePaths),
+  cacheGetStatistics: () => electron.ipcRenderer.invoke("cache-get-statistics"),
+  cacheGetEntry: (filePath) => electron.ipcRenderer.invoke("cache-get-entry", filePath),
+  cacheCleanupOrphaned: () => electron.ipcRenderer.invoke("cache-cleanup-orphaned"),
+  cacheClear: () => electron.ipcRenderer.invoke("cache-clear")
 });
 electron.contextBridge.exposeInMainWorld("ipcRenderer", {
   on(...args) {

@@ -319,6 +319,64 @@
   color: #ffd700;
 }
 
+/* Library Scan Section */
+.scan-library-section {
+  background: linear-gradient(135deg, rgba(79, 172, 254, 0.1) 0%, rgba(0, 242, 254, 0.05) 100%);
+  border: 1px solid rgba(79, 172, 254, 0.2);
+  border-radius: 8px;
+  padding: 1rem;
+}
+
+.scan-library-info {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.scan-stats {
+  display: flex;
+  gap: 1.5rem;
+  flex-wrap: wrap;
+}
+
+.scan-stat {
+  color: #aaa;
+  font-size: 0.85rem;
+}
+
+.scan-stat strong {
+  color: #fff;
+  font-variant-numeric: tabular-nums;
+}
+
+.scan-all-button {
+  background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+  color: #000;
+  border: none;
+  padding: 0.75rem 1.5rem;
+  border-radius: 8px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+}
+
+.scan-all-button:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 15px rgba(79, 172, 254, 0.4);
+}
+
+.scan-all-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  background: #444;
+  color: #999;
+}
+
 
 
 

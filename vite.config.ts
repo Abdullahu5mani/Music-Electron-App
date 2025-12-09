@@ -14,7 +14,8 @@ export default defineConfig({
         vite: {
           build: {
             rollupOptions: {
-              external: ['taglib-wasm', 'axios'], // Externalize both
+              // Externalize native modules and packages that need special handling
+              external: ['taglib-wasm', 'axios', 'better-sqlite3'],
             },
           },
         },

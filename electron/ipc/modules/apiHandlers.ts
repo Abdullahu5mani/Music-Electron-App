@@ -62,8 +62,9 @@ export function registerApiHandlers() {
 
       console.log(`Fetching MusicBrainz metadata for MBID: ${mbid}`)
 
-      // Lookup recording with artist and release info
-      const data = await mbApi.lookup('recording', mbid, ['artists', 'releases'])
+      // Lookup recording with artist, release, and release-group info
+      // release-groups gives us type info (Album, Single, Compilation, Soundtrack, etc.)
+      const data = await mbApi.lookup('recording', mbid, ['artists', 'releases', 'release-groups'])
 
       console.log('MusicBrainz Data fetched successfully')
       return data
@@ -100,6 +101,59 @@ export function registerApiHandlers() {
       console.error('Error downloading image:', error)
       return { success: false, error: error instanceof Error ? error.message : 'Unknown error' }
     }
+  })
+
+  // Handle image download with fallback URLs (tries multiple URLs until one succeeds)
+  ipcMain.handle('download-image-with-fallback', async (_event, urls: string[], filePath: string) => {
+    let lastError: string | null = null
+
+    for (const url of urls) {
+      try {
+        console.log(`Trying cover art URL: ${url}`)
+        const response = await axios.get(url, {
+          responseType: 'arraybuffer',
+          timeout: 10000,
+          validateStatus: (status) => status === 200 // Only accept 200 OK
+        })
+
+        const buffer = Buffer.from(response.data)
+
+        let targetPath = filePath
+
+        // If saving to assets, resolve relative to userData
+        if (filePath.startsWith('assets/')) {
+          const userDataPath = app.getPath('userData')
+          targetPath = path.join(userDataPath, filePath)
+
+          // Ensure directory exists
+          const dir = path.dirname(targetPath)
+          if (!fs.existsSync(dir)) {
+            fs.mkdirSync(dir, { recursive: true })
+          }
+        }
+
+        fs.writeFileSync(targetPath, buffer)
+        console.log('Cover art saved from:', url)
+        return { success: true, url } // Return which URL worked
+      } catch (error) {
+        if (axios.isAxiosError(error)) {
+          if (error.response?.status === 404) {
+            console.log(`404 Not Found: ${url}, trying next...`)
+            lastError = '404 Not Found'
+          } else {
+            console.log(`Error ${error.response?.status || 'unknown'}: ${url}, trying next...`)
+            lastError = error.message
+          }
+        } else {
+          lastError = error instanceof Error ? error.message : 'Unknown error'
+        }
+        // Continue to next URL
+      }
+    }
+
+    // All URLs failed
+    console.error('All cover art URLs failed. Last error:', lastError)
+    return { success: false, error: lastError || 'All URLs returned 404' }
   })
 }
 

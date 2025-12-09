@@ -20,13 +20,20 @@ export interface BinaryDownloadProgress {
 
 /**
  * Gets the version of the installed yt-dlp binary
+ * Returns null if file doesn't exist or is corrupted/not executable
  */
 async function getInstalledVersion(binaryPath: string): Promise<string | null> {
   try {
-    const { stdout } = await execFileAsync(binaryPath, ['--version'])
+    const { stdout } = await execFileAsync(binaryPath, ['--version'], { timeout: 10000 })
     return stdout.trim()
-  } catch (error) {
-    console.error('Failed to get installed version:', error)
+  } catch (error: any) {
+    // EFTYPE = file exists but wrong format/corrupted
+    // Don't log full error for common cases
+    if (error?.code === 'EFTYPE' || error?.code === 'EACCES') {
+      console.warn(`Binary cannot be executed (${error.code}). May need reinstall.`)
+    } else if (error?.code !== 'ENOENT') {
+      console.error('Failed to get installed version:', error?.message || error)
+    }
     return null
   }
 }

@@ -63,6 +63,7 @@ This means you can create a desktop app that looks like a website but can access
 | **YouTube** | yt-dlp-wrap | Download audio from YouTube |
 | **Audio Fingerprinting** | @unimusic/chromaprint | Generate audio fingerprints |
 | **Tag Writing** | taglib-wasm | Write cover art to files |
+| **Database** | better-sqlite3 | SQLite metadata cache |
 | **Sliders** | rc-slider | Seek bar & volume control |
 | **Scrollbars** | overlayscrollbars-react | Custom themed scrollbars |
 | **HTTP** | axios | API requests |
@@ -117,13 +118,15 @@ Music-Electron-App/
 │   ├── youtubeDownloader.ts     # YouTube download with yt-dlp
 │   ├── settings.ts              # Settings persistence (JSON)
 │   ├── binaryManager.ts         # Binary status checking (yt-dlp)
+│   ├── metadataCache.ts         # SQLite database for scan tracking
 │   └── ipc/
 │       ├── handlers.ts          # Main IPC registration (imports modules)
 │       └── modules/             # Modular IPC handlers
 │           ├── musicHandlers.ts     # Folder scanning, cover art writing
 │           ├── apiHandlers.ts       # AcoustID, MusicBrainz, image download
 │           ├── youtubeHandlers.ts   # YouTube download, binary status
-│           └── systemHandlers.ts    # Window controls, settings, platform
+│           ├── systemHandlers.ts    # Window controls, settings, platform
+│           └── cacheHandlers.ts     # Metadata cache operations
 │
 ├── src/                         # Renderer Process (React)
 │   ├── App.tsx                  # Main React component
@@ -262,7 +265,8 @@ electron/ipc/
     ├── musicHandlers.ts     # Music file operations
     ├── apiHandlers.ts       # External API operations
     ├── youtubeHandlers.ts   # YouTube download operations
-    └── systemHandlers.ts    # Window & settings operations
+    ├── systemHandlers.ts    # Window & settings operations
+    └── cacheHandlers.ts     # Metadata cache operations
 ```
 
 **Main handlers.ts:**
@@ -272,12 +276,14 @@ import { registerMusicHandlers } from './modules/musicHandlers'
 import { registerApiHandlers } from './modules/apiHandlers'
 import { registerYoutubeHandlers } from './modules/youtubeHandlers'
 import { registerSystemHandlers } from './modules/systemHandlers'
+import { registerCacheHandlers } from './modules/cacheHandlers'
 
 export function registerIpcHandlers() {
   registerMusicHandlers()
   registerApiHandlers()
   registerYoutubeHandlers()
   registerSystemHandlers()
+  registerCacheHandlers()
 }
 ```
 
@@ -289,9 +295,11 @@ export function registerIpcHandlers() {
 | | `select-music-folder` | invoke | Open folder selection dialog |
 | | `read-file-buffer` | invoke | Read file for fingerprinting |
 | | `write-cover-art` | invoke | Embed cover art in audio file |
+| | `write-metadata` | invoke | Write all metadata to audio file |
 | **apiHandlers** | `lookup-acoustid` | invoke | Query AcoustID API |
 | | `lookup-musicbrainz` | invoke | Query MusicBrainz API |
 | | `download-image` | invoke | Download cover art image |
+| | `download-image-with-fallback` | invoke | Download cover art with fallback URLs |
 | **youtubeHandlers** | `download-youtube` | invoke | Download audio from YouTube |
 | | `get-binary-statuses` | invoke | Get status of yt-dlp binary |
 | **systemHandlers** | `window-minimize` | on | Minimize window |
@@ -303,6 +311,14 @@ export function registerIpcHandlers() {
 | | `save-settings` | invoke | Save settings to disk |
 | | `select-download-folder` | invoke | Open folder picker for downloads |
 | | `get-platform-info` | invoke | Get process.platform and arch |
+| **cacheHandlers** | `cache-get-file-status` | invoke | Get scan status for a file |
+| | `cache-mark-file-scanned` | invoke | Record scan result in database |
+| | `cache-get-batch-status` | invoke | Get status for multiple files |
+| | `cache-get-unscanned-files` | invoke | Filter to unscanned files |
+| | `cache-get-statistics` | invoke | Get total/tagged/untagged counts |
+| | `cache-get-entry` | invoke | Get full cache entry for file |
+| | `cache-cleanup-orphaned` | invoke | Remove entries for deleted files |
+| | `cache-clear` | invoke | Clear entire cache (reset) |
 
 ---
 
@@ -413,6 +429,133 @@ Stores user settings in a JSON file.
 
 ---
 
+### 9. `electron/metadataCache.ts` - SQLite Metadata Cache
+
+Tracks which music files have been scanned/fingerprinted using an SQLite database. This prevents re-scanning unchanged files and persists scan results across app restarts.
+
+**Database Location:**
+- Windows: `%APPDATA%/music-sync-app/metadata-cache.db`
+- macOS: `~/Library/Application Support/music-sync-app/metadata-cache.db`
+- Linux: `~/.config/music-sync-app/metadata-cache.db`
+
+**Database Schema:**
+
+```sql
+CREATE TABLE metadata_cache (
+  filePath TEXT PRIMARY KEY,     -- Full path to music file
+  fileHash TEXT NOT NULL,        -- SHA256(path + size + mtime)
+  scannedAt INTEGER NOT NULL,    -- Unix timestamp of scan
+  mbid TEXT,                     -- MusicBrainz ID (if matched)
+  hasMetadata INTEGER NOT NULL   -- 1 = tagged, 0 = no match
+)
+```
+
+**Scan Status Types:**
+
+| Status | Description | UI Icon |
+|--------|-------------|---------|
+| `unscanned` | Not in database or never scanned | 🔍 |
+| `scanned-tagged` | Scanned successfully, metadata written | ✅ |
+| `scanned-no-match` | Scanned, but no AcoustID/MusicBrainz match | ⚠️ |
+| `file-changed` | File modified since last scan (hash mismatch) | 🔄 |
+
+**File Change Detection:**
+
+The cache uses a hash of `filePath + fileSize + modificationTime` to detect file changes:
+
+```typescript
+function generateFileHash(filePath: string): string {
+  const stats = fs.statSync(filePath)
+  const hashInput = `${filePath}:${stats.size}:${stats.mtimeMs}`
+  return crypto.createHash('sha256').update(hashInput).digest('hex')
+}
+```
+
+This ensures:
+- File renamed → treated as new file (path changed)
+- File modified → hash changes (mtime changed)
+- File replaced → hash changes (size or mtime changed)
+- File unchanged → hash matches → skip rescan
+
+**Complete Flow Diagram:**
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                    METADATA CACHE LIFECYCLE                          │
+│                                                                     │
+│  APP STARTS                                                         │
+│       │                                                             │
+│       ▼                                                             │
+│  initializeDatabase()                                               │
+│       │                                                             │
+│       ├──► Database exists? → Load existing cache                  │
+│       │                                                             │
+│       └──► No database? → Create new with schema                   │
+│                                                                     │
+│  USER SCANS FOLDER                                                  │
+│       │                                                             │
+│       ▼                                                             │
+│  For each music file:                                               │
+│       │                                                             │
+│       ├──► cacheGetBatchStatus(filePaths)                          │
+│       │         │                                                   │
+│       │         ▼                                                   │
+│       │    Compare fileHash with current file                      │
+│       │         │                                                   │
+│       │    ┌────┴────┐                                              │
+│       │    │         │                                              │
+│       │  Match    Mismatch                                          │
+│       │    │         │                                              │
+│       │    ▼         ▼                                              │
+│       │  Check    'file-changed'                                   │
+│       │  hasMetadata  or 'unscanned'                               │
+│       │    │                                                        │
+│       │  ┌─┴─┐                                                      │
+│       │  │   │                                                      │
+│       │  1   0                                                      │
+│       │  │   │                                                      │
+│       │  ▼   ▼                                                      │
+│       │ '✅' '⚠️'                                                   │
+│       │                                                             │
+│  USER CLICKS 🔍                                                     │
+│       │                                                             │
+│       ▼                                                             │
+│  Generate fingerprint → Query AcoustID → Query MusicBrainz          │
+│       │                                                             │
+│       ├──► Success: Write metadata → markFileScanned(path, mbid, true)
+│       │                                        │                    │
+│       │                                        ▼                    │
+│       │                                   Show ✅                   │
+│       │                                                             │
+│       └──► No match: markFileScanned(path, null, false)            │
+│                                        │                            │
+│                                        ▼                            │
+│                                   Show ⚠️                           │
+│                                                                     │
+│  APP CLOSES                                                         │
+│       │                                                             │
+│       ▼                                                             │
+│  closeDatabase()  ← Database persists for next session             │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+**Key Functions:**
+
+| Function | Description |
+|----------|-------------|
+| `initializeDatabase()` | Creates DB connection, ensures schema exists |
+| `closeDatabase()` | Closes DB connection on app quit |
+| `generateFileHash(path)` | Creates SHA256 hash for change detection |
+| `getFileScanStatus(path)` | Returns scan status for a single file |
+| `getBatchScanStatus(paths)` | Returns status map for multiple files |
+| `markFileScanned(path, mbid, hasMetadata)` | Records scan result |
+| `getUnscannedFiles(paths)` | Filters to files needing scan |
+| `getScanStatistics()` | Returns {total, withMetadata, withoutMetadata} |
+| `cleanupOrphanedEntries()` | Removes entries for deleted files |
+| `clearCache()` | Wipes entire cache (for reset) |
+
+---
+
 ## Renderer Process Components
 
 The **Renderer Process** is your React application - the UI that users see and interact with.
@@ -510,17 +653,17 @@ User clicks "Download"
        ▼
 window.electronAPI
   .downloadYouTube(url, path) ──► downloadYouTubeAudio()
-                                        │
+                                       │
 onDownloadTitle(title) ◄──────── send 'download-title'
        │
        ▼
 Show notification
-                                        │
+                                       │
 onDownloadProgress() ◄────────── send 'download-progress' (loop)
        │
        ▼
 Update progress bar
-                                        │
+                                       │
 ◄──────────────────────────── { success, filePath }
        │
        ▼
@@ -528,16 +671,538 @@ Refresh library
 Show success toast
 ```
 
+### Audio Fingerprinting Flow (with Cache)
+
+```
+RENDERER                         MAIN PROCESS
+────────                         ────────────
+User clicks 🔍 button
+       │
+       ▼
+Check scanStatus from cache
+       │
+       ├──► 'scanned-tagged'? → Skip (show "Already tagged")
+       │
+       └──► Continue...
+       │
+       ▼
+generateFingerprint(filePath)
+       │
+       ▼
+window.electronAPI
+  .readFileBuffer(path) ────────► fs.readFileSync(path)
+                                        │
+◄─────────────────────────────── Buffer (Uint8Array)
+       │
+       ▼
+ChromaprintModule.process()
+       │
+       ▼
+window.electronAPI
+  .lookupAcoustid(fp, duration) ─► axios.post(AcoustID API)
+                                        │
+◄─────────────────────────────── { mbid } or null
+       │
+       ├──► null? → markFileScanned(path, null, false)
+       │            Show ⚠️
+       │
+       └──► Continue with MBID...
+       │
+       ▼
+window.electronAPI
+  .lookupMusicBrainz(mbid) ─────► axios.get(MusicBrainz API)
+                                        │
+◄─────────────────────────────── Metadata (title, artist, album, etc.)
+       │
+       ▼
+window.electronAPI
+  .downloadImageWithFallback(   ► Try multiple URLs until one succeeds
+     coverUrls, path)                   │
+                                        │  404? → Try next URL
+                                        │
+◄─────────────────────────────── { success, url }
+       │
+       ▼
+window.electronAPI
+  .writeMetadata(filePath, data) ► taglib-wasm writes to file
+                                        │
+◄─────────────────────────────── { success }
+       │
+       ▼
+window.electronAPI
+  .cacheMarkFileScanned(path, ──► SQLite INSERT/REPLACE
+     mbid, true)                        │
+                                        ▼
+                                   Database updated
+       │
+       ▼
+Update local scanStatuses state
+Show ✅
+       │
+       ▼
+onRefreshLibrary()  → Rescan folder to show updated metadata
+```
+
+### WASM Fingerprint Memory Management
+
+The `@unimusic/chromaprint` WASM library has memory management limitations that require special handling during batch processing.
+
+**The Problem:**
+
+WASM modules have a fixed memory allocation that doesn't properly clean up between operations. After processing many files (~30-50), the WASM memory becomes exhausted:
+
+```
+Error: Failed processing file: memory access out of bounds
+    at processAudioFile (index.js)
+```
+
+**Mitigation Strategies:**
+
+| Strategy | Implementation | Purpose |
+|----------|---------------|---------|
+| **Circuit Breaker** | Stop after 3 consecutive errors | Prevent crash loops |
+| **File Size Limit** | Skip files > 50MB | Large files exhaust memory faster |
+| **Micro Delays** | 100ms before each fingerprint | Allow GC to run |
+| **Error Reset** | Reset counter on batch start | Fresh start for each batch |
+| **User Warning** | Notify when scanning 50+ files | Set expectations |
+
+**Implementation:** `src/utils/fingerprintGenerator.ts`
+
+```typescript
+// Circuit breaker pattern
+let consecutiveErrors = 0
+const MAX_CONSECUTIVE_ERRORS = 3
+
+// Skip oversized files
+const MAX_FILE_SIZE = 50 * 1024 * 1024 // 50MB
+
+// Allow GC time between operations
+await smallDelay(100)
+```
+
+**Flow:**
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  generateFingerprint(filePath)                                   │
+│       │                                                          │
+│       ├──► consecutiveErrors >= 3? → Return null (circuit open) │
+│       │                                                          │
+│       ├──► File > 50MB? → Return null (too large)               │
+│       │                                                          │
+│       ├──► await smallDelay(100ms)                              │
+│       │                                                          │
+│       ├──► processAudioFile(buffer)                             │
+│       │         │                                                │
+│       │         ├──► Success → Reset errors, return fingerprint │
+│       │         │                                                │
+│       │         └──► "memory access out of bounds"              │
+│       │                   │                                      │
+│       │                   └──► consecutiveErrors++              │
+│       │                        Return null                       │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+**Recommendations for Large Libraries:**
+
+1. **Scan in batches** - Process 30-40 files, restart app, continue
+2. **Restart on errors** - If consecutive errors occur, restart app
+3. **Future improvement** - Consider using `fpcalc` binary in main process for production
+
+---
+
+### Cover Art Fallback System
+
+The Cover Art Archive often returns 404 for specific releases. To handle this, the app tries multiple URLs in priority order:
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│  Cover Art Download with Fallback                                   │
+│                                                                     │
+│  MusicBrainz returns releases: [Release A, Release B, Release C]   │
+│                                                                     │
+│  getCoverArtUrls() generates URLs in priority order:                │
+│                                                                     │
+│    1. /release/A/front-250  ─── 200 OK? ─── Save & Done!           │
+│                │                                                    │
+│              404?                                                   │
+│                │                                                    │
+│    2. /release/B/front-250  ─── 200 OK? ─── Save & Done!           │
+│                │                                                    │
+│              404?                                                   │
+│                │                                                    │
+│    3. /release/C/front-250  ─── 200 OK? ─── Save & Done!           │
+│                │                                                    │
+│              404?                                                   │
+│                │                                                    │
+│    4. /release/A/front-500  ─── Higher quality fallback            │
+│                │                                                    │
+│              404?                                                   │
+│                │                                                    │
+│    5. /release/A/front      ─── Original size fallback             │
+│                │                                                    │
+│              404?                                                   │
+│                │                                                    │
+│    6. /release-group/X/front-250 ─ Release group fallback          │
+│                │                                                    │
+│              404?                                                   │
+│                │                                                    │
+│    7. /release-group/X/front ─── All failed! No cover art          │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+**Key Functions:**
+
+| Function | Location | Purpose |
+|----------|----------|---------|
+| `getCoverArtUrls(releases, releaseGroupId)` | `musicbrainzClient.ts` | Generates array of fallback URLs |
+| `download-image-with-fallback` | `apiHandlers.ts` | IPC handler that tries URLs sequentially |
+
+**URL Priority:**
+1. **250px front cover** for each release (best quality/size ratio)
+2. **500px front cover** for first release (higher quality)
+3. **Original size** for first release (largest)
+4. **Release group** covers (some albums only have art at group level)
+
+---
+
+### Release Selection System
+
+MusicBrainz returns ALL releases containing a recording, including compilations, soundtracks, and remasters. The app uses a scoring system to select the most likely **original release**.
+
+**The Problem:**
+
+```
+MusicBrainz returns:
+  - "Greatest Hits 2020"     (Compilation)     ❌
+  - "Movie Soundtrack"       (Soundtrack)      ❌
+  - "Artist - Original Album" (Album)          ✅ ← Want this one
+  - "Remix Collection"       (Remix)           ❌
+```
+
+**Scoring Algorithm:**
+
+| Factor | Score Impact |
+|--------|--------------|
+| **Official** status | +100 |
+| **Promotion** status | +20 |
+| **Album** primary type | +50 |
+| **Single** primary type | +40 |
+| **EP** primary type | +30 |
+| **Compilation** secondary type | -200 |
+| **Soundtrack** secondary type | -150 |
+| **Remix** secondary type | -100 |
+| **DJ-mix** secondary type | -100 |
+| **Live** secondary type | -50 |
+| **Earlier release date** | +0 to +50 (bonus for older = original) |
+
+**Selection Flow:**
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│  pickBestRelease(releases)                                          │
+│       │                                                             │
+│       ▼                                                             │
+│  For each release:                                                  │
+│       │                                                             │
+│       ├──► Get release-group.primary-type ("Album", "Single", etc.)│
+│       ├──► Get release-group.secondary-types (["Compilation"], etc.)│
+│       ├──► Get status ("Official", "Bootleg", etc.)                │
+│       ├──► Get date (earlier = more likely original)               │
+│       │                                                             │
+│       ▼                                                             │
+│  Calculate score using factors above                                │
+│       │                                                             │
+│       ▼                                                             │
+│  Sort by score (highest first)                                      │
+│       │                                                             │
+│       ▼                                                             │
+│  Return top-scoring release                                         │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+**Console Output Example:**
+
+```
+=== Release Selection ===
+Top 5 releases by score:
+  1. "Thriller" (1982-11-30)
+     Type: Album
+     Status: Official, Score: 192
+  2. "Greatest Hits" (2008-01-01)
+     Type: Album + Compilation
+     Status: Official, Score: -58
+  3. "80s Soundtrack" (1985-05-01)
+     Type: Album + Soundtrack
+     Status: Official, Score: -11
+Selected: "Thriller"
+========================
+```
+
+**Key Functions:**
+
+| Function | Location | Purpose |
+|----------|----------|---------|
+| `scoreRelease(release)` | `musicbrainzClient.ts` | Calculates score for a single release |
+| `pickBestRelease(releases)` | `musicbrainzClient.ts` | Returns highest-scoring release |
+
+---
+
+### Toast Notification System
+
+Non-blocking toast notifications provide user feedback for scan operations without interrupting the workflow.
+
+**Component:** `NotificationToast.tsx`
+
+**Notification Types:**
+
+| Type | Icon | Color | Use Case |
+|------|------|-------|----------|
+| `success` | ✓ | Green | Metadata tagged successfully |
+| `warning` | ⚠ | Orange | Cover art not found (but metadata written) |
+| `info` | ℹ | Blue | No match found / No metadata available |
+| `error` | ✕ | Red | Write failed / Scan error |
+
+**Scan Result Notifications:**
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│  Scan Operation Results → Toast Notifications                       │
+│                                                                     │
+│  ┌─────────────────────┐     ┌─────────────────────────────────┐   │
+│  │ Metadata written    │ ──► │ ✓ Tagged: "Song" by Artist      │   │
+│  │ successfully        │     │        (success, green)          │   │
+│  └─────────────────────┘     └─────────────────────────────────┘   │
+│                                                                     │
+│  ┌─────────────────────┐     ┌─────────────────────────────────┐   │
+│  │ Cover art 404       │ ──► │ ⚠ No cover art found for "Song" │   │
+│  │ (all URLs failed)   │     │        (warning, orange)         │   │
+│  └─────────────────────┘     └─────────────────────────────────┘   │
+│                                                                     │
+│  ┌─────────────────────┐     ┌─────────────────────────────────┐   │
+│  │ No AcoustID match   │ ──► │ ℹ No match found for "file.mp3" │   │
+│  │                     │     │        (info, blue)              │   │
+│  └─────────────────────┘     └─────────────────────────────────┘   │
+│                                                                     │
+│  ┌─────────────────────┐     ┌─────────────────────────────────┐   │
+│  │ Write/scan error    │ ──► │ ✕ Scan failed for "file.mp3"    │   │
+│  │                     │     │        (error, red)              │   │
+│  └─────────────────────┘     └─────────────────────────────────┘   │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+**Props Flow:**
+
+```
+App.tsx
+   │
+   ├── showToastNotification(message, type)  ← Helper function
+   │         │
+   │         ▼
+   └── <SongList onShowNotification={showToastNotification} />
+                    │
+                    ▼
+              handleGenerateFingerprint()
+                    │
+                    ├── Success → onShowNotification("Tagged: ...", 'success')
+                    ├── No cover → onShowNotification("No cover...", 'warning')
+                    ├── No match → onShowNotification("No match...", 'info')
+                    └── Error → onShowNotification("Scan failed...", 'error')
+```
+
+**Toast Behavior:**
+- Auto-dismisses after 3 seconds (configurable via `duration` prop)
+- Positioned in bottom-right corner
+- Includes close button for manual dismissal
+- Fade-in/fade-out animations
+
+---
+
+### Rate Limiting System
+
+API calls are rate-limited to respect external service limits and avoid being blocked.
+
+**Rate Limits (Conservative):**
+
+| API | Limit | Our Delay | Safety Margin |
+|-----|-------|-----------|---------------|
+| **AcoustID** | 3 req/sec | 500ms | ~2 req/sec |
+| **MusicBrainz** | 1 req/sec | 1100ms | Buffer for latency |
+| **Cover Art Archive** | 1 req/sec | 1100ms | Same as MusicBrainz |
+| **Between Songs** | N/A | 500ms | Prevent API hammering |
+
+**Implementation:** `src/utils/rateLimiter.ts`
+
+```
+export const API_DELAYS = {
+  ACOUSTID: 500,        // AcoustID allows 3/sec
+  MUSICBRAINZ: 1100,    // MusicBrainz requires 1/sec
+  COVERART: 1100,       // Cover Art follows MusicBrainz rules
+  BETWEEN_SONGS: 500,   // Small delay between batch items
+}
+```
+
+**Usage Flow:**
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  Scan Song                                                   │
+│       │                                                      │
+│       ├──► Generate Fingerprint (local, no delay)           │
+│       │                                                      │
+│       ├──► waitForAcoustID()  ← 500ms delay                 │
+│       ├──► Query AcoustID API                               │
+│       │                                                      │
+│       ├──► waitForMusicBrainz()  ← 1100ms delay             │
+│       ├──► Query MusicBrainz API                            │
+│       │                                                      │
+│       ├──► waitForCoverArt()  ← 1100ms delay                │
+│       └──► Download Cover Art                               │
+└─────────────────────────────────────────────────────────────┘
+```
+
+---
+
+### Batch Scan System
+
+Scans entire library with progress tracking and cancellation support.
+
+**Components:**
+
+| Component | Purpose |
+|-----------|---------|
+| `useSongScanner` hook | Manages scan logic with rate limiting |
+| `BatchScanProgress` | Floating progress notification |
+| Settings "Scan All" | Initiates batch scan |
+
+**Flow:**
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  Settings → "Scan X Unscanned Songs" Button                 │
+│       │                                                      │
+│       ▼                                                      │
+│  handleScanAll()                                             │
+│       │                                                      │
+│       ├──► Filter to unscanned files                        │
+│       ├──► scanBatch(unscannedFiles)                        │
+│       │                                                      │
+│       ▼                                                      │
+│  For each file:                                             │
+│       │                                                      │
+│       ├──► Update BatchScanProgress (X of Y)                │
+│       ├──► scanSong(file) with rate limiting                │
+│       ├──► Update scan status in cache                      │
+│       ├──► Show toast notification                          │
+│       └──► waitBetweenSongs()                               │
+│                                                              │
+│  User can cancel via ✕ button → cancelledRef.current = true │
+│                                                              │
+│  On Complete:                                                │
+│       ├──► Refresh library                                  │
+│       └──► Show summary toast                               │
+└─────────────────────────────────────────────────────────────┘
+```
+
+**Batch Progress UI:**
+
+```
+┌──────────────────────────────────┐
+│ 🔍 Scanning Library           ✕ │
+│                                  │
+│          42 of 200               │
+│                                  │
+│ ████████████░░░░░░░░░░░░░  21%  │
+│                                  │
+│     Currently: Song Name...      │
+└──────────────────────────────────┘
+```
+
+**Key Functions:**
+
+| Function | Location | Purpose |
+|----------|----------|---------|
+| `useSongScanner()` | `src/hooks/useSongScanner.ts` | Hook for scanning with rate limits |
+| `scanBatch(files)` | `useSongScanner` | Scan multiple files sequentially |
+| `cancelBatchScan()` | `useSongScanner` | Stop ongoing batch scan |
+| `handleScanAll()` | `App.tsx` | Initiates scan of unscanned files |
+
+---
+
+### Scan Status Types
+
+Each file in the library has a scan status tracked in SQLite.
+
+**Status Types:**
+
+| Status | Meaning | UI Icon |
+|--------|---------|---------|
+| `unscanned` | Never been scanned | 🔍 |
+| `scanned-tagged` | Scanned, metadata written successfully | ✅ |
+| `scanned-no-match` | Scanned, but no match found in AcoustID/MusicBrainz | ⚠️ |
+| `file-changed` | Previously scanned, but file was modified (needs rescan) | 🔄 |
+
+**Unscanned File Detection:**
+
+```typescript
+// Files needing scan = no status OR unscanned OR file changed
+const unscannedFiles = sortedMusicFiles.filter(file => {
+  const status = scanStatuses[file.path]
+  return !status || status === 'unscanned' || status === 'file-changed'
+})
+```
+
+**File Change Detection:**
+
+When a file is scanned, a hash is stored: `SHA256(path + size + mtime)`
+
+On next app load:
+1. Generate current hash from file stats
+2. Compare with stored hash
+3. If different → status becomes `'file-changed'` → included in rescan
+
+---
+
+### Binary Manager
+
+Manages external binaries (yt-dlp) with automatic download and error recovery.
+
+**Error Handling:**
+
+| Error Code | Meaning | Action |
+|------------|---------|--------|
+| `EFTYPE` | File exists but wrong format/corrupted | Auto-delete, show as "Missing" |
+| `EACCES` | Permission denied | Auto-delete, show as "Missing" |
+| `ENOENT` | File not found | Show as "Missing" |
+
+**Install Status Logic:**
+
+```
+Binary "installed" = file exists AND can execute successfully
+```
+
+A corrupted binary (exists but can't run) is automatically deleted and marked as "Missing" so users can re-download.
+
 ---
 
 ## Key Design Patterns
 
-1. **Custom Hooks** - Encapsulate complex logic (`useAudioPlayer`, `useMusicLibrary`)
+1. **Custom Hooks** - Encapsulate complex logic (`useAudioPlayer`, `useMusicLibrary`, `useSongScanner`)
 2. **Memoization** - `useMemo` for sorted music files
 3. **Modular IPC Handlers** - Split by feature for maintainability
 4. **Cleanup Functions** - All IPC listeners return cleanup functions
-5. **Rate Limiting** - 10-second delay between YouTube downloads
+5. **Rate Limiting** - Delays between API calls to respect service limits
 6. **Path Normalization** - Cross-platform file:// URL generation
+7. **SQLite Caching** - Persistent scan tracking with file change detection
+8. **Hash-Based Change Detection** - SHA256(path+size+mtime) for detecting file modifications
+9. **Fallback URL Strategy** - Try multiple cover art URLs sequentially until one succeeds
+10. **Non-Blocking Notifications** - Toast notifications for scan feedback without interrupting workflow
+11. **Release Scoring** - Prioritize original albums over compilations/soundtracks using weighted scoring
+12. **Batch Processing** - Process multiple files with progress tracking and cancellation
+13. **API Rate Limiting** - Conservative delays between AcoustID, MusicBrainz, and Cover Art API calls
+14. **Graceful Error Recovery** - Auto-delete corrupted binaries, handle API failures without crashing
+15. **Circuit Breaker** - Stop WASM fingerprinting after consecutive failures to prevent crash loops
+16. **WASM Memory Management** - File size limits and micro-delays to mitigate WASM memory exhaustion
 
 ---
 

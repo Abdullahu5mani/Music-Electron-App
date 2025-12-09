@@ -45,16 +45,31 @@ function getBinaryPath(): string {
 
 /**
  * Gets the installed version of yt-dlp binary
+ * Returns null if file doesn't exist or is corrupted/not executable
  */
 async function getInstalledVersion(binaryPath: string): Promise<string | null> {
   try {
     if (!fs.existsSync(binaryPath)) {
       return null
     }
-    const { stdout } = await execFileAsync(binaryPath, ['--version'])
+    const { stdout } = await execFileAsync(binaryPath, ['--version'], { timeout: 10000 })
     return stdout.trim() || null
-  } catch (error) {
-    console.error(`Failed to get installed version for ${binaryPath}:`, error)
+  } catch (error: any) {
+    // EFTYPE = file exists but wrong format/corrupted
+    // EACCES = permission denied
+    // ENOENT = file not found
+    if (error?.code === 'EFTYPE' || error?.code === 'EACCES') {
+      console.warn(`Binary at ${binaryPath} exists but cannot be executed (${error.code}). May be corrupted.`)
+      // Optionally delete the corrupted file
+      try {
+        fs.unlinkSync(binaryPath)
+        console.log(`Deleted corrupted binary: ${binaryPath}`)
+      } catch (deleteError) {
+        console.error(`Failed to delete corrupted binary:`, deleteError)
+      }
+    } else {
+      console.error(`Failed to get installed version for ${binaryPath}:`, error?.message || error)
+    }
     return null
   }
 }
@@ -91,14 +106,18 @@ async function getLatestVersionFromGitHub(): Promise<string | null> {
  */
 export async function getYtDlpStatus(): Promise<BinaryStatus> {
   const binaryPath = getBinaryPath()
-  const installed = fs.existsSync(binaryPath)
+  const fileExists = fs.existsSync(binaryPath)
   
   let version: string | null = null
   let latestVersion: string | null = null
   
-  if (installed) {
+  if (fileExists) {
     version = await getInstalledVersion(binaryPath)
   }
+  
+  // Binary is only truly "installed" if we can get its version
+  // (file might exist but be corrupted/not executable)
+  const installed = fileExists && version !== null
   
   // Get latest version from GitHub
   latestVersion = await getLatestVersionFromGitHub()

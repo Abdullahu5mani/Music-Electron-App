@@ -359,6 +359,64 @@
   cursor: not-allowed;
 }
 
+/* Scan status variants */
+.fingerprint-button.no-match {
+  border-color: #ff9800;
+  color: #ff9800;
+}
+
+.fingerprint-button.no-match:hover {
+  background-color: rgba(255, 152, 0, 0.1);
+  border-color: #ffb74d;
+}
+
+.fingerprint-button.file-changed {
+  border-color: #2196f3;
+  color: #2196f3;
+}
+
+.fingerprint-button.file-changed:hover {
+  background-color: rgba(33, 150, 243, 0.1);
+  border-color: #64b5f6;
+}
+
+/* Scan status icon (non-button, display only) */
+.scan-status-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 28px;
+  height: 28px;
+  font-size: 0.875rem;
+  flex-shrink: 0;
+}
+
+.scan-status-icon.tagged {
+  color: #4caf50;
+}
+
+.scan-status-icon.scanning {
+  animation: pulse 1s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+/* Loading statuses indicator */
+.loading-statuses {
+  text-align: center;
+  padding: 0.5rem;
+  color: #aaa;
+  font-size: 0.875rem;
+  font-style: italic;
+}
+
 .song-artist {
   font-size: 0.9rem;
   color: #aaa;

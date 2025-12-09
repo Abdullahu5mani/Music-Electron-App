@@ -4,10 +4,28 @@ import fs from 'fs'
 import { scanMusicFiles } from '../../musicScanner'
 
 /**
+ * Metadata that can be written to audio files
+ */
+export interface AudioMetadata {
+  title?: string
+  artist?: string
+  album?: string
+  albumArtist?: string
+  year?: number
+  trackNumber?: number
+  trackTotal?: number
+  discNumber?: number
+  discTotal?: number
+  genre?: string
+  comment?: string
+  coverArtPath?: string  // Path to cover art image file
+}
+
+/**
  * Registers IPC handlers for music file operations
  * - Folder scanning and selection
  * - File reading for fingerprinting
- * - Cover art writing
+ * - Metadata writing (title, artist, album, cover art, etc.)
  */
 export function registerMusicHandlers() {
   // Handle music folder scanning
@@ -104,6 +122,110 @@ export function registerMusicHandlers() {
       return { success: true }
     } catch (error) {
       console.error('Error writing cover art:', error)
+      return { success: false, error: error instanceof Error ? error.message : 'Unknown error' }
+    }
+  })
+
+  // Handle writing full metadata to file (title, artist, album, year, cover art, etc.)
+  ipcMain.handle('write-metadata', async (_event, filePath: string, metadata: AudioMetadata) => {
+    try {
+      const { TagLib } = await import('taglib-wasm')
+      const taglib = await TagLib.initialize()
+
+      // Read file into buffer (Sandwich method)
+      const fileBuffer = fs.readFileSync(filePath)
+      const data = new Uint8Array(fileBuffer)
+      const file = await taglib.open(data)
+
+      console.log('=== Writing Metadata ===')
+      console.log('File:', filePath)
+      console.log('Format:', file.getFormat())
+
+      const tag = file.tag()
+
+      // Write basic text fields
+      if (metadata.title !== undefined) {
+        tag.setTitle(metadata.title)
+        console.log('  Title:', metadata.title)
+      }
+
+      if (metadata.artist !== undefined) {
+        tag.setArtist(metadata.artist)
+        console.log('  Artist:', metadata.artist)
+      }
+
+      if (metadata.album !== undefined) {
+        tag.setAlbum(metadata.album)
+        console.log('  Album:', metadata.album)
+      }
+
+      // Note: albumArtist is not directly supported by taglib-wasm Tag interface
+      // It would require format-specific handling (e.g., ID3v2 frames)
+
+      if (metadata.year !== undefined && metadata.year > 0) {
+        tag.setYear(metadata.year)
+        console.log('  Year:', metadata.year)
+      }
+
+      if (metadata.trackNumber !== undefined && metadata.trackNumber > 0) {
+        tag.setTrack(metadata.trackNumber)
+        console.log('  Track:', metadata.trackNumber)
+      }
+
+      if (metadata.genre !== undefined) {
+        tag.setGenre(metadata.genre)
+        console.log('  Genre:', metadata.genre)
+      }
+
+      if (metadata.comment !== undefined) {
+        tag.setComment(metadata.comment)
+        console.log('  Comment:', metadata.comment)
+      }
+
+      // Handle cover art if provided
+      if (metadata.coverArtPath) {
+        let resolvedImagePath = metadata.coverArtPath
+        if (metadata.coverArtPath.startsWith('assets/')) {
+          const userDataPath = app.getPath('userData')
+          resolvedImagePath = path.join(userDataPath, metadata.coverArtPath)
+        }
+
+        if (fs.existsSync(resolvedImagePath)) {
+          const imageBuffer = fs.readFileSync(resolvedImagePath)
+          const imageUint8 = new Uint8Array(imageBuffer)
+
+          const ext = path.extname(resolvedImagePath).toLowerCase()
+          const mimeType = ext === '.png' ? 'image/png' : 'image/jpeg'
+
+          const picture: any = {
+            mimeType: mimeType,
+            data: imageUint8,
+            type: 'Cover (front)',
+            description: 'Cover Art'
+          }
+
+          file.setPictures([picture])
+          console.log('  Cover Art: embedded (' + imageBuffer.length + ' bytes)')
+        } else {
+          console.warn('  Cover Art: file not found at', resolvedImagePath)
+        }
+      }
+
+      // Save changes to the memory buffer
+      if (!file.save()) {
+        throw new Error('TagLib failed to save changes to memory buffer')
+      }
+
+      // Retrieve the updated buffer and write it back to disk
+      const updatedBuffer = file.getFileBuffer()
+      fs.writeFileSync(filePath, updatedBuffer)
+
+      file.dispose()
+
+      console.log('=== Metadata Written Successfully ===')
+      return { success: true }
+    } catch (error) {
+      console.error('Error writing metadata:', error)
       return { success: false, error: error instanceof Error ? error.message : 'Unknown error' }
     }
   })

@@ -1,9 +1,10 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import type { MusicFile } from '../../electron/musicScanner'
 import type { SortOption } from '../utils/sortMusicFiles'
+import type { ScanStatusType } from '../electron.d'
 import { generateFingerprint } from '../utils/fingerprintGenerator'
 import { lookupFingerprint } from '../utils/acoustidClient'
-import { lookupRecording, getCoverArtUrl } from '../utils/musicbrainzClient'
+import { lookupRecording, getCoverArtUrls, pickBestRelease } from '../utils/musicbrainzClient'
 
 interface SongListProps {
   songs: MusicFile[]
@@ -12,19 +13,59 @@ interface SongListProps {
   sortBy: SortOption
   onSortChange: (sortBy: SortOption) => void
   onRefreshLibrary?: () => void
+  onShowNotification?: (message: string, type: 'success' | 'error' | 'warning' | 'info') => void
 }
 
 /**
  * Component for displaying the list of songs
  */
-export function SongList({ songs, onSongClick, playingIndex, sortBy, onSortChange, onRefreshLibrary }: SongListProps) {
+export function SongList({ songs, onSongClick, playingIndex, sortBy, onSortChange, onRefreshLibrary, onShowNotification }: SongListProps) {
   const [generatingFingerprint, setGeneratingFingerprint] = useState<string | null>(null)
+  const [scanStatuses, setScanStatuses] = useState<Record<string, ScanStatusType>>({})
+  const [loadingStatuses, setLoadingStatuses] = useState(false)
+
+  // Load scan statuses for all songs when the list changes
+  useEffect(() => {
+    const loadScanStatuses = async () => {
+      if (songs.length === 0) {
+        setScanStatuses({})
+        return
+      }
+
+      setLoadingStatuses(true)
+      try {
+        const filePaths = songs.map(song => song.path)
+        const statuses = await window.electronAPI.cacheGetBatchStatus(filePaths)
+        setScanStatuses(statuses)
+      } catch (error) {
+        console.error('Error loading scan statuses:', error)
+      } finally {
+        setLoadingStatuses(false)
+      }
+    }
+
+    loadScanStatuses()
+  }, [songs])
 
   const handleGenerateFingerprint = async (e: React.MouseEvent, file: MusicFile) => {
     e.stopPropagation() // Prevent song click
 
     if (generatingFingerprint === file.path) {
       return // Already generating
+    }
+
+    // Check current scan status
+    const currentStatus = scanStatuses[file.path]
+    
+    // If already scanned and tagged, show message and skip
+    if (currentStatus === 'scanned-tagged') {
+      console.log('File already scanned and tagged:', file.name)
+      return
+    }
+
+    // If scanned but no match found, allow rescan but inform user
+    if (currentStatus === 'scanned-no-match') {
+      console.log('File was previously scanned with no match. Rescanning:', file.name)
     }
 
     setGeneratingFingerprint(file.path)
@@ -38,6 +79,9 @@ export function SongList({ songs, onSongClick, playingIndex, sortBy, onSortChang
 
       if (!fingerprint) {
         console.error('Failed to generate fingerprint')
+        // Mark as scanned but no metadata
+        await window.electronAPI.cacheMarkFileScanned(file.path, null, false)
+        setScanStatuses(prev => ({ ...prev, [file.path]: 'scanned-no-match' }))
         return
       }
 
@@ -65,61 +109,186 @@ export function SongList({ songs, onSongClick, playingIndex, sortBy, onSortChang
 
         if (mbData) {
           console.log('=== MusicBrainz Metadata ===')
-          console.log('Title:', mbData.title)
-          console.log('Artist:', mbData['artist-credit']?.[0]?.name)
-          const album = mbData.releases?.[0]
+          
+          // Extract all relevant metadata
+          const title = mbData.title
+          const artist = mbData['artist-credit']?.[0]?.name
+          const artistCredit = mbData['artist-credit']
+          // Pick the best release (prioritizes original albums over compilations/soundtracks)
+          const album = pickBestRelease(mbData.releases)
+          
+          console.log('Title:', title)
+          console.log('Artist:', artist)
           console.log('Album:', album?.title)
+          console.log('Release Date:', album?.date)
 
-          if (album) {
-            const coverUrl = getCoverArtUrl(album.id)
-            console.log('Cover Art URL (250px):', coverUrl)
+          // Build the full artist string (handles "feat." and multiple artists)
+          let fullArtist = ''
+          if (artistCredit && artistCredit.length > 0) {
+            fullArtist = artistCredit.map((credit: any) => {
+              const name = credit.name || credit.artist?.name || ''
+              const joinphrase = credit.joinphrase || ''
+              return name + joinphrase
+            }).join('')
+          }
+
+          // Extract year from release date (format: "YYYY-MM-DD" or "YYYY")
+          let year: number | undefined
+          if (album?.date) {
+            const yearMatch = album.date.match(/^(\d{4})/)
+            if (yearMatch) {
+              year = parseInt(yearMatch[1], 10)
+            }
+          }
+
+          // Prepare cover art URLs with fallback (tries multiple URLs if one returns 404)
+          let coverArtPath: string | undefined
+          const releases = mbData.releases || []
+          
+          if (releases.length > 0) {
+            // Get release group ID if available (for fallback)
+            const releaseGroupId = (mbData as any)['release-group']?.id
+            
+            // Generate all possible cover art URLs to try
+            const coverUrls = getCoverArtUrls(releases, releaseGroupId)
+            console.log(`Trying ${coverUrls.length} cover art URLs with fallback...`)
 
             // Generate a filename for the cover art
-            const safeTitle = mbData.title.replace(/[^a-z0-9]/gi, '_').toLowerCase()
-            const filename = `cover_${safeTitle}_${album.id}.jpg`
+            const safeTitle = title.replace(/[^a-z0-9]/gi, '_').toLowerCase()
+            const filename = `cover_${safeTitle}_${releases[0].id}.jpg`
+            const targetPath = `assets/${filename}`
 
             try {
-              // Request download to assets folder (main process resolves path to userData/assets)
-              console.log('Attempting to download cover art to assets...')
-              const targetPath = `assets/${filename}`
-
-              // 1. Download the image
-              const downloadResult = await window.electronAPI.downloadImage(coverUrl, targetPath)
+              // Download the cover art with fallback (tries each URL until one succeeds)
+              console.log('Downloading cover art with fallback...')
+              const downloadResult = await window.electronAPI.downloadImageWithFallback(coverUrls, targetPath)
               if (downloadResult.success) {
-                console.log(`Cover art saved to ${targetPath}`)
-
-                // 2. Embed the image into the audio file
-                console.log('Embedding cover art...')
-                const embedResult = await window.electronAPI.writeCoverArt(file.path, targetPath)
-
-                if (embedResult.success) {
-                  console.log('Cover art embedded successfully!')
-                  // Refresh library to show updated cover art
-                  if (onRefreshLibrary) {
-                    console.log('Refreshing library...')
-                    onRefreshLibrary()
-                  }
-                } else {
-                  console.error('Failed to embed cover art:', embedResult.error)
-                }
+                console.log(`Cover art saved from: ${downloadResult.url}`)
+                coverArtPath = targetPath
               } else {
-                console.error('Failed to download cover art:', downloadResult.error)
+                console.warn('All cover art URLs failed:', downloadResult.error)
+                // Show notification that cover art couldn't be found
+                onShowNotification?.(`No cover art found for "${title}"`, 'warning')
               }
             } catch (err) {
-              console.error('Failed to download cover art:', err)
+              console.warn('Failed to download cover art:', err)
+              onShowNotification?.('Failed to download cover art', 'warning')
             }
+          }
+
+          // Write all metadata to the file at once
+          console.log('Writing metadata to file...')
+          const metadataResult = await window.electronAPI.writeMetadata(file.path, {
+            title: title,
+            artist: fullArtist || artist,
+            album: album?.title,
+            year: year,
+            coverArtPath: coverArtPath,
+          })
+
+          if (metadataResult.success) {
+            console.log('Metadata written successfully!')
+            
+            // Mark as scanned with metadata in cache
+            await window.electronAPI.cacheMarkFileScanned(file.path, acoustidResult.mbid, true)
+            setScanStatuses(prev => ({ ...prev, [file.path]: 'scanned-tagged' }))
+            
+            // Show success notification
+            onShowNotification?.(`Tagged: "${title}" by ${fullArtist || artist}`, 'success')
+            
+            // Refresh library to show updated metadata
+            if (onRefreshLibrary) {
+              console.log('Refreshing library...')
+              onRefreshLibrary()
+            }
+          } else {
+            console.error('Failed to write metadata:', metadataResult.error)
+            // Mark as scanned but no metadata written (error occurred)
+            await window.electronAPI.cacheMarkFileScanned(file.path, acoustidResult.mbid, false)
+            setScanStatuses(prev => ({ ...prev, [file.path]: 'scanned-no-match' }))
+            onShowNotification?.(`Failed to write metadata to "${file.name}"`, 'error')
           }
 
           console.log('Full Data:', mbData)
           console.log('============================')
+        } else {
+          // MusicBrainz lookup failed
+          console.log('MusicBrainz lookup returned no data')
+          await window.electronAPI.cacheMarkFileScanned(file.path, acoustidResult.mbid, false)
+          setScanStatuses(prev => ({ ...prev, [file.path]: 'scanned-no-match' }))
+          onShowNotification?.(`No metadata found for "${file.name}"`, 'info')
         }
       } else {
         console.log('No match found for this fingerprint')
+        // Mark as scanned but no match
+        await window.electronAPI.cacheMarkFileScanned(file.path, null, false)
+        setScanStatuses(prev => ({ ...prev, [file.path]: 'scanned-no-match' }))
+        onShowNotification?.(`No match found for "${file.name}"`, 'info')
       }
     } catch (error) {
       console.error('Error generating fingerprint:', error)
+      // Mark as scanned but failed
+      await window.electronAPI.cacheMarkFileScanned(file.path, null, false)
+      onShowNotification?.(`Scan failed for "${file.name}"`, 'error')
+      setScanStatuses(prev => ({ ...prev, [file.path]: 'scanned-no-match' }))
     } finally {
       setGeneratingFingerprint(null)
+    }
+  }
+
+  /**
+   * Get the display icon/button for a song based on its scan status
+   */
+  const getScanStatusDisplay = (file: MusicFile) => {
+    const status = scanStatuses[file.path]
+    const isGenerating = generatingFingerprint === file.path
+
+    if (isGenerating) {
+      return (
+        <span className="scan-status-icon scanning" title="Scanning...">
+          ⏳
+        </span>
+      )
+    }
+
+    switch (status) {
+      case 'scanned-tagged':
+        return (
+          <span className="scan-status-icon tagged" title="Scanned and tagged">
+            ✅
+          </span>
+        )
+      case 'scanned-no-match':
+        return (
+          <button
+            className="fingerprint-button no-match"
+            onClick={(e) => handleGenerateFingerprint(e, file)}
+            title="Scanned but no match found. Click to retry."
+          >
+            ⚠️
+          </button>
+        )
+      case 'file-changed':
+        return (
+          <button
+            className="fingerprint-button file-changed"
+            onClick={(e) => handleGenerateFingerprint(e, file)}
+            title="File changed since last scan. Click to rescan."
+          >
+            🔄
+          </button>
+        )
+      case 'unscanned':
+      default:
+        return (
+          <button
+            className="fingerprint-button"
+            onClick={(e) => handleGenerateFingerprint(e, file)}
+            title="Click to scan and identify this song"
+          >
+            🔍
+          </button>
+        )
     }
   }
 
@@ -151,6 +320,9 @@ export function SongList({ songs, onSongClick, playingIndex, sortBy, onSortChang
           </select>
         </div>
       </div>
+      {loadingStatuses && (
+        <div className="loading-statuses">Loading scan statuses...</div>
+      )}
       <ul className="song-list">
         {songs.map((file, index) => (
           <li
@@ -175,16 +347,9 @@ export function SongList({ songs, onSongClick, playingIndex, sortBy, onSortChang
               <div className="song-info">
                 <div className="song-title-row">
                   <div className="song-title">
-                    {file.metadata?.title || file.name}
+                    {file.metadata?.title || file.name.replace(/\.[^/.]+$/, '')}
                   </div>
-                  <button
-                    className="fingerprint-button"
-                    onClick={(e) => handleGenerateFingerprint(e, file)}
-                    disabled={generatingFingerprint === file.path}
-                    title="Generate fingerprint (check console)"
-                  >
-                    {generatingFingerprint === file.path ? '⏳' : '🔍'}
-                  </button>
+                  {getScanStatusDisplay(file)}
                 </div>
                 <div className="song-artist">
                   {file.metadata?.artist || 'Unknown Artist'}

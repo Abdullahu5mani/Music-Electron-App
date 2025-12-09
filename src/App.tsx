@@ -1,21 +1,47 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useCallback } from 'react'
 import { OverlayScrollbarsComponent } from 'overlayscrollbars-react'
 import { useMusicLibrary } from './hooks/useMusicLibrary'
 import { useAudioPlayer } from './hooks/useAudioPlayer'
+import { useSongScanner } from './hooks/useSongScanner'
 import { SongList } from './components/SongList'
 import { PlaybackBar } from './components/PlaybackBar'
 import { TitleBar } from './components/TitleBar'
 import { DownloadButton } from './components/DownloadButton'
 import { DownloadNotification } from './components/DownloadNotification'
 import { NotificationToast } from './components/NotificationToast'
+import { BatchScanProgress } from './components/BatchScanProgress'
 import { Sidebar } from './components/Sidebar'
 import { Settings } from './components/Settings'
 import type { MusicFile } from '../electron/musicScanner'
+import type { ScanStatusType } from './electron.d'
 import './App.css'
 
 function App() {
   const { sortedMusicFiles, loading, error, selectedFolder, handleSelectFolder, scanFolder, sortBy, setSortBy } = useMusicLibrary()
   const [selectedView, setSelectedView] = useState<string>('all')
+  const [scanStatuses, setScanStatuses] = useState<Record<string, ScanStatusType>>({})
+  const [toastMessage, setToastMessage] = useState<string>('')
+  const [toastType, setToastType] = useState<'success' | 'error' | 'warning' | 'info'>('info')
+  const [showToast, setShowToast] = useState(false)
+
+  // Helper function to show toast
+  const showToastNotification = useCallback((message: string, type: 'success' | 'error' | 'warning' | 'info' = 'info') => {
+    setToastMessage(message)
+    setToastType(type)
+    setShowToast(true)
+  }, [])
+
+  // Handle scan status updates from scanner
+  const handleStatusUpdate = useCallback((filePath: string, status: ScanStatusType) => {
+    setScanStatuses(prev => ({ ...prev, [filePath]: status }))
+  }, [])
+
+  // Initialize the song scanner hook
+  const { batchProgress, scanBatch, cancelBatchScan } = useSongScanner({
+    onShowNotification: showToastNotification,
+    onRefreshLibrary: () => selectedFolder && scanFolder(selectedFolder),
+    onStatusUpdate: handleStatusUpdate
+  })
 
   // Filter music files based on selected view
   const filteredMusicFiles = useMemo(() => {
@@ -44,9 +70,6 @@ function App() {
   const [binaryDownloadProgress, setBinaryDownloadProgress] = useState(0)
   const [downloadTitle, setDownloadTitle] = useState<string>('')
   const [showNotification, setShowNotification] = useState(false)
-  const [toastMessage, setToastMessage] = useState<string>('')
-  const [toastType, setToastType] = useState<'success' | 'error' | 'warning' | 'info'>('info')
-  const [showToast, setShowToast] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
   const [downloadFolder, setDownloadFolder] = useState<string | null>(null)
 
@@ -82,12 +105,46 @@ function App() {
     }
   }, [])
 
-  // Helper function to show toast
-  const showToastNotification = (message: string, type: 'success' | 'error' | 'warning' | 'info' = 'info') => {
-    setToastMessage(message)
-    setToastType(type)
-    setShowToast(true)
-  }
+  // Load scan statuses when music files change
+  useEffect(() => {
+    const loadScanStatuses = async () => {
+      if (sortedMusicFiles.length === 0) {
+        setScanStatuses({})
+        return
+      }
+
+      try {
+        const filePaths = sortedMusicFiles.map(f => f.path)
+        const statuses = await window.electronAPI?.cacheGetBatchStatus(filePaths)
+        if (statuses) {
+          setScanStatuses(statuses)
+        }
+      } catch (error) {
+        console.error('Failed to load scan statuses:', error)
+      }
+    }
+    loadScanStatuses()
+  }, [sortedMusicFiles])
+
+  // Calculate unscanned files count
+  const unscannedFiles = useMemo(() => {
+    return sortedMusicFiles.filter(file => {
+      const status = scanStatuses[file.path]
+      // Files are unscanned if: no status loaded yet, status is 'unscanned', or file changed
+      return !status || status === 'unscanned' || status === 'file-changed'
+    })
+  }, [sortedMusicFiles, scanStatuses])
+
+  // Handle scan all unscanned songs
+  const handleScanAll = useCallback(async () => {
+    if (unscannedFiles.length === 0) {
+      showToastNotification('All songs have already been scanned', 'info')
+      return
+    }
+    
+    console.log(`Starting batch scan of ${unscannedFiles.length} songs...`)
+    await scanBatch(unscannedFiles)
+  }, [unscannedFiles, scanBatch, showToastNotification])
 
   // Load settings on mount
   useEffect(() => {
@@ -232,6 +289,7 @@ function App() {
                 sortBy={sortBy}
                 onSortChange={setSortBy}
                 onRefreshLibrary={() => selectedFolder && scanFolder(selectedFolder)}
+                onShowNotification={showToastNotification}
               />
             </OverlayScrollbarsComponent>
           </div>
@@ -268,6 +326,18 @@ function App() {
         isOpen={showSettings}
         onClose={() => setShowSettings(false)}
         onSettingsChange={handleSettingsChange}
+        onScanAll={handleScanAll}
+        isBatchScanning={batchProgress.isScanning}
+        unscannedCount={unscannedFiles.length}
+        totalSongCount={sortedMusicFiles.length}
+      />
+
+      <BatchScanProgress
+        isVisible={batchProgress.isScanning}
+        currentIndex={batchProgress.currentIndex}
+        totalCount={batchProgress.totalCount}
+        currentSongName={batchProgress.currentSongName}
+        onCancel={cancelBatchScan}
       />
     </div>
   )
