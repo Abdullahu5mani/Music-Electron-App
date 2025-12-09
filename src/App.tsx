@@ -16,7 +16,7 @@ import type { ScanStatusType } from './electron.d'
 import './App.css'
 
 function App() {
-  const { sortedMusicFiles, loading, error, selectedFolder, handleSelectFolder, scanFolder, sortBy, setSortBy } = useMusicLibrary()
+  const { sortedMusicFiles, loading, error, selectedFolder, handleSelectFolder, scanFolder, sortBy, setSortBy, updateSingleFile } = useMusicLibrary()
   const [selectedView, setSelectedView] = useState<string>('all')
   const [scanStatuses, setScanStatuses] = useState<Record<string, ScanStatusType>>({})
   const [toastMessage, setToastMessage] = useState<string>('')
@@ -38,7 +38,7 @@ function App() {
   // Initialize the song scanner hook
   const { batchProgress, scanBatch, cancelBatchScan } = useSongScanner({
     onShowNotification: showToastNotification,
-    onRefreshLibrary: () => selectedFolder && scanFolder(selectedFolder),
+    onUpdateSingleFile: updateSingleFile,
     onStatusUpdate: handleStatusUpdate
   })
 
@@ -287,7 +287,7 @@ function App() {
                 playingIndex={playingIndex !== null ? filteredMusicFiles.findIndex(f => f.path === sortedMusicFiles[playingIndex]?.path) : null}
                 sortBy={sortBy}
                 onSortChange={setSortBy}
-                onRefreshLibrary={() => selectedFolder && scanFolder(selectedFolder)}
+                onUpdateSingleFile={updateSingleFile}
                 onShowNotification={showToastNotification}
               />
             </OverlayScrollbarsComponent>

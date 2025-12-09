@@ -1,7 +1,7 @@
 import { ipcMain, dialog, app } from 'electron'
 import path from 'path'
 import fs from 'fs'
-import { scanMusicFiles } from '../../musicScanner'
+import { scanMusicFiles, readSingleFileMetadata } from '../../musicScanner'
 
 /**
  * Metadata that can be written to audio files
@@ -48,6 +48,16 @@ export function registerMusicHandlers() {
       return result.filePaths[0]
     }
     return null
+  })
+
+  // Handle reading metadata for a single file (for in-place updates after tagging)
+  ipcMain.handle('read-single-file-metadata', async (_event, filePath: string) => {
+    try {
+      return await readSingleFileMetadata(filePath)
+    } catch (error) {
+      console.error('Error reading single file metadata:', error)
+      return null
+    }
   })
 
   // Handle read file as buffer (for fingerprint generation)

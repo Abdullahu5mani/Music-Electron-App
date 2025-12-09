@@ -234,8 +234,9 @@ The preload script securely exposes specific APIs to the renderer via `contextBr
 │  │  ─────────────────────────────      ─────────────────────     │  │
 │  │  • scanMusicFolder()                • sendPlaybackState()     │  │
 │  │  • selectMusicFolder()              • minimizeWindow()        │  │
-│  │  • downloadYouTube()                • maximizeWindow()        │  │
-│  │  • getSettings()                    • closeWindow()           │  │
+│  │  • readSingleFileMetadata()         • maximizeWindow()        │  │
+│  │  • downloadYouTube()                • closeWindow()           │  │
+│  │  • getSettings()                                             │  │
 │  │  • saveSettings()                                             │  │
 │  │  • getBinaryStatuses()                                        │  │
 │  │                                                                │  │
@@ -294,6 +295,7 @@ export function registerIpcHandlers() {
 | **musicHandlers** | `scan-music-folder` | invoke | Scan directory for music files |
 | | `select-music-folder` | invoke | Open folder selection dialog |
 | | `read-file-buffer` | invoke | Read file for fingerprinting |
+| | `read-single-file-metadata` | invoke | Read metadata for a single file (in-place updates) |
 | | `write-cover-art` | invoke | Embed cover art in audio file |
 | | `write-metadata` | invoke | Write all metadata to audio file |
 | **apiHandlers** | `lookup-acoustid` | invoke | Query AcoustID API |
@@ -329,6 +331,13 @@ Scans directories recursively and extracts metadata from audio files.
 **Supported Formats:**
 `.mp3`, `.flac`, `.wav`, `.m4a`, `.aac`, `.ogg`, `.opus`, `.wma`, `.aiff`, `.mp4`, `.m4p`, `.amr`
 
+**Key Functions:**
+
+| Function | Purpose |
+|----------|---------|
+| `scanMusicFiles(directoryPath)` | Recursively scan directory for all music files |
+| `readSingleFileMetadata(filePath)` | Read metadata for a single file (for in-place updates) |
+
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
 │                        Music Scanning Flow                          │
@@ -352,6 +361,24 @@ Scans directories recursively and extracts metadata from audio files.
 │            Push to musicFiles[]                                     │
 │                                                                     │
 │  Return: MusicFile[]                                                │
+└─────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────┐
+│              Single File Metadata Read (In-Place Updates)           │
+│                                                                     │
+│  readSingleFileMetadata(filePath)                                    │
+│       │                                                             │
+│       ├──► Check file exists                                       │
+│       ├──► Verify music extension                                   │
+│       │                                                             │
+│       ▼                                                             │
+│  parseFile(filePath)  ← music-metadata library                     │
+│       │                                                             │
+│       ▼                                                             │
+│  Extract: title, artist, album, duration, albumArt                 │
+│       │                                                             │
+│       ▼                                                             │
+│  Return: MusicFile (single file object)                            │
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -616,6 +643,58 @@ Manages all audio state using **Howler.js**.
 
 Manages the music file collection and sorting.
 
+**Key Functions:**
+
+| Function | Purpose |
+|----------|---------|
+| `scanFolder(folderPath)` | Scan entire directory and replace all files |
+| `updateSingleFile(filePath)` | Update metadata for a single file in-place |
+| `setSortBy(option)` | Change sort order (title, artist, track, dateAdded) |
+
+**State:**
+- `musicFiles` - Raw array of all music files
+- `sortedMusicFiles` - Memoized sorted array (updates when sortBy changes)
+- `selectedFolder` - Currently selected music folder path
+- `loading` - Whether a scan is in progress
+- `error` - Error message if scan fails
+
+**In-Place Update Flow:**
+
+```
+updateSingleFile(filePath)
+       │
+       ▼
+window.electronAPI.readSingleFileMetadata(filePath)
+       │
+       ▼
+Main process reads fresh metadata from file
+       │
+       ▼
+Return updated MusicFile object
+       │
+       ▼
+setMusicFiles(prevFiles => 
+  prevFiles.map(file => 
+    file.path === filePath 
+      ? updatedFile  // Replace only this file
+      : file         // Keep all others unchanged
+  )
+)
+       │
+       ▼
+React re-renders only the changed song tile
+       │
+       ▼
+No scroll position loss, no list jumping
+```
+
+**Benefits:**
+- ✅ No full library refresh (faster)
+- ✅ Preserves scroll position
+- ✅ Song stays in visual position (doesn't jump when title changes)
+- ✅ Smooth UI updates without flickering
+- ✅ Better user experience when scanning individual songs
+
 ---
 
 ## IPC Communication Flows
@@ -740,8 +819,112 @@ Update local scanStatuses state
 Show ✅
        │
        ▼
-onRefreshLibrary()  → Rescan folder to show updated metadata
+onUpdateSingleFile(filePath)  → Read fresh metadata for this file only
+       │
+       ▼
+window.electronAPI
+  .readSingleFileMetadata(path) ──► readSingleFileMetadata(path)
+                                        │
+                                        ▼
+                                   parseFile() + extract metadata
+                                        │
+◄─────────────────────────────── Updated MusicFile
+       │
+       ▼
+Update file in-place in musicFiles array
+       │
+       ▼
+UI updates only this song's tile (no full refresh, no jumping)
 ```
+
+### In-Place Metadata Updates
+
+When a song is successfully scanned and tagged, the app updates only that specific file's metadata in the UI without refreshing the entire library. This provides a smooth, non-disruptive user experience.
+
+**The Problem (Before):**
+
+Previously, after tagging a song, the app would call `onRefreshLibrary()` which:
+1. Rescanned the entire folder
+2. Re-sorted all files
+3. Caused the list to jump around (especially if title changed alphabetically)
+4. Lost scroll position
+5. Made it hard to find the song you just tagged
+
+**The Solution:**
+
+Instead of full refresh, the app now uses `updateSingleFile()` which:
+1. Reads fresh metadata for only the tagged file
+2. Updates that file in-place in the `musicFiles` array
+3. React re-renders only the changed song tile
+4. Preserves scroll position and visual position
+5. No list jumping or flickering
+
+**Implementation Flow:**
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│  User clicks 🔍 on a song                                            │
+│       │                                                             │
+│       ▼                                                             │
+│  Generate fingerprint → AcoustID → MusicBrainz → Write metadata     │
+│       │                                                             │
+│       ▼                                                             │
+│  Metadata written successfully                                       │
+│       │                                                             │
+│       ▼                                                             │
+│  onUpdateSingleFile(filePath)  ← NEW: In-place update              │
+│       │                                                             │
+│       ├──► IPC: read-single-file-metadata                          │
+│       │         │                                                  │
+│       │         ▼                                                  │
+│       │    Main: readSingleFileMetadata(filePath)                  │
+│       │         │                                                  │
+│       │         ▼                                                  │
+│       │    parseFile() → Extract fresh metadata                     │
+│       │         │                                                  │
+│       │         ▼                                                  │
+│       │    Return: Updated MusicFile                                │
+│       │                                                             │
+│       ▼                                                             │
+│  setMusicFiles(prev => prev.map(file =>                            │
+│    file.path === filePath ? updatedFile : file                      │
+│  ))                                                                 │
+│       │                                                             │
+│       ▼                                                             │
+│  React re-renders only the changed song tile                       │
+│       │                                                             │
+│       ▼                                                             │
+│  ✅ Song tile updates smoothly                                      │
+│  ✅ No scroll position loss                                         │
+│  ✅ No list jumping                                                 │
+│  ✅ Song stays in visual position                                   │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+**Key Components:**
+
+| Component | Role |
+|-----------|------|
+| `readSingleFileMetadata()` | Main process function to read one file's metadata |
+| `read-single-file-metadata` | IPC handler exposing the function |
+| `updateSingleFile()` | Hook function that updates state in-place |
+| `onUpdateSingleFile` | Prop passed to SongList for individual scans |
+| `useSongScanner` | Also uses in-place updates for batch scans |
+
+**When Full Refresh is Still Used:**
+
+- Initial folder scan
+- After YouTube download (new file added)
+- Manual "Select Music Folder" action
+- Settings change that requires rescan
+
+**When In-Place Updates are Used:**
+
+- Individual song scan (clicking 🔍)
+- Batch scan (each file updates in-place after tagging)
+- Any time metadata is written to an existing file
+
+---
 
 ### WASM Fingerprint Memory Management
 
@@ -1094,13 +1277,16 @@ Scans entire library with progress tracking and cancellation support.
 │       ├──► scanSong(file) with rate limiting                │
 │       ├──► Update scan status in cache                      │
 │       ├──► Show toast notification                          │
+│       ├──► onUpdateSingleFile(file.path)  ← In-place update│
 │       └──► waitBetweenSongs()                               │
 │                                                              │
 │  User can cancel via ✕ button → cancelledRef.current = true │
 │                                                              │
 │  On Complete:                                                │
-│       ├──► Refresh library                                  │
 │       └──► Show summary toast                               │
+│                                                              │
+│  Note: No full library refresh needed - each file updated   │
+│        in-place as it's scanned                             │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -1203,6 +1389,7 @@ A corrupted binary (exists but can't run) is automatically deleted and marked as
 14. **Graceful Error Recovery** - Auto-delete corrupted binaries, handle API failures without crashing
 15. **Circuit Breaker** - Stop WASM fingerprinting after consecutive failures to prevent crash loops
 16. **WASM Memory Management** - File size limits and micro-delays to mitigate WASM memory exhaustion
+17. **In-Place Metadata Updates** - Update single file metadata without full library refresh to preserve scroll position and prevent list jumping
 
 ---
 

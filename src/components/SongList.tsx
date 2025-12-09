@@ -12,14 +12,14 @@ interface SongListProps {
   playingIndex: number | null
   sortBy: SortOption
   onSortChange: (sortBy: SortOption) => void
-  onRefreshLibrary?: () => void
+  onUpdateSingleFile?: (filePath: string) => Promise<MusicFile | null>
   onShowNotification?: (message: string, type: 'success' | 'error' | 'warning' | 'info') => void
 }
 
 /**
  * Component for displaying the list of songs
  */
-export function SongList({ songs, onSongClick, playingIndex, sortBy, onSortChange, onRefreshLibrary, onShowNotification }: SongListProps) {
+export function SongList({ songs, onSongClick, playingIndex, sortBy, onSortChange, onUpdateSingleFile, onShowNotification }: SongListProps) {
   const [generatingFingerprint, setGeneratingFingerprint] = useState<string | null>(null)
   const [scanStatuses, setScanStatuses] = useState<Record<string, ScanStatusType>>({})
   const [loadingStatuses, setLoadingStatuses] = useState(false)
@@ -196,10 +196,10 @@ export function SongList({ songs, onSongClick, playingIndex, sortBy, onSortChang
             // Show success notification
             onShowNotification?.(`Tagged: "${title}" by ${fullArtist || artist}`, 'success')
             
-            // Refresh library to show updated metadata
-            if (onRefreshLibrary) {
-              console.log('Refreshing library...')
-              onRefreshLibrary()
+            // Update just this file's metadata in-place (no full library refresh)
+            if (onUpdateSingleFile) {
+              console.log('Updating single file metadata in-place...')
+              await onUpdateSingleFile(file.path)
             }
           } else {
             console.error('Failed to write metadata:', metadataResult.error)

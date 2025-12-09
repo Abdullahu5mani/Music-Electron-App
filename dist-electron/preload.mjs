@@ -3,6 +3,7 @@ const electron = require("electron");
 electron.contextBridge.exposeInMainWorld("electronAPI", {
   scanMusicFolder: (folderPath) => electron.ipcRenderer.invoke("scan-music-folder", folderPath),
   selectMusicFolder: () => electron.ipcRenderer.invoke("select-music-folder"),
+  readSingleFileMetadata: (filePath) => electron.ipcRenderer.invoke("read-single-file-metadata", filePath),
   // Settings methods
   getSettings: () => electron.ipcRenderer.invoke("get-settings"),
   saveSettings: (settings) => electron.ipcRenderer.invoke("save-settings", settings),

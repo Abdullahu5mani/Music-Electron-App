@@ -23,7 +23,7 @@ export interface BatchScanProgress {
 
 interface UseSongScannerOptions {
   onShowNotification?: (message: string, type: 'success' | 'error' | 'warning' | 'info') => void
-  onRefreshLibrary?: () => void
+  onUpdateSingleFile?: (filePath: string) => Promise<MusicFile | null>
   onStatusUpdate?: (filePath: string, status: ScanStatusType) => void
 }
 
@@ -32,7 +32,7 @@ interface UseSongScannerOptions {
  * Can be used for both individual and batch scanning
  */
 export function useSongScanner(options: UseSongScannerOptions = {}) {
-  const { onShowNotification, onRefreshLibrary, onStatusUpdate } = options
+  const { onShowNotification, onUpdateSingleFile, onStatusUpdate } = options
   
   const [isScanning, setIsScanning] = useState(false)
   const [batchProgress, setBatchProgress] = useState<BatchScanProgress>({
@@ -218,6 +218,8 @@ export function useSongScanner(options: UseSongScannerOptions = {}) {
       
       if (result.success) {
         successCount++
+        // Update this file's metadata in-place after successful tag
+        await onUpdateSingleFile?.(file.path)
       } else {
         failCount++
       }
@@ -236,9 +238,6 @@ export function useSongScanner(options: UseSongScannerOptions = {}) {
       currentSongName: ''
     })
 
-    // Refresh library after batch scan
-    onRefreshLibrary?.()
-
     // Show summary notification
     if (!cancelledRef.current) {
       onShowNotification?.(
@@ -251,7 +250,7 @@ export function useSongScanner(options: UseSongScannerOptions = {}) {
         'info'
       )
     }
-  }, [scanSong, onShowNotification, onRefreshLibrary])
+  }, [scanSong, onShowNotification, onUpdateSingleFile])
 
   /**
    * Cancel ongoing batch scan

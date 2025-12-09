@@ -12,6 +12,7 @@ interface UseMusicLibraryReturn {
   setSortBy: (sortBy: SortOption) => void
   handleSelectFolder: () => Promise<void>
   scanFolder: (folderPath: string) => Promise<void>
+  updateSingleFile: (filePath: string) => Promise<MusicFile | null>
 }
 
 /**
@@ -82,6 +83,31 @@ export function useMusicLibrary(): UseMusicLibraryReturn {
     }
   }
 
+  /**
+   * Updates a single file's metadata in-place without rescanning the whole library.
+   * This is used after tagging a file to update its display without losing scroll position.
+   */
+  const updateSingleFile = async (filePath: string): Promise<MusicFile | null> => {
+    try {
+      const updatedFile = await window.electronAPI.readSingleFileMetadata(filePath)
+      if (updatedFile) {
+        // Update the file in-place in the musicFiles array
+        setMusicFiles(prevFiles => 
+          prevFiles.map(file => 
+            file.path === filePath 
+              ? { ...updatedFile, dateAdded: file.dateAdded || Date.now() }
+              : file
+          )
+        )
+        return updatedFile
+      }
+      return null
+    } catch (err) {
+      console.error('Error updating single file metadata:', err)
+      return null
+    }
+  }
+
   return {
     musicFiles,
     sortedMusicFiles,
@@ -92,6 +118,7 @@ export function useMusicLibrary(): UseMusicLibraryReturn {
     setSortBy,
     handleSelectFolder,
     scanFolder,
+    updateSingleFile,
   }
 }
 

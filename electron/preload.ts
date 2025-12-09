@@ -60,6 +60,7 @@ export interface CacheScanStatistics {
 export interface ElectronAPI {
   scanMusicFolder: (folderPath: string) => Promise<MusicFile[]>
   selectMusicFolder: () => Promise<string | null>
+  readSingleFileMetadata: (filePath: string) => Promise<MusicFile | null>
   getSettings: () => Promise<AppSettings>
   saveSettings: (settings: AppSettings) => Promise<{ success: boolean; error?: string }>
   selectDownloadFolder: () => Promise<string | null>
@@ -101,6 +102,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   selectMusicFolder: () =>
     ipcRenderer.invoke('select-music-folder'),
+
+  readSingleFileMetadata: (filePath: string) =>
+    ipcRenderer.invoke('read-single-file-metadata', filePath),
 
   // Settings methods
   getSettings: () =>

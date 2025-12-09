@@ -207,6 +207,69 @@ export function formatMusicMetadata(file: MusicFile): string | null {
  * Scans a directory for music files and logs the results to console
  * @param directoryPath - The path to the directory to scan
  */
+/**
+ * Reads metadata for a single music file
+ * @param filePath - The path to the music file
+ * @returns Updated MusicFile object with fresh metadata
+ */
+export async function readSingleFileMetadata(filePath: string): Promise<MusicFile | null> {
+  try {
+    if (!fs.existsSync(filePath)) {
+      console.error(`File does not exist: ${filePath}`)
+      return null
+    }
+
+    const stats = fs.statSync(filePath)
+    const ext = path.extname(filePath).toLowerCase()
+    const name = path.basename(filePath)
+
+    if (!MUSIC_EXTENSIONS.includes(ext)) {
+      console.error(`Not a supported music file: ${filePath}`)
+      return null
+    }
+
+    // Extract metadata
+    let metadata
+    try {
+      const parsed = await parseFile(filePath)
+      
+      // Extract album art and convert to base64
+      let albumArt: string | undefined
+      if (parsed.common.picture && parsed.common.picture.length > 0) {
+        const picture = parsed.common.picture[0]
+        const buffer = Buffer.from(picture.data)
+        albumArt = `data:${picture.format};base64,${buffer.toString('base64')}`
+      }
+      
+      metadata = {
+        title: parsed.common.title,
+        artist: parsed.common.artist,
+        album: parsed.common.album,
+        albumArtist: parsed.common.albumartist,
+        genre: parsed.common.genre,
+        year: parsed.common.year,
+        track: parsed.common.track,
+        disk: parsed.common.disk,
+        duration: parsed.format.duration,
+        albumArt,
+      }
+    } catch (error) {
+      console.warn(`Could not extract metadata for ${name}:`, error)
+    }
+
+    return {
+      path: filePath,
+      name,
+      extension: ext,
+      size: stats.size,
+      metadata,
+    }
+  } catch (error) {
+    console.error(`Error reading file metadata ${filePath}:`, error)
+    return null
+  }
+}
+
 export async function scanAndLogMusicFiles(directoryPath: string): Promise<MusicFile[]> {
   console.log('Starting music scan...')
   console.log(`Scanning folder: ${directoryPath}`)
