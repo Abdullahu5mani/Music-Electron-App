@@ -85,7 +85,8 @@ electron.contextBridge.exposeInMainWorld("electronAPI", {
   cacheGetStatistics: () => electron.ipcRenderer.invoke("cache-get-statistics"),
   cacheGetEntry: (filePath) => electron.ipcRenderer.invoke("cache-get-entry", filePath),
   cacheCleanupOrphaned: () => electron.ipcRenderer.invoke("cache-cleanup-orphaned"),
-  cacheClear: () => electron.ipcRenderer.invoke("cache-clear")
+  cacheClear: () => electron.ipcRenderer.invoke("cache-clear"),
+  analyzeTrack: (filePath) => electron.ipcRenderer.invoke("analyze-track", filePath)
 });
 electron.contextBridge.exposeInMainWorld("ipcRenderer", {
   on(...args) {

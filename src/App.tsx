@@ -12,6 +12,7 @@ import { NotificationToast } from './components/NotificationToast'
 import { BatchScanProgress } from './components/BatchScanProgress'
 import { Sidebar } from './components/Sidebar'
 import { Settings } from './components/Settings'
+import { MagicAI } from './components/MagicAI'
 import type { ScanStatusType } from './electron.d'
 import './App.css'
 
@@ -82,8 +83,19 @@ function App() {
     duration,
     seek,
     volume,
-    setVolume
+    setVolume,
+    currentSound, // Need access to the howl instance if we were to manipulate it directly, but actually we use playSong
+    // But we need a way to play specific files (like vocals/instrumental) that are NOT in the library.
+    playFile // We need to expose a method to play an arbitrary file path
   } = useAudioPlayer(sortedMusicFiles)
+
+  // Determine current song object
+  const currentSong = playingIndex !== null && sortedMusicFiles[playingIndex] ? sortedMusicFiles[playingIndex] : null
+
+  // Ref to audio element is not directly available because useAudioPlayer uses Howler.
+  // MagicAI needs to sync lyrics with time.
+  // We can pass a simulated audio ref that exposes currentTime.
+  // Or better, MagicAI can accept currentTime as a prop.
   const [isDownloading, setIsDownloading] = useState(false)
   const [downloadProgress, setDownloadProgress] = useState(0)
   const [binaryDownloadStatus, setBinaryDownloadStatus] = useState<string>('')
@@ -340,6 +352,16 @@ function App() {
         onSeek={seek}
         volume={volume}
         onVolumeChange={setVolume}
+        extraControls={
+          <MagicAI
+            currentSong={currentSong}
+            currentTime={currentTime}
+            onSourceChange={(source, path) => {
+            console.log(`Switching source to ${source}: ${path} at ${currentTime}`)
+            playFile(path, currentTime)
+            }}
+          />
+        }
       />
 
       <DownloadNotification

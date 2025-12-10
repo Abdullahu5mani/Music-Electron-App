@@ -1,0 +1,6 @@
+spleeter
+openai-whisper
+ffmpeg-python
+numpy
+torch
+torchaudio

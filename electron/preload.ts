@@ -93,6 +93,7 @@ export interface ElectronAPI {
   cacheGetEntry: (filePath: string) => Promise<FileScanStatus | null>
   cacheCleanupOrphaned: () => Promise<number>
   cacheClear: () => Promise<boolean>
+  analyzeTrack: (filePath: string) => Promise<any>
 }
 
 // Expose a typed API to the Renderer process
@@ -240,6 +241,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   cacheClear: () =>
     ipcRenderer.invoke('cache-clear'),
+
+  analyzeTrack: (filePath: string) =>
+    ipcRenderer.invoke('analyze-track', filePath),
 } as ElectronAPI)
 
 // Keep the old ipcRenderer for backward compatibility if needed

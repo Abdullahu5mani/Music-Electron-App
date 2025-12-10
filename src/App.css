@@ -474,7 +474,7 @@
   z-index: 1000;
   box-shadow: 0 -4px 8px rgba(0, 0, 0, 0.3);
   box-sizing: border-box; /* Include padding in height */
-  overflow: hidden; /* Prevent content overflow */
+  /* overflow: hidden; */ /* Removed to allow MagicAI panel to popup */
 }
 
 @media (min-width: 768px) {

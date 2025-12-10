@@ -22,6 +22,7 @@ interface UseAudioPlayerReturn {
   seek: (time: number) => void
   volume: number
   setVolume: (volume: number) => void
+  playFile: (path: string, startTime?: number) => void
 }
 
 /**
@@ -51,6 +52,15 @@ export function useAudioPlayer(musicFiles: MusicFile[]): UseAudioPlayerReturn {
   }
 
   const playSong = (file: MusicFile, index: number, record = true) => {
+    _play(file.path, file.extension.replace('.', ''), index, record)
+  }
+
+  const playFile = (path: string, startTime: number = 0) => {
+    const ext = path.split('.').pop() || 'mp3'
+    _play(path, ext, playingIndex, false, startTime)
+  }
+
+  const _play = (path: string, format: string, index: number | null, record: boolean, startTime: number = 0) => {
     // Ensure only one Howler instance exists - stop and cleanup current one
     if (currentSound) {
       currentSound.stop()
@@ -59,10 +69,7 @@ export function useAudioPlayer(musicFiles: MusicFile[]): UseAudioPlayerReturn {
     }
 
     // Convert file path to file:// URL using path resolver
-    const fileURL = pathToFileURL(file.path)
-
-    // Get file extension without the dot for Howler format
-    const format = file.extension.replace('.', '')
+    const fileURL = pathToFileURL(path)
 
     // Create Howl instance
     const sound = new Howl({
@@ -80,13 +87,16 @@ export function useAudioPlayer(musicFiles: MusicFile[]): UseAudioPlayerReturn {
       onend: () => {
         // Auto-play next song when current ends
         setIsPlaying(false)
-        if (playNextRef.current) {
+        // Only autoplay next if we are playing a regular song (index != null)
+        // If we are playing a stem, maybe we stop?
+        // But if index is passed, we treat it as the current song.
+        if (index !== null && playNextRef.current) {
           playNextRef.current(true)
         }
       },
       onloaderror: () => {
         console.error('Error loading song')
-        setPlayingIndex(null)
+        if (index !== null) setPlayingIndex(null)
         setCurrentSound(null)
         setIsPlaying(false)
         currentFilePathRef.current = null
@@ -96,15 +106,36 @@ export function useAudioPlayer(musicFiles: MusicFile[]): UseAudioPlayerReturn {
     })
 
     // Play the song
-    sound.play()
+    // If startTime > 0, we seek immediately after play
+    // Note: sound.seek() works best when sound is loaded.
+    // We might need to listen to 'onload' or just call it if html5:true sometimes works synchronously for seek?
+    // No, safest is to seek in onload or immediately if using html5.
+
+    // We already have an onload handler defined above but it's closure specific.
+    // We can't easily change the options object passed to Howl constructor after creation.
+    // We need to modify the options object creation.
+    // But `sound` is created with `new Howl`.
+
+    // Let's redefine the onload in the options or use `sound.once('load', ...)`
+
+    // Actually, we can use the `seek` option in Howl? No, Howl doesn't have a seek option in constructor?
+    // It doesn't.
+
+    // We can chain it.
+    const id = sound.play()
+    if (startTime > 0) {
+      sound.seek(startTime, id)
+    }
+
     setCurrentSound(sound)
-    setPlayingIndex(index)
-    if (record) {
+    if (index !== null) setPlayingIndex(index)
+
+    if (record && index !== null) {
       recordHistory(index)
     }
     setIsPlaying(true)
-    currentFilePathRef.current = file.path
-    setCurrentTime(0)
+    currentFilePathRef.current = path
+    setCurrentTime(startTime)
     isSeekingRef.current = false
   }
 
@@ -487,6 +518,7 @@ export function useAudioPlayer(musicFiles: MusicFile[]): UseAudioPlayerReturn {
     seek,
     volume,
     setVolume,
+    playFile
   }
 }
 

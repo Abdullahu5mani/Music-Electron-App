@@ -3,6 +3,7 @@ import { registerApiHandlers } from './modules/apiHandlers'
 import { registerYoutubeHandlers } from './modules/youtubeHandlers'
 import { registerSystemHandlers } from './modules/systemHandlers'
 import { registerCacheHandlers } from './modules/cacheHandlers'
+import { registerAiHandlers } from './modules/aiHandlers'
 
 /**
  * Registers all IPC handlers for communication between main and renderer processes
@@ -20,4 +21,5 @@ export function registerIpcHandlers() {
   registerYoutubeHandlers()
   registerSystemHandlers()
   registerCacheHandlers()
+  registerAiHandlers()
 }

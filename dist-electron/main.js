@@ -1,2 +1,2 @@
 import "electron";
-import "./main-iPyKMwJc.js";
+import "./main-Qi1qUQmh.js";

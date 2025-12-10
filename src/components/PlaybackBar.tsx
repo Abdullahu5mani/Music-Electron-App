@@ -24,6 +24,7 @@ interface PlaybackBarProps {
   onSeek: (time: number) => void
   volume: number
   onVolumeChange: (volume: number) => void
+  extraControls?: React.ReactNode
 }
 
 /**
@@ -56,6 +57,7 @@ export function PlaybackBar({
   onSeek,
   volume,
   onVolumeChange,
+  extraControls
 }: PlaybackBarProps) {
   const [isDragging, setIsDragging] = useState(false)
   const [dragTime, setDragTime] = useState<number>(currentTime)
@@ -221,6 +223,7 @@ export function PlaybackBar({
               railStyle={{ backgroundColor: 'rgba(255, 255, 255, 0.1)', height: 6 }}
             />
           </div>
+          {extraControls}
         </div>
       </div>
     </div>

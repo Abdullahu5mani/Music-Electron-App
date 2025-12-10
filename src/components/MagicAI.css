@@ -1,0 +1,172 @@
+.magic-ai-container {
+  position: relative;
+  display: flex;
+  align-items: center;
+  margin-left: 10px;
+}
+
+.magic-ai-btn {
+  background: linear-gradient(135deg, #6366f1, #a855f7);
+  border: none;
+  border-radius: 50%;
+  width: 36px;
+  height: 36px;
+  color: white;
+  font-size: 1.2rem;
+  cursor: pointer;
+  transition: transform 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.magic-ai-btn:hover {
+  transform: scale(1.1);
+}
+
+.magic-ai-panel {
+  position: absolute;
+  bottom: 50px; /* Above the playback bar */
+  right: 0;
+  width: 320px;
+  height: 400px;
+  background: #1e1e2e; /* Dark theme background */
+  border: 1px solid #333;
+  border-radius: 12px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+  display: flex;
+  flex-direction: column;
+  z-index: 1000;
+  overflow: hidden;
+  color: #fff;
+}
+
+.magic-ai-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 15px;
+  background: rgba(255, 255, 255, 0.05);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.magic-ai-header h3 {
+  margin: 0;
+  font-size: 1rem;
+  background: linear-gradient(to right, #6366f1, #a855f7);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.close-btn {
+  background: none;
+  border: none;
+  color: #aaa;
+  font-size: 1.2rem;
+  cursor: pointer;
+}
+
+.magic-ai-start {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  text-align: center;
+}
+
+.magic-ai-start button {
+  margin-top: 15px;
+  padding: 10px 20px;
+  background: #6366f1;
+  border: none;
+  border-radius: 6px;
+  color: white;
+  cursor: pointer;
+}
+
+.magic-ai-loading {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+.spinner {
+  width: 40px;
+  height: 40px;
+  border: 3px solid rgba(255, 255, 255, 0.1);
+  border-top-color: #6366f1;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin-bottom: 15px;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.magic-ai-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+}
+
+.stem-controls {
+  display: flex;
+  padding: 10px;
+  gap: 5px;
+  background: rgba(0, 0, 0, 0.2);
+}
+
+.stem-controls button {
+  flex: 1;
+  padding: 6px;
+  font-size: 0.8rem;
+  background: rgba(255, 255, 255, 0.1);
+  border: none;
+  border-radius: 4px;
+  color: #ccc;
+  cursor: pointer;
+}
+
+.stem-controls button.active {
+  background: #6366f1;
+  color: white;
+}
+
+.stem-controls button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.lyrics-display {
+  flex: 1;
+  padding: 15px;
+  overflow-y: auto;
+  text-align: center;
+}
+
+.lyrics-display p {
+  margin: 8px 0;
+  color: #888;
+  transition: color 0.3s, transform 0.3s;
+}
+
+.lyrics-display p.active {
+  color: #fff;
+  font-weight: bold;
+  font-size: 1.1rem;
+  transform: scale(1.05);
+}
+
+.no-lyrics {
+  color: #666;
+  font-style: italic;
+  margin-top: 50px;
+}
