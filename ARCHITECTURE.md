@@ -158,6 +158,229 @@ Music-Electron-App/
 
 ---
 
+## File-by-File Roles (Quick Reference)
+
+### Main process (`electron/`)
+- `main.ts` — App bootstrap: removes menus, registers IPC, creates window/tray, devtools shortcut, lifecycle events.
+- `window.ts` — BrowserWindow creation/config, frameless settings, load URLs, visibility events to tray.
+- `preload.ts` — contextBridge surface for renderer; wires invoke/send/listen IPC helpers.
+- `tray.ts` — System tray icon/menu, play/pause toggle, window show/hide, tooltip updates.
+- `musicScanner.ts` — Recursive scan of folders, metadata extraction, album art → base64, single-file metadata read.
+- `youtubeDownloader.ts` — yt-dlp orchestration with runtime binary download, title/progress events, 10s cooldown.
+- `settings.ts` — JSON settings load/save in `app.getPath('userData')`; music/download folder persistence.
+- `binaryManager.ts` — Platform/arch-aware yt-dlp pathing, version checks, ffmpeg path resolution and status.
+- `metadataCache.ts` — better-sqlite3 cache; file hash (path+size+mtime), scan status, stats, cleanup.
+- `ipc/handlers.ts` — Aggregates and registers all IPC modules.
+- `ipc/modules/musicHandlers.ts` — scan/select folders, read buffers, single-file metadata, write tags/cover art.
+- `ipc/modules/apiHandlers.ts` — AcoustID + MusicBrainz lookups, image download with fallback.
+- `ipc/modules/youtubeHandlers.ts` — Download endpoint, binary status exposure.
+- `ipc/modules/systemHandlers.ts` — Window controls, playback state, visibility events, settings, download folder, platform info.
+- `ipc/modules/cacheHandlers.ts` — Cache CRUD: statuses, mark scanned, batch status, stats, cleanup/reset.
+
+### Renderer (`src/`)
+- `App.tsx` — Composition root; wires hooks, IPC listeners, toasts, download flow, settings modal, batch scan actions.
+- `App.css` — Global styling, fixed bars spacing, gradients, scrollbar overrides.
+- `electron.d.ts` — Type definitions for `window.electronAPI`, settings/binary/platform types.
+- `pathResolver.ts` — `file:///` URL normalization across Win/macOS/Linux.
+- `components/TitleBar.tsx` — Custom window controls (min/max/close), state from `window-state-changed`.
+- `components/Sidebar.tsx` — Artist/album filters, current filter highlight.
+- `components/SongList.tsx` — Song grid/list, selection/play triggers, status icons, per-song scan actions.
+- `components/PlaybackBar.tsx` — Playback controls, seek/volume sliders (rc-slider), shuffle/repeat states.
+- `components/DownloadButton.tsx` — URL entry + download trigger; disables during active download.
+- `components/DownloadNotification.tsx` — Active download progress/title banner.
+- `components/NotificationToast.tsx` — General toast notifications (success/warning/info/error).
+- `components/Settings.tsx` — Modal for folder selection, binary status, platform info, batch scan button.
+- `hooks/useAudioPlayer.ts` — Howler playback, tray sync, shuffle/repeat, seek/volume, track progression.
+- `hooks/useMusicLibrary.ts` — Folder selection, scanning, sorting, in-place single-file updates.
+- `hooks/useSongScanner.ts` — Batch scanning with rate limits, cancellation, status updates, per-file refresh.
+- `utils/sortMusicFiles.ts` — Sorting by title/artist/track/date added.
+- `utils/fingerprintGenerator.ts` — Chromaprint WASM wrapper with per-file reset, size limits, delays.
+- `utils/acoustidClient.ts` — AcoustID API calls with rate limiting.
+- `utils/musicbrainzClient.ts` — MusicBrainz queries, release scoring, cover-art URL generation.
+
+### Config / Build
+- `vite.config.ts` — Vite + electron plugin setup, test config, WASM MIME headers, optimization excludes.
+- `electron-builder.json5` — Packaging config; `asarUnpack` for ffmpeg binaries.
+- `package.json` — Scripts, dependencies, entry points.
+
+---
+
+## File Details (What Each File Does)
+
+### Main process (`electron/`)
+
+- `main.ts`
+  - Boots the app: strips the default menu, registers all IPC modules, wires window lifecycle events.
+  - Registers devtools shortcut (F12/Ctrl+Shift+I), creates the BrowserWindow and tray, and handles ready/activate/quit flows.
+  - Chooses the renderer URL (dev server vs packaged `index.html`).
+
+- `window.ts`
+  - Creates the frameless BrowserWindow with sizing limits, background color, and preload script.
+  - Sets `webSecurity: false` to allow `file://` playback, handles show/hide/maximize events, and forwards window state changes to the renderer (for title bar icons/tray visibility).
+
+- `preload.ts`
+  - Runs in isolated context; exposes a typed `electronAPI` via `contextBridge`.
+  - Maps renderer calls to `ipcRenderer.invoke/send` and registers event listeners with cleanup functions (download progress/title, binary progress, tray play/pause, window state).
+
+- `tray.ts`
+  - Builds the system tray icon and menu (Show/Hide, Play/Pause, Quit) and updates labels based on playback state and window visibility.
+  - Forwards tray play/pause clicks to the renderer; toggles window visibility on icon click.
+
+- `musicScanner.ts`
+  - Recursively scans folders for supported audio extensions, reads tags with `music-metadata`, converts album art to base64, and returns `MusicFile[]`.
+  - Provides single-file metadata read for in-place UI updates and supports large libraries without mutating inputs.
+
+- `youtubeDownloader.ts`
+  - Ensures yt-dlp binary exists (platform/arch-specific download if missing), then executes downloads with `--extract-audio --audio-format mp3 --embed-thumbnail --add-metadata`.
+  - Emits title and progress events to the renderer, enforces a 10s cooldown between downloads, and reports errors cleanly.
+
+- `settings.ts`
+  - Persists JSON settings (music folder, download folder) under `app.getPath('userData')`.
+  - Exposes getters/setters used by IPC handlers and renderer settings modal.
+
+- `binaryManager.ts`
+  - Resolves yt-dlp binary path per platform/arch, checks installation and version (GitHub latest), flags corrupted binaries for redownload.
+  - Resolves ffmpeg path (unpacked from asar) and reports installed status/version.
+
+- `metadataCache.ts`
+  - Implements a better-sqlite3 cache keyed by file hash (path + size + mtime) to track scan status and avoid reprocessing unchanged files.
+  - Provides batch status lookups, mark-scanned, stats, cleanup of orphaned entries, and full reset.
+
+- `ipc/handlers.ts`
+  - Entry point that imports and registers all IPC modules so the main process exposes a unified surface to the renderer.
+
+- `ipc/modules/musicHandlers.ts`
+  - IPC endpoints for scanning folders, selecting folders, reading file buffers, single-file metadata reads, and writing tags/cover art.
+
+- `ipc/modules/apiHandlers.ts`
+  - IPC endpoints for AcoustID fingerprint lookup, MusicBrainz metadata lookup, and image download with URL fallbacks.
+
+- `ipc/modules/youtubeHandlers.ts`
+  - IPC endpoints for YouTube downloads and binary status retrieval (yt-dlp/ffmpeg).
+
+- `ipc/modules/systemHandlers.ts`
+  - IPC endpoints for window controls (min/max/close), playback state updates to tray, visibility changes, settings CRUD, download-folder dialog, and platform info.
+
+- `ipc/modules/cacheHandlers.ts`
+  - IPC endpoints for cache status (single/batch), mark scanned, stats, unscanned list, cleanup of orphaned entries, and full clear.
+
+### Renderer (`src/`)
+
+- `App.tsx`
+  - Composition root: initializes hooks (`useMusicLibrary`, `useAudioPlayer`, `useSongScanner`), attaches IPC listeners, and coordinates download flow, toasts, batch scan actions, and settings modal state.
+  - Renders title bar, sidebar, song list, playback bar, download button, notifications, and settings UI.
+
+- `App.css`
+  - Global styles, layout padding for fixed title/playback bars, gradients, typography, hover states, and overlay scrollbar theming.
+
+- `electron.d.ts`
+  - Renderer-side TypeScript declarations for `window.electronAPI`, settings/binary/platform interfaces, and IPC payload shapes; keeps TS type safety aligned with `preload.ts`.
+
+- `pathResolver.ts`
+  - Normalizes OS paths to `file:///` URLs for Howler/Electron playback (handles Windows drive letters and forward-slash conversion).
+
+- `components/TitleBar.tsx`
+  - Custom draggable title bar for the frameless window; listens for window state changes to toggle the maximize/restore icon; sends min/max/close IPC.
+
+- `components/Sidebar.tsx`
+  - Derives artist/album facets from the library, renders filters with active selection, and notifies parent of filter changes (all/artist/album).
+
+- `components/SongList.tsx`
+  - Displays songs with metadata, duration, album art, and scan status indicators; handles play selection, per-song scan/tag actions, and sort dropdown hookup.
+
+- `components/PlaybackBar.tsx`
+  - Shows current track info/art, playback controls (play/pause, prev/next, shuffle, repeat), seek bar, and volume slider; debounces seek to avoid jitter.
+
+- `components/DownloadButton.tsx`
+  - Accepts a YouTube URL, triggers download IPC, and disables during active download; surfaces validation errors via toasts.
+
+- `components/DownloadNotification.tsx`
+  - Floating banner for active download progress/title with smooth enter/exit animations.
+
+- `components/NotificationToast.tsx`
+  - General-purpose toasts (success/warning/info/error) with auto-dismiss and manual close; used across scan, download, and settings flows.
+
+- `components/Settings.tsx`
+  - Modal to view/edit music/download folders, inspect binary status (yt-dlp/ffmpeg) and platform info, and trigger batch scans of unscanned files.
+
+- `hooks/useAudioPlayer.ts`
+  - Howler-based playback engine: manages current sound, time/duration, volume, shuffle, repeat, track progression, tray play/pause sync, and time updates with seek guard.
+
+- `hooks/useMusicLibrary.ts`
+  - Handles folder selection dialog, scanning via IPC, sorting via `sortMusicFiles`, error/loading states, and in-place single-file metadata updates without full refresh.
+
+- `hooks/useSongScanner.ts`
+  - Manages batch scan queue, rate limiting between external calls, cancellation, progress state, and per-file in-place updates + toast notifications.
+
+- `utils/sortMusicFiles.ts`
+  - Pure sorting helpers for title, artist (with secondary title), track (album + track number), and date added; non-mutating.
+
+- `utils/fingerprintGenerator.ts`
+  - Wraps Chromaprint WASM with per-file reinitialization, file size guard, micro-delays, and circuit breaker for memory errors; returns fingerprints/durations for AcoustID.
+
+- `utils/acoustidClient.ts`
+  - Calls AcoustID API with provided fingerprint/duration, applying rate limits; parses best match/recording IDs.
+
+- `utils/musicbrainzClient.ts`
+  - Queries MusicBrainz for releases/recordings, scores releases to prioritize originals over compilations/soundtracks, and generates ordered cover-art URL fallbacks.
+
+### Config / Build
+
+- `vite.config.ts`
+  - Configures Vite + `vite-plugin-electron` for main/preload builds, renderer plugins, test environments (jsdom/node), WASM MIME header for dev server, and asset naming for WASM outputs; excludes native/WASM deps from optimizeDeps.
+
+- `electron-builder.json5`
+  - Packaging configuration with `asar` enabled and `asarUnpack` for `@ffmpeg-installer/ffmpeg` binaries so executables run outside the archive; defines app metadata and build targets (inherit defaults unless overridden).
+
+- `package.json`
+  - Declares scripts (dev, build, lint, test, coverage), dependency graph (Electron, React, audio/tagging, fingerprinting, DB, download), and main entry (`dist-electron/main.js`) for packaged app.
+
+---
+
+## Code Flows (End-to-End)
+
+- **App startup (main)**
+  1) `app.whenReady()` → `registerIpcHandlers()` → `setupWindowEvents()` → `createWindow()` → `createTray()`.
+  2) Removes menu, registers devtools shortcut, loads renderer (dev: `http://localhost:5173`, prod: `file://…/index.html`).
+
+- **Renderer boot**
+  1) `App.tsx` mounts → hooks initialize (`useMusicLibrary`, `useAudioPlayer`, `useSongScanner`).
+  2) IPC listeners attach (download progress/title, binary progress, window-state, tray play/pause).
+  3) UI renders title bar, sidebar, list, playback bar, settings, notifications.
+
+- **Library scan**
+  1) User selects folder → `select-music-folder` (dialog) → path stored in settings.
+  2) `scan-music-folder` invokes `musicScanner` → returns `MusicFile[]` with metadata/art.
+  3) `useMusicLibrary` sets state, `sortMusicFiles` memoizes ordering; cache statuses fetched for scan indicators.
+
+- **Playback**
+  1) Click song → `useAudioPlayer.playSong` builds `Howl` with `file:///` URL.
+  2) `onload` sets duration; interval updates current time unless seeking; `onend` advances (respecting shuffle/repeat).
+  3) Playback state sent to main (`playback-state-changed`) to sync tray menu; tray `Play/Pause` triggers renderer toggle.
+
+- **YouTube download**
+  1) Renderer calls `download-youtube` with URL + output path.
+  2) `youtubeDownloader` ensures yt-dlp binary (platform/arch asset), emits `download-title` then `download-progress`.
+  3) On success, renderer rescans selected folder and shows toast; 10s cooldown enforced between downloads.
+
+- **Fingerprint + tag (single song)**
+  1) Renderer requests file buffer (`read-file-buffer`), runs Chromaprint WASM → fingerprint + duration.
+  2) Calls `lookup-acoustid` → MBID → `lookup-musicbrainz` → picks best release → cover art URLs.
+  3) `download-image-with-fallback` fetches art; `write-metadata`/`write-cover-art` apply tags (taglib-wasm).
+  4) Cache updated (`cache-mark-file-scanned`), renderer `read-single-file-metadata` updates that song in-place.
+
+- **Batch scan**
+  1) Settings “Scan all” or batch action → `useSongScanner.scanBatch` gathers `unscanned`/`file-changed`.
+  2) Sequentially repeats fingerprint/tag flow with rate limits (AcoustID/MusicBrainz/Cover Art delays).
+  3) Progress UI updates; cancel flag stops loop; each file updates in-place; summary toast at end.
+
+- **Settings + binaries**
+  1) Open settings modal → `get-settings`, `get-binary-statuses`, `get-platform-info`.
+  2) User selects music/download folders via dialogs; `save-settings` writes JSON.
+  3) Binary panel shows yt-dlp/ffmpeg presence, versions, update needs; platform info surfaced for support.
+
+---
+
 ## Main Process Components
 
 The **Main Process** runs in Node.js and handles all system-level operations.

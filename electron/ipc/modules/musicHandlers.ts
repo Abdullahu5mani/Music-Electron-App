@@ -6,19 +6,34 @@ import { scanMusicFiles, readSingleFileMetadata } from '../../musicScanner'
 /**
  * Metadata that can be written to audio files
  */
+/**
+ * Metadata fields that can be read from or written to audio files.
+ */
 export interface AudioMetadata {
+  /** Track title */
   title?: string
+  /** Artist name */
   artist?: string
+  /** Album name */
   album?: string
+  /** Album artist name */
   albumArtist?: string
+  /** Release year */
   year?: number
+  /** Track number */
   trackNumber?: number
+  /** Total tracks */
   trackTotal?: number
+  /** Disc number */
   discNumber?: number
+  /** Total discs */
   discTotal?: number
+  /** Genre */
   genre?: string
+  /** Comment */
   comment?: string
-  coverArtPath?: string  // Path to cover art image file
+  /** Absolute path to cover art image file */
+  coverArtPath?: string
 }
 
 /**
@@ -26,6 +41,17 @@ export interface AudioMetadata {
  * - Folder scanning and selection
  * - File reading for fingerprinting
  * - Metadata writing (title, artist, album, cover art, etc.)
+ */
+/**
+ * Registers IPC handlers related to music library operations.
+ * 
+ * Handlers:
+ * - 'scan-music-folder': Scans a directory for music files.
+ * - 'select-music-folder': Opens an OS dialog to pick a folder.
+ * - 'read-single-file-metadata': Reads metadata for a specific file.
+ * - 'read-file-buffer': Reads file content into a buffer (for fpc).
+ * - 'write-cover-art': Embeds an image as cover art.
+ * - 'write-metadata': Writes ID3/Vorbis tags to a file.
  */
 export function registerMusicHandlers() {
   // Handle music folder scanning

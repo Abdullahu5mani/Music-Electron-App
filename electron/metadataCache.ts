@@ -105,7 +105,7 @@ export function generateFileHash(filePath: string): string | null {
  */
 export function getFileScanStatus(filePath: string): ScanStatusType {
   const database = initializeDatabase()
-  
+
   const currentHash = generateFileHash(filePath)
   if (!currentHash) {
     return 'unscanned' // File doesn't exist or can't be read
@@ -151,7 +151,7 @@ export function markFileScanned(
   hasMetadata: boolean
 ): boolean {
   const database = initializeDatabase()
-  
+
   const fileHash = generateFileHash(filePath)
   if (!fileHash) {
     console.error('Failed to generate hash for file:', filePath)
@@ -163,7 +163,7 @@ export function markFileScanned(
       INSERT OR REPLACE INTO metadata_cache (filePath, fileHash, scannedAt, mbid, hasMetadata)
       VALUES (?, ?, ?, ?, ?)
     `)
-    
+
     stmt.run(filePath, fileHash, Date.now(), mbid, hasMetadata ? 1 : 0)
     console.log(`Marked file as scanned: ${filePath} (hasMetadata: ${hasMetadata})`)
     return true
@@ -179,11 +179,11 @@ export function markFileScanned(
  */
 export function getBatchScanStatus(filePaths: string[]): Map<string, ScanStatusType> {
   const results = new Map<string, ScanStatusType>()
-  
+
   for (const filePath of filePaths) {
     results.set(filePath, getFileScanStatus(filePath))
   }
-  
+
   return results
 }
 
@@ -206,14 +206,14 @@ export function getScanStatistics(): {
   withoutMetadata: number
 } {
   const database = initializeDatabase()
-  
+
   const row = database.prepare(`
     SELECT 
       COUNT(*) as total,
       SUM(CASE WHEN hasMetadata = 1 THEN 1 ELSE 0 END) as withMetadata
     FROM metadata_cache
   `).get() as { total: number; withMetadata: number }
-  
+
   return {
     total: row.total,
     withMetadata: row.withMetadata,
@@ -226,23 +226,23 @@ export function getScanStatistics(): {
  */
 export function cleanupOrphanedEntries(): number {
   const database = initializeDatabase()
-  
+
   const rows = database.prepare('SELECT filePath FROM metadata_cache').all() as { filePath: string }[]
   let removed = 0
-  
+
   const deleteStmt = database.prepare('DELETE FROM metadata_cache WHERE filePath = ?')
-  
+
   for (const row of rows) {
     if (!fs.existsSync(row.filePath)) {
       deleteStmt.run(row.filePath)
       removed++
     }
   }
-  
+
   if (removed > 0) {
     console.log(`Cleaned up ${removed} orphaned entries from metadata cache`)
   }
-  
+
   return removed
 }
 
@@ -251,7 +251,7 @@ export function cleanupOrphanedEntries(): number {
  */
 export function getCachedEntry(filePath: string): FileScanStatus | null {
   const database = initializeDatabase()
-  
+
   const row = database.prepare(`
     SELECT filePath, fileHash, scannedAt, mbid, hasMetadata 
     FROM metadata_cache 
@@ -263,9 +263,9 @@ export function getCachedEntry(filePath: string): FileScanStatus | null {
     mbid: string | null
     hasMetadata: number
   } | undefined
-  
+
   if (!row) return null
-  
+
   return {
     filePath: row.filePath,
     fileHash: row.fileHash,

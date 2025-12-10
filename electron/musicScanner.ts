@@ -62,7 +62,7 @@ export async function scanMusicFiles(directoryPath: string): Promise<MusicFile[]
 
     // Recursively scan directory and extract metadata
     await scanDirectory(directoryPath, musicFiles)
-    
+
     return musicFiles
   } catch (error) {
     console.error(`Error scanning directory ${directoryPath}:`, error)
@@ -89,12 +89,12 @@ async function scanDirectory(dirPath: string, musicFiles: MusicFile[]): Promise<
           const ext = path.extname(entry.name).toLowerCase()
           if (MUSIC_EXTENSIONS.includes(ext)) {
             const stats = fs.statSync(fullPath)
-            
+
             // Extract metadata
             let metadata
             try {
               const parsed = await parseFile(fullPath)
-              
+
               // Extract album art and convert to base64
               let albumArt: string | undefined
               if (parsed.common.picture && parsed.common.picture.length > 0) {
@@ -104,7 +104,7 @@ async function scanDirectory(dirPath: string, musicFiles: MusicFile[]): Promise<
                 const buffer = Buffer.from(picture.data)
                 albumArt = `data:${picture.format};base64,${buffer.toString('base64')}`
               }
-              
+
               metadata = {
                 title: parsed.common.title,
                 artist: parsed.common.artist,
@@ -173,7 +173,7 @@ export function formatMusicMetadata(file: MusicFile): string | null {
   }
 
   const metadataParts: string[] = []
-  
+
   if (file.metadata.title) {
     metadataParts.push(`Title: ${file.metadata.title}`)
   }
@@ -193,7 +193,7 @@ export function formatMusicMetadata(file: MusicFile): string | null {
     metadataParts.push(`Year: ${file.metadata.year}`)
   }
   if (file.metadata.track && file.metadata.track.no !== null) {
-    const trackInfo = file.metadata.track.of 
+    const trackInfo = file.metadata.track.of
       ? `${file.metadata.track.no}/${file.metadata.track.of}`
       : `${file.metadata.track.no}`
     metadataParts.push(`Track: ${trackInfo}`)
@@ -234,7 +234,7 @@ export async function readSingleFileMetadata(filePath: string): Promise<MusicFil
     let metadata
     try {
       const parsed = await parseFile(filePath)
-      
+
       // Extract album art and convert to base64
       let albumArt: string | undefined
       if (parsed.common.picture && parsed.common.picture.length > 0) {
@@ -242,7 +242,7 @@ export async function readSingleFileMetadata(filePath: string): Promise<MusicFil
         const buffer = Buffer.from(picture.data)
         albumArt = `data:${picture.format};base64,${buffer.toString('base64')}`
       }
-      
+
       metadata = {
         title: parsed.common.title,
         artist: parsed.common.artist,
@@ -264,7 +264,7 @@ export async function readSingleFileMetadata(filePath: string): Promise<MusicFil
       name,
       extension: ext,
       size: stats.size,
-    dateAdded: stats.mtimeMs,
+      dateAdded: stats.mtimeMs,
       metadata,
     }
   } catch (error) {
@@ -277,11 +277,11 @@ export async function scanAndLogMusicFiles(directoryPath: string): Promise<Music
   console.log('Starting music scan...')
   console.log(`Scanning folder: ${directoryPath}`)
   console.log('-'.repeat(50))
-  
+
   const musicFiles = await scanMusicFiles(directoryPath)
-  
+
   console.log(`\nFound ${musicFiles.length} music file(s)\n`)
-  
+
   if (musicFiles.length > 0) {
     console.log('Music Files:')
     console.log('-'.repeat(50))
@@ -290,22 +290,22 @@ export async function scanAndLogMusicFiles(directoryPath: string): Promise<Music
       console.log(`   Path: ${file.path}`)
       console.log(`   Size: ${formatFileSize(file.size)}`)
       console.log(`   Type: ${file.extension}`)
-      
+
       const metadataString = formatMusicMetadata(file)
       if (metadataString) {
         console.log(`   [Music Metadata: ${metadataString}]`)
       } else {
         console.log(`   [Music Metadata: No metadata available]`)
       }
-      
+
       console.log('')
     })
   } else {
     console.log('No music files found in the specified directory.')
   }
-  
+
   console.log('-'.repeat(50))
-  
+
   return musicFiles
 }
 

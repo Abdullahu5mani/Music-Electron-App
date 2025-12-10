@@ -97,23 +97,23 @@ export function createTray(): Tray {
   const iconPath = VITE_DEV_SERVER_URL
     ? path.join(process.env.APP_ROOT, 'src', 'assets', 'trayIcon.svg')
     : path.join(process.env.APP_ROOT, 'dist', 'assets', 'trayIcon.svg')
-  
+
   // Create native image from the icon file
   const icon = nativeImage.createFromPath(iconPath)
-  
+
   // Create tray with the icon
   tray = new Tray(icon)
-  
+
   // Set tooltip
   tray.setToolTip('Music Sync App')
-  
+
   // Set initial menu
   updateTrayMenu()
-  
+
   // Handle tray icon click (show/hide window)
   tray.on('click', () => {
     const windows = BrowserWindow.getAllWindows()
-    
+
     if (windows.length === 0) {
       // No windows open, create a new one
       createWindow()
@@ -129,7 +129,7 @@ export function createTray(): Tray {
     }
     updateTrayMenu()
   })
-  
+
   return tray
 }
 
