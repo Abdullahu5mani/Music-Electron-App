@@ -82,6 +82,7 @@ export interface ElectronAPI {
   downloadImageWithFallback: (urls: string[], filePath: string) => Promise<{ success: boolean; url?: string; error?: string }>
   writeCoverArt: (filePath: string, imagePath: string) => Promise<{ success: boolean; error?: string }>
   writeMetadata: (filePath: string, metadata: AudioMetadata) => Promise<{ success: boolean; error?: string }>
+  generateFingerprint: (filePath: string) => Promise<string>
   lookupAcoustid: (fingerprint: string, duration: number) => Promise<any>
   lookupMusicBrainz: (mbid: string) => Promise<any>
   // Metadata cache operations
@@ -209,6 +210,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   writeMetadata: (filePath: string, metadata: AudioMetadata) =>
     ipcRenderer.invoke('write-metadata', filePath, metadata),
+
+  generateFingerprint: (filePath: string) =>
+    ipcRenderer.invoke('generate-fingerprint', filePath),
 
   lookupAcoustid: (fingerprint: string, duration: number) =>
     ipcRenderer.invoke('lookup-acoustid', fingerprint, duration),

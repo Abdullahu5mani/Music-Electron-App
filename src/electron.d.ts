@@ -81,6 +81,7 @@ export interface ElectronAPI {
   downloadImageWithFallback: (urls: string[], filePath: string) => Promise<{ success: boolean; url?: string; error?: string }>
   writeCoverArt: (filePath: string, imagePath: string) => Promise<{ success: boolean; error?: string }>
   writeMetadata: (filePath: string, metadata: AudioMetadata) => Promise<{ success: boolean; error?: string }>
+  generateFingerprint: (filePath: string) => Promise<string>
   lookupAcoustid: (fingerprint: string, duration: number) => Promise<{ mbid: string; title?: string; artist?: string } | null>
   lookupMusicBrainz: (mbid: string) => Promise<any>
   // Metadata cache operations

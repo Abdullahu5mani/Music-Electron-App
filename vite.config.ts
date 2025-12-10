@@ -42,6 +42,11 @@ export default defineConfig({
             rollupOptions: {
               // Externalize native modules and packages that need special handling
               external: ['taglib-wasm', 'axios', 'better-sqlite3'],
+              input: {
+                main: 'electron/main.ts',
+                // Explicitly bundle the worker script
+                fingerprintWorker: 'electron/workers/fingerprintWorker.ts',
+              },
             },
           },
         },

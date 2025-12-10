@@ -1,6 +1,7 @@
 import { ipcMain, dialog, app } from 'electron'
 import path from 'path'
 import fs from 'fs'
+import { Worker } from 'worker_threads'
 import { scanMusicFiles, readSingleFileMetadata } from '../../musicScanner'
 
 /**
@@ -60,7 +61,7 @@ export function registerMusicHandlers() {
     }
   })
 
-  // Handle read file as buffer (for fingerprint generation)
+  // Handle read file as buffer (for fingerprint generation) - KEPT FOR BACKWARD COMPATIBILITY
   ipcMain.handle('read-file-buffer', async (_event, filePath: string) => {
     try {
       const buffer = fs.readFileSync(filePath)
@@ -69,6 +70,79 @@ export function registerMusicHandlers() {
       console.error('Error reading file:', error)
       throw error
     }
+  })
+
+  // Handle generating fingerprint via Worker Thread (fpcalc)
+  ipcMain.handle('generate-fingerprint', async (_event, filePath: string) => {
+    return new Promise((resolve, reject) => {
+      // Resolve path to the worker script
+      // In prod: dist-electron/workers/fingerprintWorker.js (because we will add it to entry)
+      // In dev: electron/workers/fingerprintWorker.ts (but needs compilation or ts-node)
+
+      let workerPath = ''
+
+      if (app.isPackaged) {
+        workerPath = path.join(__dirname, '..', 'workers', 'fingerprintWorker.js')
+        // __dirname is dist-electron/ipc/modules (roughly) or dist-electron
+        // If main.js is in dist-electron/, then __dirname in this file might depend on how it is bundled.
+        // Actually, with vite, everything is bundled into main.js usually, unless code splitting is used.
+        // If we configure multiple entries, they will be separate files.
+        // Let's assume we configure vite to output workers/fingerprintWorker.js relative to dist-electron.
+        workerPath = path.join(app.getAppPath(), 'dist-electron', 'workers', 'fingerprintWorker.js')
+      } else {
+        // Dev mode
+        workerPath = path.join(process.cwd(), 'electron', 'workers', 'fingerprintWorker.ts')
+      }
+
+      // In dev, we can't run .ts directly in worker_threads without loader.
+      // But vite-plugin-electron usually handles the main process build.
+      // If we simply point to the .ts file in dev, it might fail if not compiled.
+
+      // ALTERNATIVE: Use the bundled main.js approach where worker is part of the bundle?
+      // Or simply assume that in dev we might need a workaround.
+      // However, usually one adds the worker as an entry point in vite config.
+
+      // If we added 'electron/workers/fingerprintWorker.ts' to rollup input,
+      // it should be emitted as 'workers/fingerprintWorker.js' in dist-electron.
+      // So in both dev and prod, we should look for the .js file in dist-electron if vite is running in watch mode.
+
+      const distWorkerPath = path.join(process.cwd(), 'dist-electron', 'workers', 'fingerprintWorker.js')
+      if (fs.existsSync(distWorkerPath)) {
+        workerPath = distWorkerPath
+      } else {
+        // Fallback for dev if not yet built?
+        // If the user hasn't run build, dist-electron might not have it.
+        // But `npm run dev` should build it if configured.
+      }
+
+      console.log('Spawning worker:', workerPath)
+
+      const worker = new Worker(workerPath)
+
+      worker.on('message', (message) => {
+        if (message.error) {
+          console.error('Worker error:', message.error, message.stderr)
+          reject(new Error(message.error))
+        } else {
+          resolve(message.result.fingerprint)
+        }
+        worker.terminate()
+      })
+
+      worker.on('error', (error) => {
+        console.error('Worker thread error:', error)
+        reject(error)
+        worker.terminate()
+      })
+
+      worker.on('exit', (code) => {
+        if (code !== 0) {
+          reject(new Error(`Worker stopped with exit code ${code}`))
+        }
+      })
+
+      worker.postMessage({ filePath, id: 1 })
+    })
   })
 
   // Handle writing cover art to file
@@ -240,4 +314,3 @@ export function registerMusicHandlers() {
     }
   })
 }
-

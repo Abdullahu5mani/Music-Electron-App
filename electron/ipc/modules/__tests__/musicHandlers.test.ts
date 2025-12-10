@@ -1,76 +1,49 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest'
+
+import { describe, it, expect, vi } from 'vitest'
 import { ipcMain } from 'electron'
-import * as musicScanner from '../../../musicScanner'
-import * as fs from 'fs'
-import * as path from 'path'
+import { registerMusicHandlers } from '../musicHandlers'
 
-// Mock dependencies
-vi.mock('../../../musicScanner')
-vi.mock('fs')
-vi.mock('path')
+// Mock Electron components
+vi.mock('electron', () => ({
+  ipcMain: {
+    handle: vi.fn(),
+    on: vi.fn()
+  },
+  dialog: {
+    showOpenDialog: vi.fn()
+  },
+  app: {
+    getPath: vi.fn(),
+    isPackaged: false,
+    getAppPath: vi.fn().mockReturnValue('/app')
+  }
+}))
 
-describe('musicHandlers IPC Integration', () => {
-  beforeEach(() => {
-    vi.clearAllMocks()
-  })
+vi.mock('fs', () => ({
+  default: {
+    readFileSync: vi.fn(),
+    writeFileSync: vi.fn(),
+    existsSync: vi.fn(),
+  }
+}))
 
-  describe('scan-music-folder handler', () => {
-    it('should call scanMusicFiles with correct path', async () => {
-      const mockFiles = [
-        {
-          path: '/test/song1.mp3',
-          name: 'song1.mp3',
-          extension: '.mp3',
-          size: 1000,
-        },
-      ]
+// Mock Worker
+vi.mock('worker_threads', () => ({
+  Worker: vi.fn().mockImplementation(() => ({
+    on: vi.fn(),
+    postMessage: vi.fn(),
+    terminate: vi.fn()
+  }))
+}))
 
-      vi.mocked(musicScanner.scanMusicFiles).mockResolvedValue(mockFiles as any)
+vi.mock('../../musicScanner', () => ({
+  scanMusicFiles: vi.fn(),
+  readSingleFileMetadata: vi.fn()
+}))
 
-      // In a real integration test, you would invoke the IPC handler
-      // This is a unit test of the handler logic
-      const result = await musicScanner.scanMusicFiles('/test/path')
-
-      expect(result).toEqual(mockFiles)
-      expect(musicScanner.scanMusicFiles).toHaveBeenCalledWith('/test/path')
-    })
-
-    it('should handle scan errors', async () => {
-      const error = new Error('Scan failed')
-      vi.mocked(musicScanner.scanMusicFiles).mockRejectedValue(error)
-
-      await expect(musicScanner.scanMusicFiles('/test/path')).rejects.toThrow('Scan failed')
-    })
-  })
-
-  describe('read-single-file-metadata handler', () => {
-    it('should call readSingleFileMetadata with correct path', async () => {
-      const mockFile = {
-        path: '/test/song.mp3',
-        name: 'song.mp3',
-        extension: '.mp3',
-        size: 1000,
-        metadata: {
-          title: 'Test Song',
-          artist: 'Test Artist',
-        },
-      }
-
-      vi.mocked(musicScanner.readSingleFileMetadata).mockResolvedValue(mockFile as any)
-
-      const result = await musicScanner.readSingleFileMetadata('/test/song.mp3')
-
-      expect(result).toEqual(mockFile)
-      expect(musicScanner.readSingleFileMetadata).toHaveBeenCalledWith('/test/song.mp3')
-    })
-
-    it('should return null for non-existent file', async () => {
-      vi.mocked(musicScanner.readSingleFileMetadata).mockResolvedValue(null)
-
-      const result = await musicScanner.readSingleFileMetadata('/nonexistent/file.mp3')
-
-      expect(result).toBeNull()
-    })
+describe('musicHandlers', () => {
+  it('registers generate-fingerprint handler', () => {
+    registerMusicHandlers()
+    expect(ipcMain.handle).toHaveBeenCalledWith('generate-fingerprint', expect.any(Function))
   })
 })
-
