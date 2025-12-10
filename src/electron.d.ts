@@ -1,7 +1,25 @@
-import type { MusicFile } from '../electron/musicScanner'
+export interface MusicFile {
+  path: string
+  name: string
+  extension: string
+  size: number
+  dateAdded?: number
+  metadata?: {
+    title?: string
+    artist?: string
+    album?: string
+    albumArtist?: string
+    genre?: string[]
+    year?: number
+    track?: { no: number | null; of: number | null }
+    disk?: { no: number | null; of: number | null }
+    duration?: number
+    albumArt?: string // Base64 encoded album art image
+  }
+}
 
 export interface BinaryDownloadProgress {
-  status: 'checking' | 'not-found' | 'downloading' | 'downloaded' | 'installed' | 'updating' | 'version-check'
+  status: 'checking' | 'not-found' | 'downloading' | 'downloaded' | 'installed'
   message: string
   percentage?: number
 }
@@ -48,6 +66,7 @@ export interface FileScanStatus {
   scannedAt: number
   mbid: string | null
   hasMetadata: boolean
+  assetPath: string | null
 }
 
 export interface CacheScanStatistics {
@@ -81,22 +100,24 @@ export interface ElectronAPI {
   downloadImageWithFallback: (urls: string[], filePath: string) => Promise<{ success: boolean; url?: string; error?: string }>
   writeCoverArt: (filePath: string, imagePath: string) => Promise<{ success: boolean; error?: string }>
   writeMetadata: (filePath: string, metadata: AudioMetadata) => Promise<{ success: boolean; error?: string }>
-  lookupAcoustid: (fingerprint: string, duration: number) => Promise<{ mbid: string; title?: string; artist?: string } | null>
+  lookupAcoustid: (fingerprint: string, duration: number) => Promise<any>
   lookupMusicBrainz: (mbid: string) => Promise<any>
+
   // Metadata cache operations
   cacheGetFileStatus: (filePath: string) => Promise<ScanStatusType>
-  cacheMarkFileScanned: (filePath: string, mbid: string | null, hasMetadata: boolean) => Promise<boolean>
+  cacheMarkFileScanned: (filePath: string, mbid: string | null, hasMetadata: boolean, assetPath?: string | null) => Promise<boolean>
   cacheGetBatchStatus: (filePaths: string[]) => Promise<Record<string, ScanStatusType>>
   cacheGetUnscannedFiles: (filePaths: string[]) => Promise<string[]>
   cacheGetStatistics: () => Promise<CacheScanStatistics>
   cacheGetEntry: (filePath: string) => Promise<FileScanStatus | null>
   cacheCleanupOrphaned: () => Promise<number>
   cacheClear: () => Promise<boolean>
+  runAssetGarbageCollection: () => Promise<{ deleted: number; errors: number }>
 }
 
 declare global {
   interface Window {
     electronAPI: ElectronAPI
+    ipcRenderer: any
   }
 }
-

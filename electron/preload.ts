@@ -49,6 +49,7 @@ export interface FileScanStatus {
   scannedAt: number
   mbid: string | null
   hasMetadata: boolean
+  assetPath: string | null
 }
 
 export interface CacheScanStatistics {
@@ -86,13 +87,14 @@ export interface ElectronAPI {
   lookupMusicBrainz: (mbid: string) => Promise<any>
   // Metadata cache operations
   cacheGetFileStatus: (filePath: string) => Promise<ScanStatusType>
-  cacheMarkFileScanned: (filePath: string, mbid: string | null, hasMetadata: boolean) => Promise<boolean>
+  cacheMarkFileScanned: (filePath: string, mbid: string | null, hasMetadata: boolean, assetPath?: string | null) => Promise<boolean>
   cacheGetBatchStatus: (filePaths: string[]) => Promise<Record<string, ScanStatusType>>
   cacheGetUnscannedFiles: (filePaths: string[]) => Promise<string[]>
   cacheGetStatistics: () => Promise<CacheScanStatistics>
   cacheGetEntry: (filePath: string) => Promise<FileScanStatus | null>
   cacheCleanupOrphaned: () => Promise<number>
   cacheClear: () => Promise<boolean>
+  runAssetGarbageCollection: () => Promise<{ deleted: number; errors: number }>
 }
 
 // Expose a typed API to the Renderer process
@@ -220,8 +222,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   cacheGetFileStatus: (filePath: string) =>
     ipcRenderer.invoke('cache-get-file-status', filePath),
 
-  cacheMarkFileScanned: (filePath: string, mbid: string | null, hasMetadata: boolean) =>
-    ipcRenderer.invoke('cache-mark-file-scanned', filePath, mbid, hasMetadata),
+  cacheMarkFileScanned: (filePath: string, mbid: string | null, hasMetadata: boolean, assetPath: string | null = null) =>
+    ipcRenderer.invoke('cache-mark-file-scanned', filePath, mbid, hasMetadata, assetPath),
 
   cacheGetBatchStatus: (filePaths: string[]) =>
     ipcRenderer.invoke('cache-get-batch-status', filePaths),
@@ -240,6 +242,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   cacheClear: () =>
     ipcRenderer.invoke('cache-clear'),
+
+  runAssetGarbageCollection: () =>
+    ipcRenderer.invoke('run-asset-gc'),
 } as ElectronAPI)
 
 // Keep the old ipcRenderer for backward compatibility if needed

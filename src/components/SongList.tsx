@@ -199,7 +199,7 @@ export function SongList({ songs, onSongClick, playingIndex, sortBy, onSortChang
             console.log('Metadata written successfully!')
             
             // Mark as scanned with metadata in cache
-            await window.electronAPI.cacheMarkFileScanned(file.path, acoustidResult.mbid, true)
+            await window.electronAPI.cacheMarkFileScanned(file.path, acoustidResult.mbid, true, coverArtPath)
             setScanStatuses(prev => ({ ...prev, [file.path]: 'scanned-tagged' }))
             
             // Show success notification

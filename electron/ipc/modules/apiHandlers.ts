@@ -1,7 +1,9 @@
 import { ipcMain, app } from 'electron'
 import path from 'path'
 import fs from 'fs'
+import fsPromises from 'fs/promises'
 import axios from 'axios'
+import { getUsedAssetPaths } from '../../metadataCache'
 
 function getAssetsDir() {
   const userDataPath = app.getPath('userData')
@@ -33,6 +35,70 @@ function cleanupOldAssets(maxAgeDays = 30) {
     console.warn('Asset cleanup skipped:', err)
   }
 }
+
+/**
+ * Runs garbage collection on the assets folder.
+ * Deletes any file in `userData/assets` that is not referenced by `metadata_cache`.
+ *
+ * Uses filenames for comparison to be robust against absolute/relative path differences.
+ */
+async function runAssetGarbageCollection(): Promise<{ deleted: number, errors: number }> {
+  console.log('Starting asset garbage collection...')
+  let deleted = 0
+  let errors = 0
+
+  try {
+    const assetsDir = getAssetsDir()
+
+    // Check if directory exists using async stat
+    try {
+      await fsPromises.stat(assetsDir)
+    } catch {
+      console.log('Assets directory does not exist, skipping GC')
+      return { deleted: 0, errors: 0 }
+    }
+
+    // Get all files currently in the assets directory
+    const assetFiles = await fsPromises.readdir(assetsDir)
+    console.log(`Found ${assetFiles.length} files in assets directory`)
+
+    // Get all asset paths currently referenced in the metadata cache
+    const usedAssetPaths = getUsedAssetPaths()
+    console.log(`Found ${usedAssetPaths.size} referenced assets in metadata cache`)
+
+    // Normalize used assets to a Set of filenames for robust comparison
+    // This handles both "assets/file.jpg" and "/full/path/to/assets/file.jpg"
+    const usedFilenames = new Set<string>()
+    for (const assetPath of usedAssetPaths) {
+      usedFilenames.add(path.basename(assetPath))
+    }
+
+    for (const filename of assetFiles) {
+      // Skip if this file is in use (comparing just the filename)
+      if (usedFilenames.has(filename)) {
+        continue
+      }
+
+      // This file is not referenced in the DB, so it's garbage
+      const fullPath = path.join(assetsDir, filename)
+      try {
+        console.log(`Deleting unreferenced asset: ${filename}`)
+        await fsPromises.unlink(fullPath)
+        deleted++
+      } catch (err) {
+        console.error(`Failed to delete asset ${filename}:`, err)
+        errors++
+      }
+    }
+
+    console.log(`Garbage collection complete. Deleted: ${deleted}, Errors: ${errors}`)
+    return { deleted, errors }
+  } catch (err) {
+    console.error('Fatal error during asset garbage collection:', err)
+    throw err
+  }
+}
+
 
 /**
  * Registers IPC handlers for external API operations
@@ -126,7 +192,8 @@ export function registerApiHandlers() {
 
       fs.writeFileSync(targetPath, buffer)
       console.log('Image saved to:', targetPath)
-      cleanupOldAssets()
+      // We don't run old cleanup anymore, or maybe we should run GC occasionally?
+      // cleanupOldAssets()
       return { success: true }
     } catch (error) {
       console.error('Error downloading image:', error)
@@ -164,7 +231,7 @@ export function registerApiHandlers() {
 
         fs.writeFileSync(targetPath, buffer)
         console.log('Cover art saved from:', url)
-        cleanupOldAssets()
+        // cleanupOldAssets()
         return { success: true, url } // Return which URL worked
       } catch (error) {
         if (axios.isAxiosError(error)) {
@@ -186,5 +253,9 @@ export function registerApiHandlers() {
     console.error('All cover art URLs failed. Last error:', lastError)
     return { success: false, error: lastError || 'All URLs returned 404' }
   })
-}
 
+  // Handle manual trigger of Asset Garbage Collection
+  ipcMain.handle('run-asset-gc', async () => {
+    return await runAssetGarbageCollection()
+  })
+}

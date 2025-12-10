@@ -8,6 +8,7 @@ import {
   cleanupOrphanedEntries,
   getCachedEntry,
   clearCache,
+  getUsedAssetPaths,
   type ScanStatusType,
   type FileScanStatus
 } from '../../metadataCache'
@@ -37,10 +38,11 @@ export function registerCacheHandlers() {
     _event,
     filePath: string,
     mbid: string | null,
-    hasMetadata: boolean
+    hasMetadata: boolean,
+    assetPath: string | null = null
   ): Promise<boolean> => {
     try {
-      return markFileScanned(filePath, mbid, hasMetadata)
+      return markFileScanned(filePath, mbid, hasMetadata, assetPath)
     } catch (error) {
       console.error('Error marking file as scanned:', error)
       return false
@@ -126,5 +128,15 @@ export function registerCacheHandlers() {
       return false
     }
   })
-}
 
+  // Get used assets (mostly for testing/verification)
+  ipcMain.handle('cache-get-used-assets', async (): Promise<string[]> => {
+    try {
+      const usedAssets = getUsedAssetPaths()
+      return Array.from(usedAssets)
+    } catch (error) {
+      console.error('Error getting used assets:', error)
+      return []
+    }
+  })
+}

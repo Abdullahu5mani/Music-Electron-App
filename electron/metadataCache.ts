@@ -23,6 +23,7 @@ export interface FileScanStatus {
   scannedAt: number
   mbid: string | null
   hasMetadata: boolean
+  assetPath: string | null
 }
 
 export type ScanStatusType = 'unscanned' | 'scanned-tagged' | 'scanned-no-match' | 'file-changed'
@@ -61,9 +62,23 @@ export function initializeDatabase(): Database.Database {
       fileHash TEXT NOT NULL,
       scannedAt INTEGER NOT NULL,
       mbid TEXT,
-      hasMetadata INTEGER NOT NULL DEFAULT 0
+      hasMetadata INTEGER NOT NULL DEFAULT 0,
+      assetPath TEXT
     )
   `)
+
+  // Check if assetPath column exists (migration for existing DBs)
+  try {
+    const tableInfo = db.prepare('PRAGMA table_info(metadata_cache)').all() as any[]
+    const hasAssetPath = tableInfo.some(col => col.name === 'assetPath')
+
+    if (!hasAssetPath) {
+      console.log('Migrating database: adding assetPath column')
+      db.exec('ALTER TABLE metadata_cache ADD COLUMN assetPath TEXT')
+    }
+  } catch (error) {
+    console.error('Error checking/migrating database schema:', error)
+  }
 
   // Create index for faster lookups
   db.exec(`
@@ -144,11 +159,13 @@ export function isFileScanned(filePath: string): boolean {
  * @param filePath - Path to the music file
  * @param mbid - MusicBrainz ID if found (null if no match)
  * @param hasMetadata - Whether metadata was successfully written to the file
+ * @param assetPath - Path to the associated asset/cover art (optional)
  */
 export function markFileScanned(
   filePath: string,
   mbid: string | null,
-  hasMetadata: boolean
+  hasMetadata: boolean,
+  assetPath: string | null = null
 ): boolean {
   const database = initializeDatabase()
   
@@ -160,12 +177,12 @@ export function markFileScanned(
 
   try {
     const stmt = database.prepare(`
-      INSERT OR REPLACE INTO metadata_cache (filePath, fileHash, scannedAt, mbid, hasMetadata)
-      VALUES (?, ?, ?, ?, ?)
+      INSERT OR REPLACE INTO metadata_cache (filePath, fileHash, scannedAt, mbid, hasMetadata, assetPath)
+      VALUES (?, ?, ?, ?, ?, ?)
     `)
     
-    stmt.run(filePath, fileHash, Date.now(), mbid, hasMetadata ? 1 : 0)
-    console.log(`Marked file as scanned: ${filePath} (hasMetadata: ${hasMetadata})`)
+    stmt.run(filePath, fileHash, Date.now(), mbid, hasMetadata ? 1 : 0, assetPath)
+    console.log(`Marked file as scanned: ${filePath} (hasMetadata: ${hasMetadata}, assetPath: ${assetPath})`)
     return true
   } catch (error) {
     console.error('Error marking file as scanned:', error)
@@ -253,7 +270,7 @@ export function getCachedEntry(filePath: string): FileScanStatus | null {
   const database = initializeDatabase()
   
   const row = database.prepare(`
-    SELECT filePath, fileHash, scannedAt, mbid, hasMetadata 
+    SELECT filePath, fileHash, scannedAt, mbid, hasMetadata, assetPath
     FROM metadata_cache 
     WHERE filePath = ?
   `).get(filePath) as {
@@ -262,6 +279,7 @@ export function getCachedEntry(filePath: string): FileScanStatus | null {
     scannedAt: number
     mbid: string | null
     hasMetadata: number
+    assetPath: string | null
   } | undefined
   
   if (!row) return null
@@ -271,8 +289,31 @@ export function getCachedEntry(filePath: string): FileScanStatus | null {
     fileHash: row.fileHash,
     scannedAt: row.scannedAt,
     mbid: row.mbid,
-    hasMetadata: row.hasMetadata === 1
+    hasMetadata: row.hasMetadata === 1,
+    assetPath: row.assetPath
   }
+}
+
+/**
+ * Get all asset paths that are currently in use by at least one file in the cache
+ */
+export function getUsedAssetPaths(): Set<string> {
+  const database = initializeDatabase()
+
+  const rows = database.prepare(`
+    SELECT DISTINCT assetPath
+    FROM metadata_cache
+    WHERE assetPath IS NOT NULL
+  `).all() as { assetPath: string }[]
+
+  const usedAssets = new Set<string>()
+  for (const row of rows) {
+    if (row.assetPath) {
+      usedAssets.add(row.assetPath)
+    }
+  }
+
+  return usedAssets
 }
 
 /**
@@ -283,4 +324,3 @@ export function clearCache(): void {
   database.exec('DELETE FROM metadata_cache')
   console.log('Metadata cache cleared')
 }
-
