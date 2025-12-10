@@ -1,4 +1,3 @@
-import { useState, useEffect } from 'react'
 import type { MusicFile } from '../../electron/musicScanner'
 import Slider from 'rc-slider'
 import 'rc-slider/assets/index.css'
@@ -8,6 +7,7 @@ import backwardButtonIcon from '../assets/backwardButton.svg'
 import forwardButtonIcon from '../assets/forwardButton.svg'
 import volumeControlIcon from '../assets/volumeControl.svg'
 import trayIcon from '../assets/trayIcon.svg'
+import { AudioVisualizer } from './AudioVisualizer'
 
 interface PlaybackBarProps {
   currentSong: MusicFile | null
@@ -24,6 +24,8 @@ interface PlaybackBarProps {
   onSeek: (time: number) => void
   volume: number
   onVolumeChange: (volume: number) => void
+  waveformRef: React.RefObject<HTMLDivElement>
+  analyserNode: AnalyserNode | null
 }
 
 /**
@@ -53,33 +55,13 @@ export function PlaybackBar({
   onCycleRepeatMode,
   currentTime,
   duration,
-  onSeek,
   volume,
   onVolumeChange,
+  waveformRef,
+  analyserNode
 }: PlaybackBarProps) {
-  const [isDragging, setIsDragging] = useState(false)
-  const [dragTime, setDragTime] = useState<number>(currentTime)
-
-  // Update dragTime when currentTime changes (but not while dragging)
-  useEffect(() => {
-    if (!isDragging) {
-      setDragTime(currentTime)
-    }
-  }, [currentTime, isDragging])
-
-  // Handle value change during drag (for visual feedback only)
-  const handleSeekChange = (value: number | number[]) => {
-    const newTime = Array.isArray(value) ? value[0] : value
-    setDragTime(newTime)
-    setIsDragging(true)
-  }
-
-  // Handle final seek when drag ends
-  const handleSeekAfterChange = (value: number | number[]) => {
-    const newTime = Array.isArray(value) ? value[0] : value
-    setIsDragging(false)
-    onSeek(newTime)
-  }
+  // We no longer need local drag state for the seek bar because WaveSurfer handles it.
+  // But we still display the time.
 
   const repeatIcon = repeatMode === 'one' ? '🔂' : repeatMode === 'all' ? '🔁' : '↻'
   const repeatLabel = repeatMode === 'one' ? 'Repeat 1' : repeatMode === 'all' ? 'Repeat All' : 'Repeat Off'
@@ -113,33 +95,24 @@ export function PlaybackBar({
             )}
           </div>
           <div className="seek-bar-container">
-            <div className="seek-bar-wrapper">
-              <Slider
-                min={0}
-                max={duration || 0}
-                value={isDragging ? dragTime : currentTime}
-                onChange={handleSeekChange}
-                onChangeComplete={handleSeekAfterChange}
-                className="seek-bar-slider"
-                disabled={!currentSong}
-                trackStyle={{ backgroundColor: '#646cff', height: 8 }}
-                handleStyle={{
-                  borderColor: '#646cff',
-                  backgroundColor: '#fff',
-                  width: 16,
-                  height: 16,
-                  marginTop: -4,
-                  boxShadow: '0 2px 6px rgba(0, 0, 0, 0.3)',
-                }}
-                railStyle={{ backgroundColor: 'rgba(255, 255, 255, 0.1)', height: 8 }}
-              />
-            </div>
+            {/* WaveSurfer Container */}
+            <div
+              ref={waveformRef}
+              className="seek-bar-wrapper"
+              style={{ width: '100%', height: 40, cursor: 'pointer' }}
+            />
             <div className="time-display">
-              <span>{formatTime(isDragging ? dragTime : currentTime)}</span>
+              <span>{formatTime(currentTime)}</span>
               <span>{formatTime(duration)}</span>
             </div>
           </div>
         </div>
+
+        {/* Visualizer Area - Small visualizer between info and controls or next to controls */}
+        <div style={{ width: 100, height: 40, margin: '0 10px' }}>
+             <AudioVisualizer analyser={analyserNode} isPlaying={isPlaying} />
+        </div>
+
         <div className="playback-controls">
           <button
             className={`control-button toggle-button ${shuffle ? 'active' : ''}`}
@@ -226,4 +199,3 @@ export function PlaybackBar({
     </div>
   )
 }
-

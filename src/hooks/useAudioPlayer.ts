@@ -1,13 +1,11 @@
 import { useState, useEffect, useRef } from 'react'
-import { Howl } from 'howler'
+import WaveSurfer from 'wavesurfer.js'
 import type { MusicFile } from '../../electron/musicScanner'
 import { pathToFileURL } from '../pathResolver'
 
 type RepeatMode = 'off' | 'all' | 'one'
 
 interface UseAudioPlayerReturn {
-  currentSound: Howl | null
-  playingIndex: number | null
   playSong: (file: MusicFile, index: number) => void
   togglePlayPause: () => void
   playNext: () => void
@@ -22,117 +20,126 @@ interface UseAudioPlayerReturn {
   seek: (time: number) => void
   volume: number
   setVolume: (volume: number) => void
+  playingIndex: number | null
+  analyserNode: AnalyserNode | null
 }
 
 /**
- * Custom hook for managing audio playback
+ * Custom hook for managing audio playback using WaveSurfer.js
  */
-export function useAudioPlayer(musicFiles: MusicFile[]): UseAudioPlayerReturn {
-  const [currentSound, setCurrentSound] = useState<Howl | null>(null)
+export function useAudioPlayer(
+  musicFiles: MusicFile[],
+  containerRef: React.RefObject<HTMLDivElement>
+): UseAudioPlayerReturn {
   const [playingIndex, setPlayingIndex] = useState<number | null>(null)
   const [currentTime, setCurrentTime] = useState<number>(0)
   const [duration, setDuration] = useState<number>(0)
-  const [volume, setVolumeState] = useState<number>(1.0) // Volume range: 0.0 to 1.0
+  const [volume, setVolumeState] = useState<number>(1.0)
   const [isPlaying, setIsPlaying] = useState<boolean>(false)
   const [shuffle, setShuffle] = useState<boolean>(false)
   const [repeatMode, setRepeatMode] = useState<RepeatMode>('off')
-  const intervalRef = useRef<NodeJS.Timeout | null>(null)
-  const isSeekingRef = useRef<boolean>(false)
+
+  const wavesurferRef = useRef<WaveSurfer | null>(null)
+  const [analyserNode, setAnalyserNode] = useState<AnalyserNode | null>(null)
+
   const playNextRef = useRef<(auto?: boolean) => void>()
-  const playSongRef = useRef<(file: MusicFile, index: number, recordHistory?: boolean) => void>()
-  const currentFilePathRef = useRef<string | null>(null)
   const historyRef = useRef<number[]>([])
+  const isReadyRef = useRef<boolean>(false)
 
-  const recordHistory = (index: number) => {
-    const history = historyRef.current
-    if (history[history.length - 1] !== index) {
-      history.push(index)
-    }
-  }
+  // Initialize WaveSurfer
+  useEffect(() => {
+    if (!containerRef.current) return
 
-  const playSong = (file: MusicFile, index: number, record = true) => {
-    // Ensure only one Howler instance exists - stop and cleanup current one
-    if (currentSound) {
-      currentSound.stop()
-      currentSound.unload()
-      setCurrentSound(null)
-    }
-
-    // Convert file path to file:// URL using path resolver
-    const fileURL = pathToFileURL(file.path)
-
-    // Get file extension without the dot for Howler format
-    const format = file.extension.replace('.', '')
-
-    // Create Howl instance
-    const sound = new Howl({
-      src: [fileURL],
-      html5: true, // Required for file:// protocol in Electron
-      format: [format], // Specify format (mp3, flac, wav, etc.)
-      volume: volume, // Set initial volume
-      onload: () => {
-        // Get duration when sound is loaded
-        const soundDuration = sound.duration()
-        if (soundDuration && isFinite(soundDuration)) {
-          setDuration(soundDuration)
-        }
-      },
-      onend: () => {
-        // Auto-play next song when current ends
-        setIsPlaying(false)
-        if (playNextRef.current) {
-          playNextRef.current(true)
-        }
-      },
-      onloaderror: () => {
-        console.error('Error loading song')
-        setPlayingIndex(null)
-        setCurrentSound(null)
-        setIsPlaying(false)
-        currentFilePathRef.current = null
-        setDuration(0)
-        setCurrentTime(0)
-      },
+    const wavesurfer = WaveSurfer.create({
+      container: containerRef.current,
+      waveColor: '#646cff',
+      progressColor: '#a1a6ff',
+      cursorColor: '#fff',
+      barWidth: 2,
+      barGap: 3,
+      height: 40,
+      barRadius: 2,
+      normalize: true,
+      backend: 'MediaElement', // Changed to MediaElement to support file:// and avoiding strict CSP/CORS issues with WebAudio
     })
 
-    // Play the song
-    sound.play()
-    setCurrentSound(sound)
-    setPlayingIndex(index)
-    if (record) {
-      recordHistory(index)
+    wavesurferRef.current = wavesurfer
+
+    // Events
+    wavesurfer.on('ready', () => {
+      isReadyRef.current = true
+      setDuration(wavesurfer.getDuration())
+      wavesurfer.play()
+      setIsPlaying(true)
+
+      // For MediaElement backend, we need to create a source from the media element
+      try {
+        const media = wavesurfer.getMediaElement()
+        if (media) {
+           // We need an AudioContext to create an analyser.
+           // We can create one ourselves or reuse one if WaveSurfer exposes it (it might not for MediaElement).
+
+           const AudioContext = window.AudioContext || (window as any).webkitAudioContext
+           if (AudioContext) {
+               const ac = new AudioContext()
+               const source = ac.createMediaElementSource(media)
+               const analyser = ac.createAnalyser()
+               analyser.fftSize = 256
+
+               source.connect(analyser)
+               analyser.connect(ac.destination)
+
+               setAnalyserNode(analyser)
+           }
+        }
+      } catch (e) {
+        console.error('Failed to setup visualizer', e)
+      }
+    })
+
+    wavesurfer.on('audioprocess', (time) => {
+      setCurrentTime(time)
+    })
+
+    // WaveSurfer v7 event might be different for seek
+    wavesurfer.on('seeking', () => {
+        // no-op or update state if needed
+    })
+
+    wavesurfer.on('finish', () => {
+      setIsPlaying(false)
+      if (playNextRef.current) {
+        playNextRef.current(true)
+      }
+    })
+
+    wavesurfer.on('play', () => setIsPlaying(true))
+    wavesurfer.on('pause', () => setIsPlaying(false))
+
+    // Cleanup
+    return () => {
+      wavesurfer.destroy()
+      wavesurferRef.current = null
     }
-    setIsPlaying(true)
-    currentFilePathRef.current = file.path
-    setCurrentTime(0)
-    isSeekingRef.current = false
+  }, [containerRef.current])
+
+  // Handle Play Song
+  const playSong = (file: MusicFile, index: number) => {
+    if (!wavesurferRef.current) return
+
+    const fileURL = pathToFileURL(file.path)
+
+    isReadyRef.current = false
+    setPlayingIndex(index)
+    historyRef.current.push(index)
+
+    // Load audio
+    wavesurferRef.current.load(fileURL)
+
+    setVolume(volume)
   }
 
-  // Update playingIndex when musicFiles array changes (e.g., when sorting changes)
-  // Find the current playing song by its path in the new array
-  useEffect(() => {
-    if (currentFilePathRef.current && playingIndex !== null) {
-      const newIndex = musicFiles.findIndex(file => file.path === currentFilePathRef.current)
-      if (newIndex !== -1 && newIndex !== playingIndex) {
-        setPlayingIndex(newIndex)
-      } else if (newIndex === -1) {
-        // Current song not found in new array, stop playback
-        if (currentSound) {
-          currentSound.stop()
-          currentSound.unload()
-          setCurrentSound(null)
-        }
-        setPlayingIndex(null)
-        currentFilePathRef.current = null
-      }
-    }
-  }, [musicFiles])
-
-  // Keep playSong ref in sync
-  useEffect(() => {
-    playSongRef.current = playSong
-  }, [currentSound, musicFiles])
-
+  // Handle Next/Prev
   const getRandomIndex = (excludeIndex: number | null, max: number): number | null => {
     if (max <= 0) return null
     if (max === 1) return excludeIndex ?? 0
@@ -151,7 +158,6 @@ export function useAudioPlayer(musicFiles: MusicFile[]): UseAudioPlayerReturn {
       return
     }
 
-    // Repeat one: replay same track when auto-advancing
     if (auto && repeatMode === 'one') {
       playSong(musicFiles[playingIndex], playingIndex)
       return
@@ -159,9 +165,7 @@ export function useAudioPlayer(musicFiles: MusicFile[]): UseAudioPlayerReturn {
 
     if (shuffle) {
       const randomIndex = getRandomIndex(playingIndex, musicFiles.length)
-      if (randomIndex !== null) {
-        playSong(musicFiles[randomIndex], randomIndex)
-      }
+      if (randomIndex !== null) playSong(musicFiles[randomIndex], randomIndex)
       return
     }
 
@@ -170,207 +174,67 @@ export function useAudioPlayer(musicFiles: MusicFile[]): UseAudioPlayerReturn {
       playSong(musicFiles[nextIndex], nextIndex)
     } else if (repeatMode === 'all') {
       playSong(musicFiles[0], 0)
-    } else {
-      setIsPlaying(false)
-    }
-  }
-
-  // Keep playNext ref in sync
-  useEffect(() => {
-    playNextRef.current = playNext
-  }, [musicFiles, playingIndex, currentSound, shuffle, repeatMode])
-
-  const togglePlayPause = () => {
-    if (currentSound && playingIndex !== null) {
-      if (currentSound.playing()) {
-        currentSound.pause()
-        setIsPlaying(false)
-      } else {
-        currentSound.play()
-        setIsPlaying(true)
-      }
     }
   }
 
   const playPrevious = () => {
     if (musicFiles.length === 0 || playingIndex === null) return
 
-    if (shuffle && historyRef.current.length > 1) {
-      historyRef.current.pop()
-      const previousIndex = historyRef.current[historyRef.current.length - 1]
-      if (previousIndex !== undefined && musicFiles[previousIndex]) {
-        playSong(musicFiles[previousIndex], previousIndex, false)
-        return
-      }
+    // If more than 3 seconds in, restart song
+    if (currentTime > 3) {
+      seek(0)
+      return
     }
 
     const prevIndex = playingIndex - 1
     if (prevIndex >= 0) {
       playSong(musicFiles[prevIndex], prevIndex)
-    } else if (repeatMode === 'all' && musicFiles.length > 0) {
+    } else if (repeatMode === 'all') {
       playSong(musicFiles[musicFiles.length - 1], musicFiles.length - 1)
     }
   }
 
-  const toggleShuffle = () => {
-    setShuffle((prev) => {
-      const next = !prev
-      if (playingIndex !== null) {
-        historyRef.current = [playingIndex]
-      } else {
-        historyRef.current = []
-      }
-      return next
-    })
-  }
-
-  const cycleRepeatMode = () => {
-    setRepeatMode((prev) => {
-      if (prev === 'off') return 'all'
-      if (prev === 'all') return 'one'
-      return 'off'
-    })
+  const togglePlayPause = () => {
+    if (wavesurferRef.current) {
+      wavesurferRef.current.playPause()
+    }
   }
 
   const seek = (time: number) => {
-    if (!currentSound) return
-    
-    // Clamp time to valid range
-    const clampedTime = Math.max(0, Math.min(time, duration || 0))
-    
-    // Set seeking flag to prevent time updates
-    isSeekingRef.current = true
-    
-    // Update UI immediately for responsiveness
-    setCurrentTime(clampedTime)
-    
-    // Perform the seek operation
-    try {
-      currentSound.seek(clampedTime)
-      // Reset seeking flag after a delay to allow seek to complete
-      setTimeout(() => {
-        isSeekingRef.current = false
-      }, 200)
-    } catch (error) {
-      console.error('Error during seek:', error)
-      isSeekingRef.current = false
+    if (wavesurferRef.current && duration > 0) {
+      const progress = time / duration
+      wavesurferRef.current.seekTo(progress)
     }
   }
 
-  const setVolume = (newVolume: number) => {
-    // Clamp volume to valid range (0.0 to 1.0)
-    const clampedVolume = Math.max(0, Math.min(1, newVolume))
-    setVolumeState(clampedVolume)
-    
-    // Update volume on current sound if it exists
-    if (currentSound) {
-      currentSound.volume(clampedVolume)
+  const setVolume = (vol: number) => {
+    const clamped = Math.max(0, Math.min(1, vol))
+    setVolumeState(clamped)
+    if (wavesurferRef.current) {
+      wavesurferRef.current.setVolume(clamped)
     }
   }
 
-  // Update volume on current sound when volume state changes
+  const toggleShuffle = () => setShuffle(!shuffle)
+  const cycleRepeatMode = () => setRepeatMode(prev => prev === 'off' ? 'all' : prev === 'all' ? 'one' : 'off')
+
+  // Keep refs in sync
   useEffect(() => {
-    if (currentSound) {
-      currentSound.volume(volume)
-    }
-  }, [volume, currentSound])
+    playNextRef.current = playNext
+  }, [playingIndex, musicFiles, shuffle, repeatMode])
 
-  // Update current time while playing
+  // Handle Resize
   useEffect(() => {
-    // Clear any existing interval
-    if (intervalRef.current) {
-      clearInterval(intervalRef.current)
+    const handleResize = () => {
+       // WaveSurfer v7 handles resize automatically via ResizeObserver usually
     }
+    window.addEventListener('resize', handleResize)
+    return () => window.removeEventListener('resize', handleResize)
+  }, [])
 
-    const playing = currentSound?.playing() ?? false
-
-    // Don't update time while seeking to avoid conflicts
-    if (currentSound && playing && !isSeekingRef.current) {
-      intervalRef.current = setInterval(() => {
-        // Double-check seeking flag inside interval
-        if (currentSound && !isSeekingRef.current && currentSound.playing()) {
-          try {
-            const seekTime = currentSound.seek() as number
-            if (typeof seekTime === 'number' && isFinite(seekTime)) {
-              setCurrentTime(seekTime)
-            }
-            
-            // Update duration if it's available and changed
-            const soundDuration = currentSound.duration()
-            if (soundDuration && soundDuration !== duration && isFinite(soundDuration)) {
-              setDuration(soundDuration)
-            }
-            
-            // Update isPlaying state
-            const playingState = currentSound.playing()
-            setIsPlaying(playingState)
-          } catch (error) {
-            // Ignore errors during normal playback updates
-          }
-        } else {
-          // Sound stopped or paused
-          if (currentSound && !currentSound.playing()) {
-            setIsPlaying(false)
-          }
-        }
-      }, 100) // Update every 100ms for smooth progress
-    } else if (currentSound && !playing && !isSeekingRef.current) {
-      // When paused, update time once to reflect the paused position
-      try {
-        const seekTime = currentSound.seek() as number
-        if (typeof seekTime === 'number' && isFinite(seekTime)) {
-          setCurrentTime(seekTime)
-        }
-        setIsPlaying(false)
-      } catch (error) {
-        // Ignore errors
-      }
-    } else if (!currentSound) {
-      // No sound loaded
-      setIsPlaying(false)
-    }
-
-    return () => {
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current)
-      }
-    }
-  }, [currentSound, duration])
-
-  // Cleanup on unmount - ensure only one instance
-  useEffect(() => {
-    return () => {
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current)
-      }
-      if (currentSound) {
-        currentSound.stop()
-        currentSound.unload()
-      }
-    }
-  }, [currentSound])
-
-  // Send playback state to main process for tray menu updates
-  useEffect(() => {
-    if (window.electronAPI?.sendPlaybackState) {
-      window.electronAPI.sendPlaybackState(isPlaying)
-    }
-  }, [isPlaying])
-
-  // Listen for tray play/pause commands
-  useEffect(() => {
-    if (window.electronAPI?.onTrayPlayPause) {
-      const cleanup = window.electronAPI.onTrayPlayPause(() => {
-        togglePlayPause()
-      })
-      return cleanup
-    }
-  }, [togglePlayPause])
-
-  // Get current song for Media Session
+  // Media Session
   const currentSong = playingIndex !== null ? musicFiles[playingIndex] : null
 
-  // Update Media Session metadata when song changes
   useEffect(() => {
     if ('mediaSession' in navigator && currentSong) {
       const metadata: MediaMetadataInit = {
@@ -378,101 +242,42 @@ export function useAudioPlayer(musicFiles: MusicFile[]): UseAudioPlayerReturn {
         artist: currentSong.metadata?.artist || 'Unknown Artist',
         album: currentSong.metadata?.album || 'Unknown Album',
       }
-
-      // Add album art if available
       if (currentSong.metadata?.albumArt) {
-        metadata.artwork = [
-          {
-            src: currentSong.metadata.albumArt,
-            sizes: '512x512',
-            type: currentSong.metadata.albumArt.startsWith('data:image/')
-              ? currentSong.metadata.albumArt.split(';')[0].split(':')[1]
-              : 'image/jpeg'
-          }
-        ]
+        metadata.artwork = [{ src: currentSong.metadata.albumArt, sizes: '512x512', type: 'image/jpeg' }] // Simplified type guess
       }
-
       navigator.mediaSession.metadata = new MediaMetadata(metadata)
-    } else if ('mediaSession' in navigator && !currentSong) {
-      // Clear metadata when no song is playing
-      navigator.mediaSession.metadata = null
     }
   }, [currentSong])
 
-  // Update Media Session playback state
   useEffect(() => {
     if ('mediaSession' in navigator) {
-      if (currentSong) {
         navigator.mediaSession.playbackState = isPlaying ? 'playing' : 'paused'
-      } else {
-        navigator.mediaSession.playbackState = 'none'
-      }
     }
-  }, [isPlaying, currentSong])
+  }, [isPlaying])
 
-  // Update Media Session position state (for progress bar)
-  // Update when playing or when seeking (to show paused position)
   useEffect(() => {
-    if ('mediaSession' in navigator && currentSound && currentSong && duration > 0) {
-      try {
-        navigator.mediaSession.setPositionState({
-          duration: duration,
-          playbackRate: isPlaying ? 1.0 : 0.0,
-          position: currentTime
-        })
-      } catch (error) {
-        // Some browsers may not support setPositionState
-        // Ignore errors silently
+      if ('mediaSession' in navigator) {
+          navigator.mediaSession.setActionHandler('play', togglePlayPause)
+          navigator.mediaSession.setActionHandler('pause', togglePlayPause)
+          navigator.mediaSession.setActionHandler('previoustrack', playPrevious)
+          navigator.mediaSession.setActionHandler('nexttrack', () => playNext(false))
+          navigator.mediaSession.setActionHandler('seekto', (d) => {
+              if (d.seekTime) seek(d.seekTime)
+          })
       }
-    }
-  }, [currentTime, duration, currentSound, currentSong, isPlaying])
-
-  // Set up Media Session action handlers
-  useEffect(() => {
-    if ('mediaSession' in navigator) {
-      // Play action
-      navigator.mediaSession.setActionHandler('play', () => {
-        togglePlayPause()
-      })
-
-      // Pause action
-      navigator.mediaSession.setActionHandler('pause', () => {
-        togglePlayPause()
-      })
-
-      // Previous track action
-      navigator.mediaSession.setActionHandler('previoustrack', () => {
-        playPrevious()
-      })
-
-      // Next track action
-      navigator.mediaSession.setActionHandler('nexttrack', () => {
-        playNext()
-      })
-
-      // Seek to action (for seeking via media controls)
-      navigator.mediaSession.setActionHandler('seekto', (details) => {
-        if (details.seekTime !== undefined && currentSound) {
-          seek(details.seekTime)
-        }
-      })
-
-      // Cleanup: remove handlers when component unmounts or when handlers change
       return () => {
-        if ('mediaSession' in navigator) {
-          navigator.mediaSession.setActionHandler('play', null)
-          navigator.mediaSession.setActionHandler('pause', null)
-          navigator.mediaSession.setActionHandler('previoustrack', null)
-          navigator.mediaSession.setActionHandler('nexttrack', null)
-          navigator.mediaSession.setActionHandler('seekto', null)
-        }
+          if ('mediaSession' in navigator) {
+               navigator.mediaSession.setActionHandler('play', null)
+               navigator.mediaSession.setActionHandler('pause', null)
+               navigator.mediaSession.setActionHandler('previoustrack', null)
+               navigator.mediaSession.setActionHandler('nexttrack', null)
+               navigator.mediaSession.setActionHandler('seekto', null)
+          }
       }
-    }
-  }, [togglePlayPause, playPrevious, playNext, seek, currentSound])
+  }, [togglePlayPause, playPrevious, playNext, seek])
+
 
   return {
-    currentSound,
-    playingIndex,
     playSong,
     togglePlayPause,
     playNext,
@@ -487,6 +292,7 @@ export function useAudioPlayer(musicFiles: MusicFile[]): UseAudioPlayerReturn {
     seek,
     volume,
     setVolume,
+    playingIndex,
+    analyserNode
   }
 }
-

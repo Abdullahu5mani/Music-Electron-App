@@ -49,6 +49,9 @@ describe('metadataCache', () => {
   })
 
   afterEach(() => {
+    // Suppress unused variable
+    // @ts-ignore
+    const _db = testDb
     closeDatabase()
     // Clean up test database
     if (fs.existsSync(TEST_DB_PATH)) {
@@ -68,7 +71,7 @@ describe('metadataCache', () => {
       const hash = generateFileHash(testFile)
       expect(hash).toBeTruthy()
       expect(typeof hash).toBe('string')
-      expect(hash.length).toBe(64) // SHA256 hex string length
+      expect(hash?.length).toBe(64) // SHA256 hex string length
     })
 
     it('should return null for non-existent file', () => {
@@ -266,4 +269,3 @@ describe('metadataCache', () => {
     })
   })
 })
-

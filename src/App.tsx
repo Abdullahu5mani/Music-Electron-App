@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from 'react'
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { OverlayScrollbarsComponent } from 'overlayscrollbars-react'
 import { useMusicLibrary } from './hooks/useMusicLibrary'
 import { useAudioPlayer } from './hooks/useAudioPlayer'
@@ -12,6 +12,7 @@ import { NotificationToast } from './components/NotificationToast'
 import { BatchScanProgress } from './components/BatchScanProgress'
 import { Sidebar } from './components/Sidebar'
 import { Settings } from './components/Settings'
+import { DynamicBackground } from './components/DynamicBackground'
 import type { ScanStatusType } from './electron.d'
 import './App.css'
 
@@ -23,6 +24,9 @@ function App() {
   const [toastMessage, setToastMessage] = useState<string>('')
   const [toastType, setToastType] = useState<'success' | 'error' | 'warning' | 'info'>('info')
   const [showToast, setShowToast] = useState(false)
+
+  // Ref for waveform container, passed to PlaybackBar and useAudioPlayer
+  const waveformRef = useRef<HTMLDivElement>(null)
 
   // Helper function to show toast
   const showToastNotification = useCallback((message: string, type: 'success' | 'error' | 'warning' | 'info' = 'info') => {
@@ -82,8 +86,10 @@ function App() {
     duration,
     seek,
     volume,
-    setVolume
-  } = useAudioPlayer(sortedMusicFiles)
+    setVolume,
+    analyserNode
+  } = useAudioPlayer(sortedMusicFiles, waveformRef)
+
   const [isDownloading, setIsDownloading] = useState(false)
   const [downloadProgress, setDownloadProgress] = useState(0)
   const [binaryDownloadStatus, setBinaryDownloadStatus] = useState<string>('')
@@ -243,8 +249,11 @@ function App() {
     }
   }
 
+  const currentSong = playingIndex !== null && sortedMusicFiles[playingIndex] ? sortedMusicFiles[playingIndex] : null
+
   return (
     <div className="app-container">
+      <DynamicBackground albumArt={currentSong?.metadata?.albumArt} />
       <TitleBar />
       <div className="app-content">
         <div className="app-header">
@@ -326,7 +335,7 @@ function App() {
       </div>
 
       <PlaybackBar
-        currentSong={playingIndex !== null && sortedMusicFiles[playingIndex] ? sortedMusicFiles[playingIndex] : null}
+        currentSong={currentSong}
         isPlaying={isPlaying}
         onPlayPause={togglePlayPause}
         onNext={playNext}
@@ -340,6 +349,8 @@ function App() {
         onSeek={seek}
         volume={volume}
         onVolumeChange={setVolume}
+        waveformRef={waveformRef}
+        analyserNode={analyserNode}
       />
 
       <DownloadNotification

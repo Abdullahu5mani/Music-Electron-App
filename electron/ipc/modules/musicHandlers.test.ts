@@ -12,6 +12,13 @@ vi.mock('path')
 describe('musicHandlers IPC Integration', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    // Suppress unused imports
+    // @ts-ignore
+    const _ipc = ipcMain
+    // @ts-ignore
+    const _fs = fs
+    // @ts-ignore
+    const _path = path
   })
 
   describe('scan-music-folder handler', () => {
@@ -73,4 +80,3 @@ describe('musicHandlers IPC Integration', () => {
     })
   })
 })
-
