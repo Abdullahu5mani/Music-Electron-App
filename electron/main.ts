@@ -3,6 +3,8 @@ import { createWindow, setupWindowEvents } from './window'
 import { registerIpcHandlers } from './ipc/handlers'
 import { createTray, updateWindowVisibility } from './tray'
 import { initializeDatabase, closeDatabase } from './metadataCache'
+import { initializeWatcher } from './libraryWatcher'
+import { getStoredMusicFolder } from './settings'
 
 // Remove the menu bar completely
 Menu.setApplicationMenu(null)
@@ -52,6 +54,15 @@ app.whenReady().then(async () => {
   initializeDatabase()
 
   const window = createWindow()
+
+  // Initialize library watcher if music folder is set
+  const musicFolderPath = getStoredMusicFolder()
+  if (musicFolderPath) {
+    initializeWatcher(musicFolderPath, (event, filePath) => {
+      // Notify the renderer process about file changes
+      window.webContents.send('library-changed', { event, filePath })
+    })
+  }
   createTray()
 
   // Also track the specific window instance

@@ -3,7 +3,7 @@ import path from 'node:path'
 import { parseFile } from 'music-metadata'
 
 // Common music file extensions
-const MUSIC_EXTENSIONS = [
+export const MUSIC_EXTENSIONS = [
   '.mp3',
   '.flac',
   '.wav',

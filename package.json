@@ -26,6 +26,7 @@
     "adm-zip": "^0.5.16",
     "axios": "^1.13.2",
     "better-sqlite3": "^12.5.0",
+    "chokidar": "^5.0.0",
     "howler": "^2.2.4",
     "music-metadata": "^11.10.3",
     "musicbrainz-api": "^0.27.0",
