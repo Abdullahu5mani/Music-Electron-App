@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { renderHook, act } from '@testing-library/react'
-import { useAudioPlayer } from './useAudioPlayer'
-import type { MusicFile } from '../../electron/musicScanner'
+import { useAudioPlayer } from '../useAudioPlayer'
+import type { MusicFile } from '../../../electron/musicScanner'
 
 // Mock Howler to avoid real audio operations
 vi.mock('howler', () => {

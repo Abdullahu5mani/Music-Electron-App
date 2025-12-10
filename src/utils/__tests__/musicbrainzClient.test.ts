@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
-import { getCoverArtUrl, getCoverArtUrls, pickBestRelease } from './musicbrainzClient'
-import type { MusicBrainzRelease } from './musicbrainzClient'
+import { getCoverArtUrl, getCoverArtUrls, pickBestRelease } from '../musicbrainzClient'
+import type { MusicBrainzRelease } from '../musicbrainzClient'
 
 describe('musicbrainzClient', () => {
   describe('getCoverArtUrl', () => {

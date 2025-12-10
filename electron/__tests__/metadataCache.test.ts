@@ -14,7 +14,7 @@ import {
   cleanupOrphanedEntries,
   clearCache,
   getCachedEntry,
-} from './metadataCache'
+} from '../metadataCache'
 
 // Use a test database in a temp directory
 const TEST_DB_DIR = path.join(__dirname, '../test-temp')

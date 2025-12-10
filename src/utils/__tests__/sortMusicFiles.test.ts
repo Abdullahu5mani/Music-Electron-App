@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
-import { sortMusicFiles } from './sortMusicFiles'
-import type { MusicFile } from '../../electron/musicScanner'
+import { sortMusicFiles } from '../sortMusicFiles'
+import type { MusicFile } from '../../../electron/musicScanner'
 
 describe('sortMusicFiles', () => {
   const mockFiles: MusicFile[] = [

@@ -11,25 +11,31 @@ We use **Vitest** as our testing framework, which integrates seamlessly with Vit
 - Built-in code coverage
 - UI mode for interactive testing
 
-## Test Structure
+## Test Structure (Option A: colocated `__tests__`)
 
 ```
 Music-Electron-App/
 ├── src/
 │   ├── test/
 │   │   └── setup.ts              # Test setup and global mocks
+│   ├── __tests__/                # Top-level renderer tests
+│   │   └── pathResolver.test.ts
 │   ├── utils/
-│   │   ├── sortMusicFiles.test.ts
-│   │   ├── rateLimiter.test.ts
-│   │   └── musicbrainzClient.test.ts
+│   │   ├── __tests__/
+│   │   │   ├── sortMusicFiles.test.ts
+│   │   │   ├── rateLimiter.test.ts
+│   │   │   └── musicbrainzClient.test.ts
 │   ├── hooks/
-│   │   └── useMusicLibrary.test.tsx
-│   └── pathResolver.test.ts
+│   │   └── __tests__/
+│   │       ├── useMusicLibrary.test.tsx
+│   │       └── useAudioPlayer.test.tsx
 ├── electron/
-│   ├── metadataCache.test.ts
+│   ├── __tests__/
+│   │   └── metadataCache.test.ts
 │   └── ipc/
 │       └── modules/
-│           └── musicHandlers.test.ts
+│           └── __tests__/
+│               └── musicHandlers.test.ts
 └── vite.config.ts                # Vitest configuration
 ```
 

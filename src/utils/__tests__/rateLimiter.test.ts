@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { delay, waitForAcoustID, waitForMusicBrainz, waitForCoverArt, waitBetweenSongs, API_DELAYS } from './rateLimiter'
+import { delay, waitForAcoustID, waitForMusicBrainz, waitForCoverArt, waitBetweenSongs, API_DELAYS } from '../rateLimiter'
 
 describe('rateLimiter', () => {
   beforeEach(() => {

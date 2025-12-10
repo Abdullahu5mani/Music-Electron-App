@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { renderHook, act } from '@testing-library/react'
-import { useMusicLibrary } from './useMusicLibrary'
-import type { MusicFile } from '../../electron/musicScanner'
+import { useMusicLibrary } from '../useMusicLibrary'
+import type { MusicFile } from '../../../electron/musicScanner'
 
 // Mock electronAPI
 const mockElectronAPI = {

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { pathToFileURL } from './pathResolver'
+import { pathToFileURL } from '../pathResolver'
 
 describe('pathToFileURL', () => {
   it('should convert Windows absolute path to file:// URL', () => {

@@ -1,11 +1,11 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { ipcMain } from 'electron'
-import * as musicScanner from '../../musicScanner'
+import * as musicScanner from '../../../musicScanner'
 import * as fs from 'fs'
 import * as path from 'path'
 
 // Mock dependencies
-vi.mock('../../musicScanner')
+vi.mock('../../../musicScanner')
 vi.mock('fs')
 vi.mock('path')
 
