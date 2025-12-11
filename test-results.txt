@@ -1,0 +1,35 @@
+======================================================================
+FINGERPRINT BATCH TEST
+======================================================================
+
+fpcalc path: C:\Users\abdul\AppData\Roaming\music-sync-app\fpcalc-binary\fpcalc.exe
+fpcalc version: fpcalc version 1.5.1 (FFmpeg Lavc58.134.100 Lavf58.76.100 SwR3.9.100)
+
+Scanning for audio files in: C:\Users\abdul\Music
+Found 667 audio files
+
+Starting fingerprint generation...
+----------------------------------------------------------------------
+[1/667] ✓ $$$ [gtdejuLP2hw].mp3... (130.4s)
+[2/667] ✓ $tupid Young - Mando (Lyrics) Feat. Mozzy ｜ catch ... (179.0s)
+[3/667] ✓ $uLTANR$, Staarz, CRÈME - Far Away (sped up) Lyric... (185.8s)
+[4/667] ✓ $werve - h4rdjump_1988 (Super Slowed) [H_zEFg_dhWs... (134.0s)
+[5/667] ✓ $werve, FXRCE, SXCREDMANE - krushed! [0a7ooYi0kjg]... (98.3s)
+[11/667] ✓ 03. K POP.flac... (113.0s)
+[21/667] ✓ 08. Poke It Out.flac... (269.8s)
+[31/667] ✓ 13. CRANK.flac... (147.7s)
+[41/667] ✓ 17. WAKE UP F1LTHY.flac... (169.3s)
+   --- Progress: 50/667 | Rate: 8.4 files/sec | ETA: 73s ---
+[51/667] ✓ 24. TWIN TRIM.flac... (94.8s)
+[61/667] ✓ 310babii, OhGeesy & BlueBucksClan - rock your hips... (205.8s)
+[71/667] ✓ A New Kind Of Love (Demo) [vWwIBemUwOI].mp3... (259.1s)
+[81/667] ✓ Alien Blues [xvegS6xDmKE].mp3... (156.0s)
+[91/667] ✓ At Night [hoV6qv9R_gg].mp3... (171.1s)
+   --- Progress: 100/667 | Rate: 8.8 files/sec | ETA: 64s ---
+[101/667] ✓ bbno$ - gigolo (lyrics) [RZHVzSiFnt8].mp3... (147.0s)
+[111/667] ✓ Black Hair [yBzy_WahaeI].mp3... (164.1s)
+[121/667] ✓ Britney Manson - FΛSHION (Lyrics) ｜ make it to the... (172.3s)
+[131/667] ✓ butterfly doors- playboi carti [FrHfXTxZ8DM].mp3... (162.9s)
+[141/667] ✓ Chechen War Song ''Just don't tell mom I'm in Chec... (186.9s)
+   --- Progress: 150/667 | Rate: 9.0 files/sec | ETA: 57s ---
+[151/667] ✓ Cigarettes out the Window [7j6C9METNm0].mp3... (199.0s)

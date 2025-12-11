@@ -93,6 +93,10 @@ export interface ElectronAPI {
   cacheGetEntry: (filePath: string) => Promise<FileScanStatus | null>
   cacheCleanupOrphaned: () => Promise<number>
   cacheClear: () => Promise<boolean>
+  // Fingerprint generation (Main Process - fpcalc binary)
+  generateFingerprint: (filePath: string) => Promise<{ success: boolean; fingerprint?: string; duration?: number; error?: string }>
+  fingerprintCheckReady: () => Promise<{ ready: boolean; path: string | null }>
+  fingerprintEnsureReady: () => Promise<{ success: boolean; path?: string | null; error?: string }>
 }
 
 // Expose a typed API to the Renderer process
@@ -240,6 +244,16 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   cacheClear: () =>
     ipcRenderer.invoke('cache-clear'),
+
+  // Fingerprint generation (Main Process - fpcalc binary)
+  generateFingerprint: (filePath: string) =>
+    ipcRenderer.invoke('generate-fingerprint', filePath),
+
+  fingerprintCheckReady: () =>
+    ipcRenderer.invoke('fingerprint-check-ready'),
+
+  fingerprintEnsureReady: () =>
+    ipcRenderer.invoke('fingerprint-ensure-ready'),
 } as ElectronAPI)
 
 // Keep the old ipcRenderer for backward compatibility if needed

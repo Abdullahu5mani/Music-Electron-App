@@ -85,7 +85,11 @@ electron.contextBridge.exposeInMainWorld("electronAPI", {
   cacheGetStatistics: () => electron.ipcRenderer.invoke("cache-get-statistics"),
   cacheGetEntry: (filePath) => electron.ipcRenderer.invoke("cache-get-entry", filePath),
   cacheCleanupOrphaned: () => electron.ipcRenderer.invoke("cache-cleanup-orphaned"),
-  cacheClear: () => electron.ipcRenderer.invoke("cache-clear")
+  cacheClear: () => electron.ipcRenderer.invoke("cache-clear"),
+  // Fingerprint generation (Main Process - fpcalc binary)
+  generateFingerprint: (filePath) => electron.ipcRenderer.invoke("generate-fingerprint", filePath),
+  fingerprintCheckReady: () => electron.ipcRenderer.invoke("fingerprint-check-ready"),
+  fingerprintEnsureReady: () => electron.ipcRenderer.invoke("fingerprint-ensure-ready")
 });
 electron.contextBridge.exposeInMainWorld("ipcRenderer", {
   on(...args) {

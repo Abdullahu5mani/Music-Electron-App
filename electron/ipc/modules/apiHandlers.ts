@@ -3,6 +3,16 @@ import path from 'path'
 import fs from 'fs'
 import axios from 'axios'
 
+// Rate limiting delay for Cover Art Archive (1 req/sec)
+const COVER_ART_DELAY_MS = 1100
+
+/**
+ * Helper to add delay between API calls
+ */
+function delay(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms))
+}
+
 function getAssetsDir() {
   const userDataPath = app.getPath('userData')
   return path.join(userDataPath, 'assets')
@@ -144,7 +154,10 @@ export function registerApiHandlers() {
         const response = await axios.get(url, {
           responseType: 'arraybuffer',
           timeout: 10000,
-          validateStatus: (status) => status === 200 // Only accept 200 OK
+          validateStatus: (status) => status === 200, // Only accept 200 OK
+          headers: {
+            'User-Agent': 'MusicSyncApp/1.0.0 (abdullahusmanicod@gmail.com)'
+          }
         })
 
         const buffer = Buffer.from(response.data)
@@ -178,7 +191,8 @@ export function registerApiHandlers() {
         } else {
           lastError = error instanceof Error ? error.message : 'Unknown error'
         }
-        // Continue to next URL
+        // Rate limit: wait before trying next URL
+        await delay(COVER_ART_DELAY_MS)
       }
     }
 

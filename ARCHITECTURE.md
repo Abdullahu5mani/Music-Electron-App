@@ -43,7 +43,7 @@ This is an **Electron + React + TypeScript** desktop music player application. I
 | **Audio Playback** | Howler.js | Cross-platform audio |
 | **Metadata** | music-metadata | Extract ID3 tags & album art |
 | **YouTube** | yt-dlp-wrap | Download audio from YouTube |
-| **Audio Fingerprinting** | @unimusic/chromaprint (WASM) | Generate audio fingerprints |
+| **Audio Fingerprinting** | fpcalc (Chromaprint CLI) | Generate audio fingerprints (Main Process) |
 | **Tag Writing** | taglib-wasm | Write cover art to files |
 | **Database** | better-sqlite3 | SQLite metadata cache |
 | **Sliders** | rc-slider | Seek bar & volume control |
@@ -138,6 +138,7 @@ Music-Electron-App/
 │   ├── youtubeDownloader.ts     # YouTube download with yt-dlp
 │   ├── settings.ts              # Settings persistence (JSON)
 │   ├── binaryManager.ts         # Binary status checking (yt-dlp)
+│   ├── fpcalcManager.ts         # fpcalc binary download & fingerprinting
 │   ├── metadataCache.ts         # SQLite database for scan tracking
 │   └── ipc/
 │       ├── handlers.ts          # Main IPC registration (imports modules)
@@ -146,7 +147,8 @@ Music-Electron-App/
 │           ├── apiHandlers.ts       # AcoustID, MusicBrainz, image download
 │           ├── youtubeHandlers.ts   # YouTube download, binary status
 │           ├── systemHandlers.ts    # Window controls, settings, platform
-│           └── cacheHandlers.ts     # Metadata cache operations
+│           ├── cacheHandlers.ts     # Metadata cache operations
+│           └── fingerprintHandlers.ts # Audio fingerprinting (fpcalc)
 │
 ├── src/                         # Renderer Process (React)
 │   ├── App.tsx                  # Main React component
@@ -220,6 +222,7 @@ Boots the application with this startup flow:
 | **`youtubeDownloader.ts`** | Ensures yt-dlp binary exists (platform/arch-specific download if missing). Executes downloads with audio extraction, thumbnail embedding, and metadata. Emits progress events with 10s cooldown between downloads. |
 | **`settings.ts`** | Persists JSON settings (music folder, download folder) under `app.getPath('userData')`. |
 | **`binaryManager.ts`** | Resolves yt-dlp binary path per platform/arch. Checks installation and version, flags corrupted binaries for redownload. Resolves ffmpeg path from asar. |
+| **`fpcalcManager.ts`** | Manages fpcalc (Chromaprint) binary for audio fingerprinting. Auto-downloads platform-specific binary on first use. Runs fingerprinting in subprocess to avoid memory limits. |
 | **`metadataCache.ts`** | SQLite cache keyed by file hash (path + size + mtime) to track scan status and avoid reprocessing unchanged files. |
 
 ### Window Configuration
@@ -589,7 +592,7 @@ Manages batch scan queue with progress tracking and cancellation.
 |---------|---------|
 | **`pathResolver.ts`** | Normalizes OS paths to `file:///` URLs for Howler/Electron playback |
 | **`sortMusicFiles.ts`** | Pure sorting helpers for title, artist, track, date added |
-| **`fingerprintGenerator.ts`** | Wraps Chromaprint WASM with per-file reset, file size guard, and circuit breaker |
+| **`fingerprintGenerator.ts`** | IPC wrapper for Main Process fpcalc fingerprinting with circuit breaker |
 | **`acoustidClient.ts`** | Calls AcoustID API with rate limiting |
 | **`musicbrainzClient.ts`** | Queries MusicBrainz, scores releases, generates cover-art URL fallbacks |
 
@@ -626,7 +629,8 @@ electron/ipc/
     ├── apiHandlers.ts       # External API operations
     ├── youtubeHandlers.ts   # YouTube download operations
     ├── systemHandlers.ts    # Window & settings operations
-    └── cacheHandlers.ts     # Metadata cache operations
+    ├── cacheHandlers.ts     # Metadata cache operations
+    └── fingerprintHandlers.ts # Audio fingerprinting (fpcalc)
 ```
 
 ### All IPC Endpoints
@@ -662,6 +666,9 @@ electron/ipc/
 | | `cache-get-entry` | invoke | Get full cache entry for file |
 | | `cache-cleanup-orphaned` | invoke | Remove entries for deleted files |
 | | `cache-clear` | invoke | Clear entire cache (reset) |
+| **fingerprintHandlers** | `generate-fingerprint` | invoke | Generate AcoustID fingerprint using fpcalc |
+| | `fingerprint-check-ready` | invoke | Check if fpcalc is installed |
+| | `fingerprint-ensure-ready` | invoke | Download fpcalc if missing |
 
 ### Renderer Type Safety
 
@@ -696,6 +703,9 @@ electron/ipc/
 
 ### Fingerprint + Tag (Single Song)
 
+Fingerprinting now runs entirely in the **Main Process** using the `fpcalc` binary (Chromaprint CLI).
+This avoids browser WASM memory limitations and enables unlimited batch processing.
+
 ```
 RENDERER                         MAIN PROCESS
 ────────                         ────────────
@@ -708,12 +718,18 @@ User clicks 🔍 button
 generateFingerprint(filePath)
        │
        ▼
-readFileBuffer(path) ────────────► fs.readFileSync(path)
+IPC: 'generate-fingerprint' ─────► fpcalcManager.generateFingerprintWithFpcalc()
                                         │
-◄────────────────────────────── Buffer (Uint8Array)
-       │
-       ▼
-ChromaprintModule.process()
+                                        ▼
+                                   execFile('fpcalc', ['-json', filePath])
+                                        │
+                                        ▼
+                                   fpcalc runs as subprocess (no memory limits!)
+                                        │
+                                        ▼
+                                   Parse JSON: { fingerprint, duration }
+                                        │
+◄────────────────────────────── { success, fingerprint, duration }
        │
        ▼
 lookupAcoustid(fp, duration) ────► axios.post(AcoustID API)
@@ -826,20 +842,80 @@ MusicBrainz returns ALL releases containing a recording, including compilations,
 | **Live** secondary type | -50 |
 | **Earlier release date** | +0 to +50 |
 
-### WASM Fingerprint Memory Management
+### fpcalc Binary Manager (Audio Fingerprinting)
 
-The `@unimusic/chromaprint` WASM library has memory limitations requiring special handling.
+Audio fingerprinting uses the **fpcalc** binary (official Chromaprint CLI tool) running in the Main Process as a subprocess. This architecture was chosen over the previous WASM-based approach to eliminate memory limitations.
 
-**The Problem:** WASM modules have fixed memory that doesn't properly clean up. After ~30-50 files, memory becomes exhausted.
+**Why fpcalc instead of WASM?**
 
-**Mitigation Strategies:**
+| Aspect | WASM (Previous) | fpcalc (Current) |
+|--------|-----------------|------------------|
+| **Memory Limit** | 2GB hard limit (browser constraint) | **No limit** (native process) |
+| **Batch Processing** | Fails after ~30-50 files | **Unlimited files** |
+| **UI Blocking** | Runs in Renderer (can freeze UI) | **Separate process** (non-blocking) |
+| **Error Recovery** | Complex reset logic needed | Simple process exit/restart |
+| **Binary Size** | Included in app bundle | Downloaded on demand (~2MB) |
 
-| Strategy | Implementation | Purpose |
-|----------|---------------|---------|
-| **Circuit Breaker** | Stop after 3 consecutive errors | Prevent crash loops |
-| **File Size Limit** | Skip files > 50MB | Large files exhaust memory faster |
-| **Micro Delays** | 100ms before each fingerprint | Allow GC to run |
-| **Per-File Reinit** | Reset WASM instance after each file | Release WASM memory aggressively |
+**Binary Storage Location:**
+- Windows: `%APPDATA%/music-sync-app/fpcalc-binary/fpcalc.exe`
+- macOS: `~/Library/Application Support/music-sync-app/fpcalc-binary/fpcalc`
+- Linux: `~/.config/music-sync-app/fpcalc-binary/fpcalc`
+
+**Platform-Specific Downloads:**
+
+| Platform | Architecture | Download Source |
+|----------|-------------|-----------------|
+| **Windows** | x64 | `chromaprint-fpcalc-1.5.1-windows-x86_64.zip` |
+| **macOS** | x64 | `chromaprint-fpcalc-1.5.1-macos-x86_64.tar.gz` |
+| **macOS** | ARM64 (M1/M2) | `chromaprint-fpcalc-1.5.1-macos-arm64.tar.gz` |
+| **Linux** | x64 | `chromaprint-fpcalc-1.5.1-linux-x86_64.tar.gz` |
+
+Binaries are downloaded from the official [Chromaprint GitHub releases](https://github.com/acoustid/chromaprint/releases).
+
+**Fingerprint Generation Flow:**
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│  MAIN PROCESS                                                       │
+│                                                                     │
+│  generateFingerprintWithFpcalc(filePath)                            │
+│       │                                                             │
+│       ├──► Check if fpcalc exists → Download if missing            │
+│       │                                                             │
+│       ▼                                                             │
+│  execFile('fpcalc', ['-json', filePath])                            │
+│       │                                                             │
+│       ├──► fpcalc runs as SEPARATE OS PROCESS                      │
+│       │    • No memory sharing with Electron                        │
+│       │    • 60 second timeout for long files                       │
+│       │    • 10MB buffer for large fingerprints                     │
+│       │                                                             │
+│       ▼                                                             │
+│  Parse stdout JSON: { fingerprint: "...", duration: 180 }           │
+│       │                                                             │
+│       ▼                                                             │
+│  Return { success: true, fingerprint, duration }                    │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+**Key Functions (fpcalcManager.ts):**
+
+| Function | Purpose |
+|----------|---------|
+| `getFpcalcPath()` | Get platform-specific binary path |
+| `isFpcalcInstalled()` | Check if binary exists and is executable |
+| `downloadFpcalc(onProgress)` | Download and extract binary from GitHub |
+| `ensureFpcalc()` | Download if missing, return when ready |
+| `generateFingerprintWithFpcalc(path)` | Run fpcalc and parse JSON output |
+
+**Error Handling:**
+
+| Error | Handling |
+|-------|----------|
+| Binary not found | Auto-download on first use |
+| Execution timeout | Return null after 60 seconds |
+| Process error | Log error, return null (circuit breaker still applies) |
+| Unsupported platform | Log error, fingerprinting disabled |
 
 ---
 
@@ -925,27 +1001,28 @@ webPreferences: {
 11. **Release Scoring** - Prioritize original albums over compilations
 12. **Batch Processing** - Process multiple files with progress tracking and cancellation
 13. **Graceful Error Recovery** - Auto-delete corrupted binaries, handle API failures
-14. **Circuit Breaker** - Stop WASM fingerprinting after consecutive failures
-15. **WASM Memory Management** - File size limits and per-file reinitialization
-16. **In-Place Metadata Updates** - Update single file without full library refresh
+14. **Circuit Breaker** - Stop fingerprinting after consecutive failures
+15. **Subprocess Fingerprinting** - Run fpcalc as separate process to avoid memory limits
+16. **On-Demand Binary Download** - Download platform-specific binaries (yt-dlp, fpcalc) on first use
+17. **In-Place Metadata Updates** - Update single file without full library refresh
 
 ---
 
 ## Known Limitations & Future Work
 
-- **Fingerprinting on renderer thread:** Long batches can make UI sluggish. Best path is to move to main-process CLI or Web Worker.
 - **Library UX:** Search bar added; no multi-select for bulk actions yet.
 - **Downloads:** No download queue/history; single-link flow with fixed delay.
 - **Cover art management:** No manual upload; downloaded art auto-cleans after ~30 days.
 - **Incremental updates:** No file-system watch; rescans are manual.
 - **Accessibility/shortcuts:** No renderer keyboard shortcuts; limited accessibility.
 - **Testing/observability:** No automated tests; limited structured logging.
+- **ARM64 Support:** fpcalc not available for Windows ARM64 or Linux ARM64 platforms.
 
 ### Proposed Improvements (v2.0)
 
-1. **Worker Thread Fingerprinting** - Move WASM processing to Web Worker for 60fps UI during scans
-2. **Indexed Database Layer** - Full ORM (Prisma/Kysely) for complex queries without re-scanning
-3. **Streaming I/O for Cover Art** - Use Node.js Streams for large FLAC files
+1. **Indexed Database Layer** - Full ORM (Prisma/Kysely) for complex queries without re-scanning
+2. **Streaming I/O for Cover Art** - Use Node.js Streams for large FLAC files
+3. **ARM64 Fingerprinting** - Compile fpcalc for ARM64 platforms
 
 ---
 

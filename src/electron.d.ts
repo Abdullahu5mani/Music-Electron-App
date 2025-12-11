@@ -92,6 +92,10 @@ export interface ElectronAPI {
   cacheGetEntry: (filePath: string) => Promise<FileScanStatus | null>
   cacheCleanupOrphaned: () => Promise<number>
   cacheClear: () => Promise<boolean>
+  // Fingerprint generation (Main Process - fpcalc binary)
+  generateFingerprint: (filePath: string) => Promise<{ success: boolean; fingerprint?: string; duration?: number; error?: string }>
+  fingerprintCheckReady: () => Promise<{ ready: boolean; path: string | null }>
+  fingerprintEnsureReady: () => Promise<{ success: boolean; path?: string | null; error?: string }>
 }
 
 declare global {

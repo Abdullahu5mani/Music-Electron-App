@@ -39,6 +39,7 @@ function getDatabasePath(): string {
 
 /**
  * Initialize the database connection and create tables if needed
+ * In development mode (npm run dev), the cache is automatically cleared on startup
  */
 export function initializeDatabase(): Database.Database {
   if (db) return db
@@ -69,6 +70,12 @@ export function initializeDatabase(): Database.Database {
   db.exec(`
     CREATE INDEX IF NOT EXISTS idx_file_hash ON metadata_cache(fileHash)
   `)
+
+  // In development mode, clear the cache on startup for fresh testing
+  if (!app.isPackaged) {
+    db.exec('DELETE FROM metadata_cache')
+    console.log('Development mode: Metadata cache cleared on startup')
+  }
 
   console.log('Metadata cache database initialized successfully')
   return db

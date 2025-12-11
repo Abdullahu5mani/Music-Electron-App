@@ -33,7 +33,7 @@ interface UseSongScannerOptions {
  */
 export function useSongScanner(options: UseSongScannerOptions = {}) {
   const { onShowNotification, onUpdateSingleFile, onStatusUpdate } = options
-  
+
   const [isScanning, setIsScanning] = useState(false)
   const [batchProgress, setBatchProgress] = useState<BatchScanProgress>({
     isScanning: false,
@@ -41,7 +41,7 @@ export function useSongScanner(options: UseSongScannerOptions = {}) {
     totalCount: 0,
     currentSongName: ''
   })
-  
+
   const cancelledRef = useRef(false)
 
   /**
@@ -179,14 +179,14 @@ export function useSongScanner(options: UseSongScannerOptions = {}) {
 
     setIsScanning(true)
     cancelledRef.current = false
-    
+
     setBatchProgress({
       isScanning: true,
       currentIndex: 0,
       totalCount: files.length,
       currentSongName: ''
     })
-    
+
     // Show warning for large batches about WASM memory limitations
     if (files.length > 50) {
       onShowNotification?.(
@@ -206,7 +206,7 @@ export function useSongScanner(options: UseSongScannerOptions = {}) {
 
       const file = files[i]
       const songName = file.metadata?.title || file.name.replace(/\.[^/.]+$/, '')
-      
+
       setBatchProgress({
         isScanning: true,
         currentIndex: i + 1,
@@ -215,7 +215,7 @@ export function useSongScanner(options: UseSongScannerOptions = {}) {
       })
 
       const result = await scanSong(file)
-      
+
       if (result.success) {
         successCount++
         // Update this file's metadata in-place after successful tag
