@@ -10,7 +10,7 @@ interface UseAudioPlayerReturn {
   playingIndex: number | null
   playSong: (file: MusicFile, index: number) => void
   togglePlayPause: () => void
-  playNext: () => void
+  playNext: (auto?: boolean) => void
   playPrevious: () => void
   shuffle: boolean
   repeatMode: RepeatMode
@@ -234,16 +234,16 @@ export function useAudioPlayer(musicFiles: MusicFile[]): UseAudioPlayerReturn {
 
   const seek = (time: number) => {
     if (!currentSound) return
-    
+
     // Clamp time to valid range
     const clampedTime = Math.max(0, Math.min(time, duration || 0))
-    
+
     // Set seeking flag to prevent time updates
     isSeekingRef.current = true
-    
+
     // Update UI immediately for responsiveness
     setCurrentTime(clampedTime)
-    
+
     // Perform the seek operation
     try {
       currentSound.seek(clampedTime)
@@ -261,7 +261,7 @@ export function useAudioPlayer(musicFiles: MusicFile[]): UseAudioPlayerReturn {
     // Clamp volume to valid range (0.0 to 1.0)
     const clampedVolume = Math.max(0, Math.min(1, newVolume))
     setVolumeState(clampedVolume)
-    
+
     // Update volume on current sound if it exists
     if (currentSound) {
       currentSound.volume(clampedVolume)
@@ -294,13 +294,13 @@ export function useAudioPlayer(musicFiles: MusicFile[]): UseAudioPlayerReturn {
             if (typeof seekTime === 'number' && isFinite(seekTime)) {
               setCurrentTime(seekTime)
             }
-            
+
             // Update duration if it's available and changed
             const soundDuration = currentSound.duration()
             if (soundDuration && soundDuration !== duration && isFinite(soundDuration)) {
               setDuration(soundDuration)
             }
-            
+
             // Update isPlaying state
             const playingState = currentSound.playing()
             setIsPlaying(playingState)

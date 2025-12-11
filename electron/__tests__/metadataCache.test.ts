@@ -1,5 +1,4 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
-import Database from 'better-sqlite3'
 import * as fs from 'fs'
 import * as path from 'path'
 import {
@@ -32,8 +31,6 @@ vi.mock('electron', async () => {
 })
 
 describe('metadataCache', () => {
-  let testDb: Database.Database | null = null
-
   beforeEach(() => {
     // Clean up any existing test database
     if (fs.existsSync(TEST_DB_PATH)) {
@@ -45,7 +42,7 @@ describe('metadataCache', () => {
     fs.mkdirSync(TEST_DB_DIR, { recursive: true })
 
     // Initialize test database
-    testDb = initializeDatabase()
+    initializeDatabase()
   })
 
   afterEach(() => {
@@ -68,7 +65,7 @@ describe('metadataCache', () => {
       const hash = generateFileHash(testFile)
       expect(hash).toBeTruthy()
       expect(typeof hash).toBe('string')
-      expect(hash.length).toBe(64) // SHA256 hex string length
+      expect(hash!.length).toBe(64) // SHA256 hex string length
     })
 
     it('should return null for non-existent file', () => {
