@@ -115,7 +115,6 @@ export function registerMusicHandlers() {
         resolvedImagePath = path.join(userDataPath, imagePath)
       }
 
-      console.log('File format detected:', file.getFormat())
 
       const imageBuffer = fs.readFileSync(resolvedImagePath)
       const imageUint8 = new Uint8Array(imageBuffer)
@@ -131,12 +130,10 @@ export function registerMusicHandlers() {
         description: 'Cover Art'
       }
 
-      console.log('Writing picture with size:', imageBuffer.length, 'MIME:', mimeType)
 
       // Force tag creation if empty first
       const tag = file.tag()
       if (!tag.title) {
-        console.log('Title empty, setting placeholder to force tag creation (using filename)')
         tag.setTitle(path.basename(filePath, path.extname(filePath)))
       }
 
@@ -154,7 +151,6 @@ export function registerMusicHandlers() {
 
       file.dispose()
 
-      console.log('Cover art written to disk:', filePath)
       return { success: true }
     } catch (error) {
       console.error('Error writing cover art:', error)
@@ -173,26 +169,20 @@ export function registerMusicHandlers() {
       const data = new Uint8Array(fileBuffer)
       const file = await taglib.open(data)
 
-      console.log('=== Writing Metadata ===')
-      console.log('File:', filePath)
-      console.log('Format:', file.getFormat())
 
       const tag = file.tag()
 
       // Write basic text fields
       if (metadata.title !== undefined) {
         tag.setTitle(metadata.title)
-        console.log('  Title:', metadata.title)
       }
 
       if (metadata.artist !== undefined) {
         tag.setArtist(metadata.artist)
-        console.log('  Artist:', metadata.artist)
       }
 
       if (metadata.album !== undefined) {
         tag.setAlbum(metadata.album)
-        console.log('  Album:', metadata.album)
       }
 
       // Note: albumArtist is not directly supported by taglib-wasm Tag interface
@@ -200,22 +190,18 @@ export function registerMusicHandlers() {
 
       if (metadata.year !== undefined && metadata.year > 0) {
         tag.setYear(metadata.year)
-        console.log('  Year:', metadata.year)
       }
 
       if (metadata.trackNumber !== undefined && metadata.trackNumber > 0) {
         tag.setTrack(metadata.trackNumber)
-        console.log('  Track:', metadata.trackNumber)
       }
 
       if (metadata.genre !== undefined) {
         tag.setGenre(metadata.genre)
-        console.log('  Genre:', metadata.genre)
       }
 
       if (metadata.comment !== undefined) {
         tag.setComment(metadata.comment)
-        console.log('  Comment:', metadata.comment)
       }
 
       // Handle cover art if provided
@@ -241,7 +227,6 @@ export function registerMusicHandlers() {
           }
 
           file.setPictures([picture])
-          console.log('  Cover Art: embedded (' + imageBuffer.length + ' bytes)')
         } else {
           console.warn('  Cover Art: file not found at', resolvedImagePath)
         }
@@ -258,7 +243,6 @@ export function registerMusicHandlers() {
 
       file.dispose()
 
-      console.log('=== Metadata Written Successfully ===')
       return { success: true }
     } catch (error) {
       console.error('Error writing metadata:', error)

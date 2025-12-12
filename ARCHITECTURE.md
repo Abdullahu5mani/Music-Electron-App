@@ -689,11 +689,96 @@ electron/ipc/
 2. IPC listeners attach (download progress/title, binary progress, window-state, tray play/pause)
 3. UI renders title bar, sidebar, list, playback bar, settings, notifications
 
-### Library Scan
+### Library Scan (Initial Folder Scan)
 
-1. User selects folder → `select-music-folder` (dialog) → path stored in settings
-2. `scan-music-folder` invokes `musicScanner` → returns `MusicFile[]` with metadata/art
-3. `useMusicLibrary` sets state, `sortMusicFiles` memoizes ordering; cache statuses fetched for scan indicators
+The initial library scan happens when the app loads and discovers all music files in the configured folder.
+
+**Current Behavior:** The scan is **blocking** - the UI waits until all files are discovered and metadata is extracted before displaying anything.
+
+**Code Flow:**
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│  1. APP STARTUP - useMusicLibrary.ts                                     │
+├─────────────────────────────────────────────────────────────────────────┤
+│                                                                          │
+│  useEffect(() => {                                                       │
+│    const loadSavedFolder = async () => {                                │
+│      const settings = await window.electronAPI?.getSettings()           │
+│      if (settings?.musicFolderPath) {                                   │
+│        await scanFolder(settings.musicFolderPath)  ← BLOCKS UI          │
+│      }                                                                   │
+│    }                                                                     │
+│    loadSavedFolder()                                                     │
+│  }, [])                                                                  │
+│                                                                          │
+└───────────────────────────────────┬─────────────────────────────────────┘
+                                    │
+                                    ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│  2. SCAN FOLDER - useMusicLibrary.ts                                     │
+├─────────────────────────────────────────────────────────────────────────┤
+│                                                                          │
+│  const scanFolder = async (folderPath: string) => {                     │
+│    setLoading(true)                                                     │
+│    const files = await window.electronAPI.scanMusicFolder(folderPath)   │
+│    ↑                                                                    │
+│    │  IPC CALL - Waits for Main Process to return ALL files            │
+│    │  UI shows loading spinner until 100% complete                      │
+│    setMusicFiles(filesWithDate)                                         │
+│    setLoading(false)                                                    │
+│  }                                                                       │
+│                                                                          │
+└───────────────────────────────────┬─────────────────────────────────────┘
+                                    │
+                                    ▼  IPC: 'scan-music-folder'
+┌─────────────────────────────────────────────────────────────────────────┐
+│  3. MAIN PROCESS - musicHandlers.ts                                      │
+├─────────────────────────────────────────────────────────────────────────┤
+│                                                                          │
+│  ipcMain.handle('scan-music-folder', async (_event, folderPath) => {    │
+│    return await scanMusicFiles(folderPath)  ← Returns ALL at once       │
+│  })                                                                      │
+│                                                                          │
+└───────────────────────────────────┬─────────────────────────────────────┘
+                                    │
+                                    ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│  4. MUSIC SCANNER - musicScanner.ts                                      │
+├─────────────────────────────────────────────────────────────────────────┤
+│                                                                          │
+│  async function scanMusicFiles(directoryPath) {                         │
+│    const musicFiles = []                                                │
+│    await scanDirectory(directoryPath, musicFiles)                       │
+│    return musicFiles  ← Returns only when ALL files processed           │
+│  }                                                                       │
+│                                                                          │
+│  async function scanDirectory(dirPath, musicFiles) {                    │
+│    const entries = fs.readdirSync(dirPath)   ← Sync file system call   │
+│    for (const entry of entries) {                                       │
+│      if (entry.isDirectory()) {                                         │
+│        await scanDirectory(fullPath, musicFiles)                        │
+│      } else {                                                            │
+│        const stats = fs.statSync(fullPath)   ← Sync call               │
+│        const parsed = await parseFile(fullPath)  ← Metadata extraction │
+│        musicFiles.push({ path, name, metadata, ... })                   │
+│      }                                                                   │
+│    }                                                                     │
+│  }                                                                       │
+│                                                                          │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+**Key Bottlenecks:**
+
+| Issue | Location | Impact |
+|-------|----------|--------|
+| All-or-nothing IPC | `scanFolder()` | UI shows nothing until 100% complete |
+| Sync file system | `fs.readdirSync()`, `fs.statSync()` | Blocks Node.js event loop |
+| Sequential metadata | `parseFile()` in loop | Each file processed one-by-one |
+| No streaming | `scanMusicFiles()` | All files buffered before returning |
+
+**Result:** For a folder with 500+ songs, the app appears frozen for 10-30+ seconds on startup.
 
 ### Playback
 
@@ -916,6 +1001,226 @@ Binaries are downloaded from the official [Chromaprint GitHub releases](https://
 | Execution timeout | Return null after 60 seconds |
 | Process error | Log error, return null (circuit breaker still applies) |
 | Unsupported platform | Log error, fingerprinting disabled |
+
+### Parallel Fingerprint Worker Pool
+
+For batch processing, fingerprints are generated in **parallel** using a worker pool that utilizes all available CPU cores.
+
+**Architecture:**
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│                     FINGERPRINT WORKER POOL                              │
+│                                                                          │
+│  numCPUs = os.cpus().length  → 16 (example: 8 cores × 2 threads)        │
+│  workerCount = numCPUs - 1   → 15 (leave 1 for UI/system)               │
+│                                                                          │
+│  ┌─────────┐ ┌─────────┐ ┌─────────┐ ┌─────────┐        ┌─────────┐     │
+│  │Worker 1 │ │Worker 2 │ │Worker 3 │ │Worker 4 │  ...   │Worker 15│     │
+│  │ fpcalc  │ │ fpcalc  │ │ fpcalc  │ │ fpcalc  │        │ fpcalc  │     │
+│  │ song1   │ │ song2   │ │ song3   │ │ song4   │        │ song15  │     │
+│  └────┬────┘ └────┬────┘ └────┬────┘ └────┬────┘        └────┬────┘     │
+│       │           │           │           │                   │          │
+│       └───────────┴───────────┴───────────┴───────────────────┘          │
+│                                    │                                     │
+│                                    ▼                                     │
+│                    Ordered Results Queue                                 │
+│                    [fp1, fp2, fp3, ..., fpN]                            │
+│                                                                          │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+**Key Features:**
+
+| Feature | Description |
+|---------|-------------|
+| **Auto CPU Detection** | `os.cpus().length` detects logical processors |
+| **Optimal Worker Count** | Uses `numCPUs - 1` to leave headroom for UI |
+| **Slot-Based Logging** | Each worker logs as `[Worker 1]`, `[Worker 2]`, etc. |
+| **Ordered Results** | Results returned in original file order, not completion order |
+| **Progress Events** | Real-time progress sent to Renderer via IPC events |
+
+**IPC Endpoints:**
+
+| Handler | Purpose |
+|---------|---------|
+| `generate-fingerprints-batch` | Process multiple files in parallel |
+| `fingerprint-get-pool-info` | Get CPU count and worker count |
+| `fingerprint-batch-progress` | Event: progress updates during batch |
+
+**Example Log Output:**
+
+```
+[FingerprintPool] Initialized with 15 workers (16 CPU cores detected)
+[FingerprintPool] Starting batch of 100 files with 15 workers
+[Worker 1] Starting: "song1.mp3"
+[Worker 2] Starting: "song2.mp3"
+...
+[Worker 15] Starting: "song15.mp3"
+[Worker 3] Complete: "song3.mp3" (1250ms) - Success
+[Worker 3] Starting: "song16.mp3"
+...
+```
+
+### Complete Fingerprint → API Flow (Data Journey)
+
+This section explains exactly how audio data flows through the system from file to AcoustID API.
+
+```
+┌─────────────────────────────────────────────────────────────────────────────────────────────┐
+│                              COMPLETE DATA FLOW                                              │
+├─────────────────────────────────────────────────────────────────────────────────────────────┤
+│                                                                                              │
+│  RENDERER PROCESS (React UI)                                                                 │
+│  ─────────────────────────────                                                               │
+│                                                                                              │
+│  1. User clicks "Scan All Unscanned"                                                        │
+│     └── useSongScanner.scanBatch([file1, file2, ...])                                       │
+│                                                                                              │
+│  2. Renderer sends file PATHS (not audio data) via IPC                                      │
+│     └── window.electronAPI.generateFingerprintsBatch([                                      │
+│           "C:/Music/song1.mp3",                                                             │
+│           "C:/Music/song2.mp3",                                                             │
+│           ...                                                                                │
+│         ])                                                                                   │
+│     └── IPC channel: 'generate-fingerprints-batch'                                          │
+│                                                                                              │
+├─────────────────────────────────────────────────────────────────────────────────────────────┤
+│                                                                                              │
+│  MAIN PROCESS (Node.js)                                                                      │
+│  ──────────────────────                                                                      │
+│                                                                                              │
+│  3. IPC Handler receives array of file paths                                                │
+│     └── fingerprintHandlers.ts: ipcMain.handle('generate-fingerprints-batch', ...)          │
+│                                                                                              │
+│  4. Worker Pool distributes files to workers                                                │
+│     └── fingerprintWorkerPool.ts: FingerprintWorkerPool.processAll(filePaths)               │
+│     └── Creates N workers where N = os.cpus().length - 1                                    │
+│     └── Each "worker" is a slot that can run one fpcalc process                             │
+│                                                                                              │
+│  5. For each file, a worker spawns fpcalc subprocess                                        │
+│     └── fpcalcManager.ts: generateFingerprintWithFpcalc(filePath)                           │
+│     └── execFile('fpcalc.exe', ['-json', 'C:/Music/song1.mp3'])                             │
+│                                                                                              │
+├─────────────────────────────────────────────────────────────────────────────────────────────┤
+│                                                                                              │
+│  FPCALC SUBPROCESS (Native Binary)                                                           │
+│  ─────────────────────────────────                                                           │
+│                                                                                              │
+│  6. fpcalc reads and decodes the audio file                                                 │
+│     └── Opens file directly from disk (not sent via IPC)                                    │
+│     └── Decodes audio using FFmpeg libraries built into fpcalc                              │
+│     └── Computes Chromaprint fingerprint from audio waveform                                │
+│                                                                                              │
+│  7. fpcalc outputs JSON to stdout                                                           │
+│     └── { "fingerprint": "AQADtJ...", "duration": 180.5 }                                   │
+│     └── Fingerprint is a ~2KB base64-encoded string                                         │
+│     └── Duration is in seconds                                                               │
+│                                                                                              │
+├─────────────────────────────────────────────────────────────────────────────────────────────┤
+│                                                                                              │
+│  BACK TO MAIN PROCESS                                                                        │
+│  ────────────────────                                                                        │
+│                                                                                              │
+│  8. Main Process parses stdout JSON                                                         │
+│     └── result = JSON.parse(stdout)                                                          │
+│     └── Returns { fingerprint, duration } to worker pool                                    │
+│                                                                                              │
+│  9. Worker pool collects all results, preserves original order                              │
+│     └── Results stored in memory as array                                                   │
+│     └── [{ filePath, success, fingerprint, duration, workerId }, ...]                       │
+│     └── ⚠️ NOT persisted to disk - held in RAM only                                         │
+│                                                                                              │
+│  10. Batch result returned via IPC to Renderer                                              │
+│      └── { success: true, results: [...], stats: { totalTimeMs, ... } }                     │
+│                                                                                              │
+├─────────────────────────────────────────────────────────────────────────────────────────────┤
+│                                                                                              │
+│  BACK TO RENDERER (API Lookup Phase)                                                         │
+│  ────────────────────────────────────                                                        │
+│                                                                                              │
+│  11. Renderer receives fingerprints array                                                   │
+│      └── fingerprintResults = batchResult.results                                           │
+│      └── Fingerprints held in memory (JavaScript heap)                                      │
+│                                                                                              │
+│  12. For EACH file (sequentially, rate-limited):                                            │
+│      └── Wait 500ms (AcoustID rate limit)                                                   │
+│      └── Call: window.electronAPI.lookupAcoustid(fingerprint, duration)                     │
+│                                                                                              │
+├─────────────────────────────────────────────────────────────────────────────────────────────┤
+│                                                                                              │
+│  MAIN PROCESS (API Call)                                                                     │
+│  ───────────────────────                                                                     │
+│                                                                                              │
+│  13. AcoustID API handler makes HTTP request                                                │
+│      └── apiHandlers.ts: ipcMain.handle('lookup-acoustid', ...)                             │
+│      └── URL: https://api.acoustid.org/v2/lookup?fingerprint=AQADtJ...&duration=180         │
+│      └── Response: { results: [{ recordings: [{ id: "mbid-123", title: "..." }] }] }        │
+│                                                                                              │
+│  14. Returns MBID (MusicBrainz Recording ID) to Renderer                                    │
+│      └── { mbid: "380b708e-...", title: "Song Name", artist: "Artist" }                     │
+│                                                                                              │
+├─────────────────────────────────────────────────────────────────────────────────────────────┤
+│                                                                                              │
+│  RENDERER → MAIN → MUSICBRAINZ API                                                           │
+│  ──────────────────────────────────                                                          │
+│                                                                                              │
+│  15. Wait 1100ms (MusicBrainz rate limit)                                                   │
+│      └── Call: window.electronAPI.lookupMusicBrainz(mbid)                                   │
+│                                                                                              │
+│  16. Main Process queries MusicBrainz                                                       │
+│      └── URL: https://musicbrainz.org/ws/2/recording/{mbid}?fmt=json&inc=...                │
+│      └── Returns: { title, artist-credit, releases, release-groups, ... }                  │
+│                                                                                              │
+│  17. Renderer picks best release using scoring algorithm                                    │
+│      └── pickBestRelease(releases) → selects original album over compilations              │
+│                                                                                              │
+├─────────────────────────────────────────────────────────────────────────────────────────────┤
+│                                                                                              │
+│  COVER ART + METADATA WRITE                                                                  │
+│  ──────────────────────────                                                                  │
+│                                                                                              │
+│  18. Download cover art via Main Process                                                    │
+│      └── window.electronAPI.downloadImageWithFallback(urls, "assets/cover.jpg")             │
+│      └── Saves to: %APPDATA%/music-sync-app/assets/cover_xxx.jpg                            │
+│                                                                                              │
+│  19. Write metadata to audio file                                                           │
+│      └── window.electronAPI.writeMetadata(filePath, { title, artist, album, ... })          │
+│      └── Uses taglib-wasm in Main Process                                                   │
+│      └── Embeds cover art as ID3 picture tag                                                │
+│                                                                                              │
+│  20. Mark file as scanned in cache                                                          │
+│      └── window.electronAPI.cacheMarkFileScanned(filePath, mbid, hasMetadata)               │
+│      └── Writes to: %APPDATA%/music-sync-app/metadata-cache.db                              │
+│                                                                                              │
+└─────────────────────────────────────────────────────────────────────────────────────────────┘
+```
+
+**Key Storage Locations:**
+
+| Data | Storage | Persistence |
+|------|---------|-------------|
+| **Fingerprints** | Memory (RAM) only | Temporary - lost when scan completes |
+| **fpcalc binary** | `%APPDATA%/music-sync-app/fpcalc-binary/fpcalc.exe` | Permanent |
+| **Scan status cache** | `%APPDATA%/music-sync-app/metadata-cache.db` (SQLite) | Permanent |
+| **Cover art images** | `%APPDATA%/music-sync-app/assets/*.jpg` | Permanent |
+| **Metadata** | Embedded in audio files (ID3/Vorbis tags) | Permanent |
+
+**Why Fingerprints Aren't Persisted:**
+
+1. They're only needed once - to look up the MBID
+2. Once we have the MBID, we don't need the fingerprint again
+3. The cache stores the MBID, not the fingerprint
+4. Regenerating fingerprints is fast (~200ms per file with parallel processing)
+
+**Data Sizes:**
+
+| Item | Typical Size |
+|------|--------------|
+| Fingerprint string | ~2-4 KB |
+| Audio file | 5-50 MB |
+| Cover art image | 20-100 KB |
+| Cache database | ~50 KB per 1000 files |
 
 ---
 

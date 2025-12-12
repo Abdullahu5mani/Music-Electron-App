@@ -56,7 +56,6 @@ export function registerApiHandlers() {
     const ACOUSTID_API_KEY = 'wWcEq1oIC4'
     const ACOUSTID_API_URL = 'https://api.acoustid.org/v2/lookup'
 
-    console.log('Sending AcoustID request from backend')
 
     const params = new URLSearchParams({
       client: ACOUSTID_API_KEY,
@@ -78,7 +77,6 @@ export function registerApiHandlers() {
             title: recording.title,
             artist: recording.artists?.[0]?.name
           }
-          console.log('AcoustID Result:', result)
           return result
         }
       }
@@ -101,13 +99,11 @@ export function registerApiHandlers() {
         appContactInfo: 'abdullahusmanicod@gmail.com'
       })
 
-      console.log(`Fetching MusicBrainz metadata for MBID: ${mbid}`)
 
       // Lookup recording with artist, release, and release-group info
       // release-groups gives us type info (Album, Single, Compilation, Soundtrack, etc.)
       const data = await mbApi.lookup('recording' as any, mbid, ['artists', 'releases', 'release-groups'] as any)
 
-      console.log('MusicBrainz Data fetched successfully')
       return data
     } catch (error) {
       console.error('Failed to fetch from MusicBrainz:', error)
@@ -135,7 +131,6 @@ export function registerApiHandlers() {
       }
 
       fs.writeFileSync(targetPath, buffer)
-      console.log('Image saved to:', targetPath)
       cleanupOldAssets()
       return { success: true }
     } catch (error) {
@@ -150,7 +145,6 @@ export function registerApiHandlers() {
 
     for (const url of urls) {
       try {
-        console.log(`Trying cover art URL: ${url}`)
         const response = await axios.get(url, {
           responseType: 'arraybuffer',
           timeout: 10000,
@@ -176,16 +170,13 @@ export function registerApiHandlers() {
         }
 
         fs.writeFileSync(targetPath, buffer)
-        console.log('Cover art saved from:', url)
         cleanupOldAssets()
         return { success: true, url } // Return which URL worked
       } catch (error) {
         if (axios.isAxiosError(error)) {
           if (error.response?.status === 404) {
-            console.log(`404 Not Found: ${url}, trying next...`)
             lastError = '404 Not Found'
           } else {
-            console.log(`Error ${error.response?.status || 'unknown'}: ${url}, trying next...`)
             lastError = error.message
           }
         } else {

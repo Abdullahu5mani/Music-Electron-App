@@ -97,6 +97,36 @@ export interface ElectronAPI {
   generateFingerprint: (filePath: string) => Promise<{ success: boolean; fingerprint?: string; duration?: number; error?: string }>
   fingerprintCheckReady: () => Promise<{ ready: boolean; path: string | null }>
   fingerprintEnsureReady: () => Promise<{ success: boolean; path?: string | null; error?: string }>
+  // Parallel batch fingerprinting
+  generateFingerprintsBatch: (filePaths: string[]) => Promise<{
+    success: boolean
+    results?: Array<{
+      filePath: string
+      success: boolean
+      fingerprint: string | null
+      duration: number | null
+      workerId: number
+      processingTimeMs: number
+    }>
+    stats?: {
+      totalFiles: number
+      successCount: number
+      failCount: number
+      totalTimeMs: number
+      avgTimeMs: number
+      cpuCount: number
+      workerCount: number
+    }
+    error?: string
+  }>
+  fingerprintGetPoolInfo: () => Promise<{ cpuCount: number; workerCount: number }>
+  onFingerprintBatchProgress: (callback: (progress: {
+    completed: number
+    total: number
+    workerId: number
+    fileName: string
+    percentage: number
+  }) => void) => () => void
 }
 
 // Expose a typed API to the Renderer process
@@ -254,6 +284,25 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   fingerprintEnsureReady: () =>
     ipcRenderer.invoke('fingerprint-ensure-ready'),
+
+  // Parallel batch fingerprinting
+  generateFingerprintsBatch: (filePaths: string[]) =>
+    ipcRenderer.invoke('generate-fingerprints-batch', filePaths),
+
+  fingerprintGetPoolInfo: () =>
+    ipcRenderer.invoke('fingerprint-get-pool-info'),
+
+  onFingerprintBatchProgress: (callback: (progress: {
+    completed: number
+    total: number
+    workerId: number
+    fileName: string
+    percentage: number
+  }) => void) => {
+    const handler = (_event: any, progress: any) => callback(progress)
+    ipcRenderer.on('fingerprint-batch-progress', handler)
+    return () => ipcRenderer.removeListener('fingerprint-batch-progress', handler)
+  },
 } as ElectronAPI)
 
 // Keep the old ipcRenderer for backward compatibility if needed

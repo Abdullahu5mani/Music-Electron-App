@@ -45,7 +45,6 @@ export function initializeDatabase(): Database.Database {
   if (db) return db
 
   const dbPath = getDatabasePath()
-  console.log('Initializing metadata cache database at:', dbPath)
 
   // Ensure the directory exists
   const dir = path.dirname(dbPath)
@@ -74,10 +73,8 @@ export function initializeDatabase(): Database.Database {
   // In development mode, clear the cache on startup for fresh testing
   if (!app.isPackaged) {
     db.exec('DELETE FROM metadata_cache')
-    console.log('Development mode: Metadata cache cleared on startup')
   }
 
-  console.log('Metadata cache database initialized successfully')
   return db
 }
 
@@ -88,7 +85,6 @@ export function closeDatabase(): void {
   if (db) {
     db.close()
     db = null
-    console.log('Metadata cache database closed')
   }
 }
 
@@ -172,7 +168,6 @@ export function markFileScanned(
     `)
 
     stmt.run(filePath, fileHash, Date.now(), mbid, hasMetadata ? 1 : 0)
-    console.log(`Marked file as scanned: ${filePath} (hasMetadata: ${hasMetadata})`)
     return true
   } catch (error) {
     console.error('Error marking file as scanned:', error)
@@ -246,9 +241,6 @@ export function cleanupOrphanedEntries(): number {
     }
   }
 
-  if (removed > 0) {
-    console.log(`Cleaned up ${removed} orphaned entries from metadata cache`)
-  }
 
   return removed
 }
@@ -288,6 +280,5 @@ export function getCachedEntry(filePath: string): FileScanStatus | null {
 export function clearCache(): void {
   const database = initializeDatabase()
   database.exec('DELETE FROM metadata_cache')
-  console.log('Metadata cache cleared')
 }
 

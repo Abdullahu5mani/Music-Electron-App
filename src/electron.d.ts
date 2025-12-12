@@ -96,6 +96,36 @@ export interface ElectronAPI {
   generateFingerprint: (filePath: string) => Promise<{ success: boolean; fingerprint?: string; duration?: number; error?: string }>
   fingerprintCheckReady: () => Promise<{ ready: boolean; path: string | null }>
   fingerprintEnsureReady: () => Promise<{ success: boolean; path?: string | null; error?: string }>
+  // Parallel batch fingerprinting
+  generateFingerprintsBatch: (filePaths: string[]) => Promise<{
+    success: boolean
+    results?: Array<{
+      filePath: string
+      success: boolean
+      fingerprint: string | null
+      duration: number | null
+      workerId: number
+      processingTimeMs: number
+    }>
+    stats?: {
+      totalFiles: number
+      successCount: number
+      failCount: number
+      totalTimeMs: number
+      avgTimeMs: number
+      cpuCount: number
+      workerCount: number
+    }
+    error?: string
+  }>
+  fingerprintGetPoolInfo: () => Promise<{ cpuCount: number; workerCount: number }>
+  onFingerprintBatchProgress: (callback: (progress: {
+    completed: number
+    total: number
+    workerId: number
+    fileName: string
+    percentage: number
+  }) => void) => () => void
 }
 
 declare global {

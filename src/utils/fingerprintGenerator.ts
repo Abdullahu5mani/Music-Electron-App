@@ -6,19 +6,18 @@
  * memory exhaustion issues that occur when running fingerprinting in
  * the Renderer process.
  * 
- * The fpcalc binary is automatically downloaded on first use.
+ * Supports both single-file and parallel batch fingerprinting.
  */
 
 // Track consecutive errors for circuit breaker pattern
 let consecutiveErrors = 0
-const MAX_CONSECUTIVE_ERRORS = 5 // More lenient now that we're using native binary
+const MAX_CONSECUTIVE_ERRORS = 5
 
 // Track if fpcalc is ready
 let fpcalcReady = false
 
 /**
  * Ensure fpcalc binary is installed and ready
- * This is called automatically on first fingerprint generation
  */
 export async function ensureFpcalcReady(): Promise<boolean> {
   if (fpcalcReady) {
@@ -26,11 +25,9 @@ export async function ensureFpcalcReady(): Promise<boolean> {
   }
 
   try {
-    console.log('Checking if fpcalc is ready...')
     const result = await window.electronAPI.fingerprintEnsureReady()
 
     if (result.success) {
-      console.log('fpcalc is ready at:', result.path)
       fpcalcReady = true
       return true
     } else {
@@ -62,43 +59,40 @@ export interface FingerprintResult {
   duration: number
 }
 
+export interface BatchFingerprintResult {
+  filePath: string
+  success: boolean
+  fingerprint: string | null
+  duration: number | null
+  workerId: number
+  processingTimeMs: number
+}
+
 /**
  * Generates an AcoustID fingerprint from an audio file
  * Uses fpcalc binary via IPC to the Main Process
- * 
- * @param filePath - Path to the audio file
- * @returns Fingerprint string or null if generation fails
  */
 export async function generateFingerprint(filePath: string): Promise<string | null> {
   try {
-    // Circuit breaker: if we've had too many consecutive errors, skip
     if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
-      console.warn('Too many consecutive fingerprint errors, skipping. Try restarting the app.')
+      console.warn('Too many consecutive fingerprint errors, skipping.')
       return null
     }
 
-    console.log('Generating fingerprint for:', filePath)
-
-    // Ensure fpcalc is ready (downloads if necessary)
     if (!fpcalcReady) {
       const ready = await ensureFpcalcReady()
       if (!ready) {
-        console.error('fpcalc is not available')
         consecutiveErrors++
         return null
       }
     }
 
-    // Generate fingerprint via IPC (runs fpcalc in Main Process)
     const result = await window.electronAPI.generateFingerprint(filePath)
 
     if (result.success && result.fingerprint) {
-      // Success - reset error counter
       consecutiveErrors = 0
-      console.log('Fingerprint generated successfully (duration:', result.duration, 'seconds)')
       return result.fingerprint
     } else {
-      console.error('Failed to generate fingerprint:', result.error)
       consecutiveErrors++
       return null
     }
@@ -111,17 +105,13 @@ export async function generateFingerprint(filePath: string): Promise<string | nu
 
 /**
  * Generate fingerprint and return both fingerprint and duration
- * Useful when you need the duration for AcoustID lookup
  */
 export async function generateFingerprintWithDuration(filePath: string): Promise<FingerprintResult | null> {
   try {
-    // Circuit breaker
     if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
-      console.warn('Too many consecutive fingerprint errors, skipping.')
       return null
     }
 
-    // Ensure fpcalc is ready
     if (!fpcalcReady) {
       const ready = await ensureFpcalcReady()
       if (!ready) {
@@ -130,7 +120,6 @@ export async function generateFingerprintWithDuration(filePath: string): Promise
       }
     }
 
-    // Generate fingerprint via IPC
     const result = await window.electronAPI.generateFingerprint(filePath)
 
     if (result.success && result.fingerprint && result.duration) {
@@ -145,14 +134,73 @@ export async function generateFingerprintWithDuration(filePath: string): Promise
     }
   } catch (error) {
     consecutiveErrors++
-    console.error('Error generating fingerprint with duration:', error)
     return null
   }
 }
 
 /**
- * Reset the error counter
- * Call this when starting a new scan session
+ * Generate fingerprints for multiple files in PARALLEL
+ * Uses the worker pool in the Main Process for maximum performance
+ * 
+ * @param filePaths - Array of file paths to fingerprint
+ * @param onProgress - Optional callback for progress updates
+ * @returns Array of results in the same order as input files
+ */
+export async function generateFingerprintsBatch(
+  filePaths: string[],
+  onProgress?: (progress: {
+    completed: number
+    total: number
+    workerId: number
+    fileName: string
+    percentage: number
+  }) => void
+): Promise<BatchFingerprintResult[]> {
+  if (filePaths.length === 0) {
+    return []
+  }
+
+  // Set up progress listener if callback provided
+  let cleanup: (() => void) | undefined
+  if (onProgress) {
+    cleanup = window.electronAPI.onFingerprintBatchProgress(onProgress)
+  }
+
+  try {
+    const result = await window.electronAPI.generateFingerprintsBatch(filePaths)
+
+    if (result.success && result.results) {
+      return result.results
+    } else {
+      console.error('Batch fingerprinting failed:', result.error)
+      return filePaths.map(fp => ({
+        filePath: fp,
+        success: false,
+        fingerprint: null,
+        duration: null,
+        workerId: 0,
+        processingTimeMs: 0
+      }))
+    }
+  } finally {
+    // Clean up progress listener
+    cleanup?.()
+  }
+}
+
+/**
+ * Get info about the fingerprint worker pool
+ */
+export async function getFingerprintPoolInfo(): Promise<{ cpuCount: number; workerCount: number }> {
+  try {
+    return await window.electronAPI.fingerprintGetPoolInfo()
+  } catch (error) {
+    return { cpuCount: 1, workerCount: 1 }
+  }
+}
+
+/**
+ * Reset the error counter - call when starting a new scan session
  */
 export function resetFingerprintErrors(): void {
   consecutiveErrors = 0
@@ -174,3 +222,4 @@ export function getFingerprintStatus(): {
     fpcalcReady
   }
 }
+
