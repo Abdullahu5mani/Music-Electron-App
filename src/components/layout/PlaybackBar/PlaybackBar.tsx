@@ -1,13 +1,13 @@
 import { useState, useEffect } from 'react'
-import type { MusicFile } from '../../electron/musicScanner'
+import type { MusicFile } from '../../../../electron/musicScanner'
 import Slider from 'rc-slider'
 import 'rc-slider/assets/index.css'
-import playButtonIcon from '../assets/playButton.svg'
-import pauseButtonIcon from '../assets/pauseButton.svg'
-import backwardButtonIcon from '../assets/backwardButton.svg'
-import forwardButtonIcon from '../assets/forwardButton.svg'
-import volumeControlIcon from '../assets/volumeControl.svg'
-import trayIcon from '../assets/trayIcon.svg'
+import playButtonIcon from '../../../assets/playButton.svg'
+import pauseButtonIcon from '../../../assets/pauseButton.svg'
+import backwardButtonIcon from '../../../assets/backwardButton.svg'
+import forwardButtonIcon from '../../../assets/forwardButton.svg'
+import volumeControlIcon from '../../../assets/volumeControl.svg'
+import trayIcon from '../../../assets/trayIcon.svg'
 
 interface PlaybackBarProps {
   currentSong: MusicFile | null
@@ -89,14 +89,14 @@ export function PlaybackBar({
       <div className="playback-content">
         <div className="playback-album-art">
           {currentSong?.metadata?.albumArt ? (
-            <img 
-              src={currentSong.metadata.albumArt} 
+            <img
+              src={currentSong.metadata.albumArt}
               alt="Album cover"
               className="playback-art"
             />
           ) : (
-            <img 
-              src={trayIcon} 
+            <img
+              src={trayIcon}
               alt="No song playing"
               className="playback-art-placeholder"
             />
@@ -163,7 +163,7 @@ export function PlaybackBar({
           >
             <span className="toggle-icon">{repeatIcon}</span>
           </button>
-          <button 
+          <button
             className="control-button prev-button"
             onClick={(e) => {
               e.stopPropagation()
@@ -174,7 +174,7 @@ export function PlaybackBar({
           >
             <img src={backwardButtonIcon} alt="Previous" className="control-icon" />
           </button>
-          <button 
+          <button
             className="control-button play-pause-button"
             onClick={(e) => {
               e.stopPropagation()
@@ -189,7 +189,7 @@ export function PlaybackBar({
               <img src={playButtonIcon} alt="Play" className="control-icon" />
             )}
           </button>
-          <button 
+          <button
             className="control-button next-button"
             onClick={(e) => {
               e.stopPropagation()

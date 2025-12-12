@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import trayIcon from '../assets/trayIcon.svg'
+import trayIcon from '../../../assets/trayIcon.svg'
 import './TitleBar.css'
 
 export function TitleBar() {
@@ -41,21 +41,21 @@ export function TitleBar() {
           <span>Music Sync App</span>
         </div>
         <div className="title-bar-controls">
-          <button 
+          <button
             className="title-bar-button minimize-button"
             onClick={handleMinimize}
             aria-label="Minimize"
           >
             <span>−</span>
           </button>
-          <button 
+          <button
             className="title-bar-button maximize-button"
             onClick={handleMaximize}
             aria-label={isMaximized ? 'Restore' : 'Maximize'}
           >
             <span>{isMaximized ? '❐' : '□'}</span>
           </button>
-          <button 
+          <button
             className="title-bar-button close-button"
             onClick={handleClose}
             aria-label="Close"

@@ -72,11 +72,18 @@ export function useMusicLibrary(): UseMusicLibraryReturn {
       setLoading(true)
       setError(null)
       const files = await window.electronAPI.scanMusicFolder(folderPath)
+
+      // Yield to main thread to let UI update before processing large array
+      // This prevents the "frozen" feeling after scan completes
+      await new Promise(resolve => setTimeout(resolve, 0))
+
       // Use file mtimeMs (dateAdded from backend); fallback to current time if missing
       const filesWithDate = files.map(file => ({
         ...file,
         dateAdded: file.dateAdded ?? Date.now(),
       }))
+
+      // Update state (React will batch this efficiently)
       setMusicFiles(filesWithDate)
     } catch (err) {
       setError('Failed to scan music folder')

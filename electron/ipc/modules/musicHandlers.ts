@@ -1,7 +1,8 @@
-import { ipcMain, dialog, app } from 'electron'
+import { ipcMain, dialog, app, BrowserWindow } from 'electron'
 import path from 'path'
 import fs from 'fs'
-import { scanMusicFiles, readSingleFileMetadata } from '../../musicScanner'
+import { readSingleFileMetadata } from '../../musicScanner'
+import { getParallelScanner } from '../../parallelMetadataScanner'
 
 /**
  * Metadata that can be written to audio files
@@ -46,7 +47,7 @@ export interface AudioMetadata {
  * Registers IPC handlers related to music library operations.
  * 
  * Handlers:
- * - 'scan-music-folder': Scans a directory for music files.
+ * - 'scan-music-folder': Scans a directory for music files (PARALLEL).
  * - 'select-music-folder': Opens an OS dialog to pick a folder.
  * - 'read-single-file-metadata': Reads metadata for a specific file.
  * - 'read-file-buffer': Reads file content into a buffer (for fpc).
@@ -54,10 +55,21 @@ export interface AudioMetadata {
  * - 'write-metadata': Writes ID3/Vorbis tags to a file.
  */
 export function registerMusicHandlers() {
-  // Handle music folder scanning
-  ipcMain.handle('scan-music-folder', async (_event, folderPath: string) => {
+  // Handle music folder scanning - uses PARALLEL metadata parsing
+  ipcMain.handle('scan-music-folder', async (event, folderPath: string) => {
     try {
-      return await scanMusicFiles(folderPath)
+      const scanner = getParallelScanner()
+
+      // Set up progress callback to send to renderer
+      const window = BrowserWindow.fromWebContents(event.sender)
+      if (window) {
+        scanner.setProgressCallback((progress) => {
+          window.webContents.send('scan-progress', progress)
+        })
+      }
+
+      // Use parallel scanner instead of sequential
+      return await scanner.scanDirectory(folderPath)
     } catch (error) {
       console.error('Error scanning folder:', error)
       throw error

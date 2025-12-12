@@ -1,9 +1,9 @@
 import { useState, useCallback, useRef } from 'react'
 import type { MusicFile } from '../../electron/musicScanner'
-import type { ScanStatusType } from '../electron.d'
-import { generateFingerprint, resetFingerprintErrors } from '../utils/fingerprintGenerator'
-import { lookupFingerprint } from '../utils/acoustidClient'
-import { lookupRecording, getCoverArtUrls, pickBestRelease } from '../utils/musicbrainzClient'
+import type { ScanStatusType } from '../types/electron.d'
+import { generateFingerprint, resetFingerprintErrors } from '../services/fingerprint'
+import { lookupFingerprint } from '../services/acoustid'
+import { lookupRecording, getCoverArtUrls, pickBestRelease } from '../services/musicbrainz'
 import { waitForAcoustID, waitForMusicBrainz, waitForCoverArt, waitBetweenSongs } from '../utils/rateLimiter'
 
 export interface ScanResult {

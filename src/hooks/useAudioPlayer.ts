@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { Howl } from 'howler'
 import type { MusicFile } from '../../electron/musicScanner'
-import { pathToFileURL } from '../pathResolver'
+import { pathToFileURL } from '../utils/pathResolver'
 
 type RepeatMode = 'off' | 'all' | 'one'
 

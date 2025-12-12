@@ -1,10 +1,10 @@
 import { useState, useEffect } from 'react'
-import type { MusicFile } from '../../electron/musicScanner'
-import type { SortOption } from '../utils/sortMusicFiles'
-import type { ScanStatusType } from '../electron.d'
-import { generateFingerprint } from '../utils/fingerprintGenerator'
-import { lookupFingerprint } from '../utils/acoustidClient'
-import { lookupRecording, getCoverArtUrls, pickBestRelease } from '../utils/musicbrainzClient'
+import type { MusicFile } from '../../../../electron/musicScanner'
+import type { SortOption } from '../../../utils/sortMusicFiles'
+import type { ScanStatusType } from '../../../types/electron.d'
+import { generateFingerprint } from '../../../services/fingerprint'
+import { lookupFingerprint } from '../../../services/acoustid'
+import { lookupRecording, getCoverArtUrls, pickBestRelease } from '../../../services/musicbrainz'
 
 interface SongListProps {
   songs: MusicFile[]
@@ -56,7 +56,7 @@ export function SongList({ songs, onSongClick, playingIndex, sortBy, onSortChang
 
     // Check current scan status
     const currentStatus = scanStatuses[file.path]
-    
+
     // If already scanned and tagged, show message and skip
     if (currentStatus === 'scanned-tagged') {
       console.log('File already scanned and tagged:', file.name)
@@ -109,14 +109,14 @@ export function SongList({ songs, onSongClick, playingIndex, sortBy, onSortChang
 
         if (mbData) {
           console.log('=== MusicBrainz Metadata ===')
-          
+
           // Extract all relevant metadata
           const title = mbData.title
           const artist = mbData['artist-credit']?.[0]?.name
           const artistCredit = mbData['artist-credit']
           // Pick the best release (prioritizes original albums over compilations/soundtracks)
           const album = pickBestRelease(mbData.releases)
-          
+
           console.log('Title:', title)
           console.log('Artist:', artist)
           console.log('Album:', album?.title)
@@ -144,7 +144,7 @@ export function SongList({ songs, onSongClick, playingIndex, sortBy, onSortChang
           // Prepare cover art URLs with fallback (tries multiple URLs if one returns 404)
           let coverArtPath: string | undefined
           const releases = mbData.releases || []
-          
+
           if (releases.length > 0) {
             // Get release group ID if available (for fallback)
             // Try from top-level first, then from the best release
@@ -153,7 +153,7 @@ export function SongList({ songs, onSongClick, playingIndex, sortBy, onSortChang
               // Extract from the first release (which is usually the best one after pickBestRelease)
               releaseGroupId = releases[0]['release-group']?.id
             }
-            
+
             // Generate all possible cover art URLs to try
             const coverUrls = getCoverArtUrls(releases, releaseGroupId)
             console.log(`Trying ${coverUrls.length} cover art URLs with fallback...`)
@@ -197,14 +197,14 @@ export function SongList({ songs, onSongClick, playingIndex, sortBy, onSortChang
 
           if (metadataResult.success) {
             console.log('Metadata written successfully!')
-            
+
             // Mark as scanned with metadata in cache
             await window.electronAPI.cacheMarkFileScanned(file.path, acoustidResult.mbid, true)
             setScanStatuses(prev => ({ ...prev, [file.path]: 'scanned-tagged' }))
-            
+
             // Show success notification
             onShowNotification?.(`Tagged: "${title}" by ${fullArtist || artist}`, 'success')
-            
+
             // Update just this file's metadata in-place (no full library refresh)
             if (onUpdateSingleFile) {
               console.log('Updating single file metadata in-place...')

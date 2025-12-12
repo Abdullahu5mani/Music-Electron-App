@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
-import { getCoverArtUrl, getCoverArtUrls, pickBestRelease } from '../musicbrainzClient'
-import type { MusicBrainzRelease } from '../musicbrainzClient'
+import { getCoverArtUrl, getCoverArtUrls, pickBestRelease } from '../musicbrainz'
+import type { MusicBrainzRelease } from '../musicbrainz'
 
 describe('musicbrainzClient', () => {
   describe('getCoverArtUrl', () => {
@@ -35,7 +35,7 @@ describe('musicbrainzClient', () => {
       ]
 
       const urls = getCoverArtUrls(releases, 'rg-1')
-      
+
       // Should have 250px, 500px, and original for each release, plus release group fallbacks
       expect(urls).toContain('https://coverartarchive.org/release/release-1/front-250')
       expect(urls).toContain('https://coverartarchive.org/release/release-1/front-500')

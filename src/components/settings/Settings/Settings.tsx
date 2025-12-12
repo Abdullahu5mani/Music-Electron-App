@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import type { AppSettings, BinaryStatus, PlatformInfo } from '../electron.d'
+import type { AppSettings, BinaryStatus, PlatformInfo } from '../../../types/electron.d'
 import './Settings.css'
 
 interface SettingsProps {

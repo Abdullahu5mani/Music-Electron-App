@@ -3,16 +3,22 @@ import { OverlayScrollbarsComponent } from 'overlayscrollbars-react'
 import { useMusicLibrary } from './hooks/useMusicLibrary'
 import { useAudioPlayer } from './hooks/useAudioPlayer'
 import { useSongScanner } from './hooks/useSongScanner'
-import { SongList } from './components/SongList'
-import { PlaybackBar } from './components/PlaybackBar'
-import { TitleBar } from './components/TitleBar'
-import { DownloadButton } from './components/DownloadButton'
-import { DownloadNotification } from './components/DownloadNotification'
-import { NotificationToast } from './components/NotificationToast'
-import { BatchScanProgress } from './components/BatchScanProgress'
-import { Sidebar } from './components/Sidebar'
-import { Settings } from './components/Settings'
-import type { ScanStatusType } from './electron.d'
+// Layout components
+import { TitleBar } from './components/layout/TitleBar/TitleBar'
+import { Sidebar } from './components/layout/Sidebar/Sidebar'
+import { PlaybackBar } from './components/layout/PlaybackBar/PlaybackBar'
+// Library components
+import { SongList } from './components/library/SongList/SongList'
+import { BatchScanProgress } from './components/library/BatchScanProgress/BatchScanProgress'
+// Settings components
+import { Settings } from './components/settings/Settings/Settings'
+// Download components
+import { DownloadButton } from './components/download/DownloadButton/DownloadButton'
+import { DownloadNotification } from './components/download/DownloadNotification/DownloadNotification'
+// Common components
+import { NotificationToast } from './components/common/NotificationToast/NotificationToast'
+// Types
+import type { ScanStatusType } from './types/electron.d'
 import './App.css'
 
 function App() {
@@ -249,15 +255,15 @@ function App() {
       <div className="app-content">
         <div className="app-header">
           <h1>Music Sync App</h1>
-        <div className="search-container" title="Search by title, artist, or album">
-          <input
-            type="text"
-            className="search-input"
-            placeholder="Search title, artist, album..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-          />
-        </div>
+          <div className="search-container" title="Search by title, artist, or album">
+            <input
+              type="text"
+              className="search-input"
+              placeholder="Search title, artist, album..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
+          </div>
           <div className="header-actions">
             <button
               className="folder-select-button"
