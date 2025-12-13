@@ -22,7 +22,7 @@ import type { ScanStatusType } from './types/electron.d'
 import './App.css'
 
 function App() {
-  const { sortedMusicFiles, loading, error, selectedFolder, handleSelectFolder, scanFolder, sortBy, setSortBy, updateSingleFile } = useMusicLibrary()
+  const { sortedMusicFiles, loading, error, selectedFolder, scanFolder, sortBy, setSortBy, updateSingleFile } = useMusicLibrary()
   const [selectedView, setSelectedView] = useState<string>('all')
   const [searchTerm, setSearchTerm] = useState<string>('')
   const [scanStatuses, setScanStatuses] = useState<Record<string, ScanStatusType>>({})
@@ -266,13 +266,6 @@ function App() {
           </div>
           <div className="header-actions">
             <button
-              className="folder-select-button"
-              onClick={handleSelectFolder}
-              disabled={loading}
-            >
-              {loading ? 'Scanning...' : 'Select Music Folder'}
-            </button>
-            <button
               className="settings-button"
               onClick={() => setShowSettings(true)}
               aria-label="Settings"
@@ -376,6 +369,7 @@ function App() {
         currentIndex={batchProgress.currentIndex}
         totalCount={batchProgress.totalCount}
         currentSongName={batchProgress.currentSongName}
+        apiPhase={batchProgress.apiPhase}
         onCancel={cancelBatchScan}
       />
     </div>

@@ -14,11 +14,14 @@ export interface ScanResult {
   error?: string
 }
 
+export type ApiPhase = 'acoustid' | 'musicbrainz' | 'coverart' | 'writing' | null
+
 export interface BatchScanProgress {
   isScanning: boolean
   currentIndex: number
   totalCount: number
   currentSongName: string
+  apiPhase?: ApiPhase
 }
 
 interface UseSongScannerOptions {
@@ -39,10 +42,16 @@ export function useSongScanner(options: UseSongScannerOptions = {}) {
     isScanning: false,
     currentIndex: 0,
     totalCount: 0,
-    currentSongName: ''
+    currentSongName: '',
+    apiPhase: null
   })
 
   const cancelledRef = useRef(false)
+
+  // Helper to update just the API phase without changing other progress fields
+  const updateApiPhase = (phase: ApiPhase) => {
+    setBatchProgress(prev => ({ ...prev, apiPhase: phase }))
+  }
 
   /**
    * Scan a single song with rate limiting
@@ -174,7 +183,8 @@ export function useSongScanner(options: UseSongScannerOptions = {}) {
         return { success: false, status: 'scanned-no-match', error: 'No fingerprint' }
       }
 
-      // Step 1: Wait for rate limit, then query AcoustID
+      // Step 1: Query AcoustID
+      updateApiPhase('acoustid')
       await waitForAcoustID()
       const fileDuration = duration || file.metadata?.duration || 0
       const acoustidResult = await lookupFingerprint(fingerprint, fileDuration)
@@ -186,7 +196,8 @@ export function useSongScanner(options: UseSongScannerOptions = {}) {
         return { success: false, status: 'scanned-no-match', error: 'No AcoustID match' }
       }
 
-      // Step 2: Wait for rate limit, then query MusicBrainz
+      // Step 2: Query MusicBrainz
+      updateApiPhase('musicbrainz')
       await waitForMusicBrainz()
       const mbData = await lookupRecording(acoustidResult.mbid)
 
@@ -219,7 +230,8 @@ export function useSongScanner(options: UseSongScannerOptions = {}) {
         }
       }
 
-      // Step 3: Download cover art with rate limiting
+      // Step 3: Download cover art
+      updateApiPhase('coverart')
       let coverArtPath: string | undefined
       const releases = mbData.releases || []
 
@@ -243,6 +255,7 @@ export function useSongScanner(options: UseSongScannerOptions = {}) {
       }
 
       // Step 4: Write metadata to file
+      updateApiPhase('writing')
       const metadataResult = await window.electronAPI.writeMetadata(file.path, {
         title: title,
         artist: fullArtist || mbData['artist-credit']?.[0]?.name,
@@ -332,7 +345,7 @@ export function useSongScanner(options: UseSongScannerOptions = {}) {
       } else {
         onShowNotification?.('Fingerprinting failed', 'error')
         setIsScanning(false)
-        setBatchProgress({ isScanning: false, currentIndex: 0, totalCount: 0, currentSongName: '' })
+        setBatchProgress({ isScanning: false, currentIndex: 0, totalCount: 0, currentSongName: '', apiPhase: null })
         cleanupProgress()
         return
       }
@@ -340,7 +353,7 @@ export function useSongScanner(options: UseSongScannerOptions = {}) {
       console.error('Batch fingerprinting error:', error)
       onShowNotification?.('Fingerprinting failed: ' + String(error), 'error')
       setIsScanning(false)
-      setBatchProgress({ isScanning: false, currentIndex: 0, totalCount: 0, currentSongName: '' })
+      setBatchProgress({ isScanning: false, currentIndex: 0, totalCount: 0, currentSongName: '', apiPhase: null })
       cleanupProgress()
       return
     }
@@ -349,7 +362,7 @@ export function useSongScanner(options: UseSongScannerOptions = {}) {
 
     if (cancelledRef.current) {
       setIsScanning(false)
-      setBatchProgress({ isScanning: false, currentIndex: 0, totalCount: 0, currentSongName: '' })
+      setBatchProgress({ isScanning: false, currentIndex: 0, totalCount: 0, currentSongName: '', apiPhase: null })
       onShowNotification?.('Scan cancelled during fingerprinting', 'info')
       return
     }
@@ -372,7 +385,8 @@ export function useSongScanner(options: UseSongScannerOptions = {}) {
         isScanning: true,
         currentIndex: i + 1,
         totalCount: files.length,
-        currentSongName: `API lookup: ${songName}`
+        currentSongName: songName,
+        apiPhase: 'acoustid' // Will be updated by processSongWithFingerprint
       })
 
       const result = await processSongWithFingerprint(
@@ -399,7 +413,8 @@ export function useSongScanner(options: UseSongScannerOptions = {}) {
       isScanning: false,
       currentIndex: 0,
       totalCount: 0,
-      currentSongName: ''
+      currentSongName: '',
+      apiPhase: null
     })
 
     // Show summary notification

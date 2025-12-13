@@ -122,9 +122,12 @@ export function registerMusicHandlers() {
       const file = await taglib.open(data)
 
       let resolvedImagePath = imagePath
+      let shouldDeleteTempFile = false
+
       if (imagePath.startsWith('assets/')) {
         const userDataPath = app.getPath('userData')
         resolvedImagePath = path.join(userDataPath, imagePath)
+        shouldDeleteTempFile = true // Mark for cleanup after embedding
       }
 
 
@@ -162,6 +165,18 @@ export function registerMusicHandlers() {
       fs.writeFileSync(filePath, updatedBuffer)
 
       file.dispose()
+
+      // Delete temp cover art file after successful embedding
+      // The image is now embedded in the audio file, so we don't need the temp file
+      if (shouldDeleteTempFile && fs.existsSync(resolvedImagePath)) {
+        try {
+          fs.unlinkSync(resolvedImagePath)
+          console.log('[CoverArt] Cleaned up temp file:', path.basename(resolvedImagePath))
+        } catch (cleanupError) {
+          // Non-fatal - just log and continue
+          console.warn('[CoverArt] Failed to cleanup temp file:', cleanupError)
+        }
+      }
 
       return { success: true }
     } catch (error) {

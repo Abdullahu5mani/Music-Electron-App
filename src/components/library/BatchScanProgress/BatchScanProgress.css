@@ -1,6 +1,7 @@
 .batch-scan-progress {
   position: fixed;
-  top: 120px; /* Below header buttons (title bar ~32px + padding ~12px + header ~60px = ~104px, so 120px is safe) */
+  top: 120px;
+  /* Below header buttons (title bar ~32px + padding ~12px + header ~60px = ~104px, so 120px is safe) */
   right: 16px;
   width: 280px;
   background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
@@ -17,6 +18,7 @@
     transform: translateX(100%);
     opacity: 0;
   }
+
   to {
     transform: translateX(0);
     opacity: 1;
@@ -76,6 +78,27 @@
   transition: width 0.3s ease;
 }
 
+.batch-scan-phase {
+  font-size: 0.85rem;
+  color: #4facfe;
+  text-align: center;
+  margin-bottom: 4px;
+  font-weight: 500;
+  animation: pulsePhase 1.5s ease-in-out infinite;
+}
+
+@keyframes pulsePhase {
+
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.7;
+  }
+}
+
 .batch-scan-song {
   font-size: 0.8rem;
   color: #aaa;
@@ -84,4 +107,3 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
-
