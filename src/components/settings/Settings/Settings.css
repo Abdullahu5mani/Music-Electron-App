@@ -376,3 +376,38 @@
   background: #444;
   color: #999;
 }
+
+/* Settings Option Group */
+.settings-options-group {
+  display: flex;
+  background: #2a2a2a;
+  padding: 0.25rem;
+  border-radius: 6px;
+  border: 1px solid #444;
+  gap: 0.25rem;
+}
+
+.settings-option {
+  flex: 1;
+  padding: 0.5rem;
+  border: none;
+  background: transparent;
+  color: #aaa;
+  cursor: pointer;
+  border-radius: 4px;
+  font-size: 0.9rem;
+  font-weight: 500;
+  transition: all 0.2s;
+}
+
+.settings-option:hover {
+  color: white;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.settings-option.active {
+  background: #646cff;
+  color: white;
+  font-weight: 600;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}

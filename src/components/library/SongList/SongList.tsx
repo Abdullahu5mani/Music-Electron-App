@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import type { MusicFile } from '../../../../electron/musicScanner'
 import type { SortOption } from '../../../utils/sortMusicFiles'
 import type { ScanStatusType } from '../../../types/electron.d'
@@ -23,6 +23,31 @@ export function SongList({ songs, onSongClick, playingIndex, sortBy, onSortChang
   const [generatingFingerprint, setGeneratingFingerprint] = useState<string | null>(null)
   const [scanStatuses, setScanStatuses] = useState<Record<string, ScanStatusType>>({})
   const [loadingStatuses, setLoadingStatuses] = useState(false)
+
+  // Refs for each song item to enable auto-scrolling
+  const songRefs = useRef<Map<number, HTMLLIElement>>(new Map())
+
+  // Callback to set ref for each song item
+  const setSongRef = useCallback((index: number, element: HTMLLIElement | null) => {
+    if (element) {
+      songRefs.current.set(index, element)
+    } else {
+      songRefs.current.delete(index)
+    }
+  }, [])
+
+  // Auto-scroll to the currently playing song when it changes
+  useEffect(() => {
+    if (playingIndex !== null && playingIndex >= 0) {
+      const element = songRefs.current.get(playingIndex)
+      if (element) {
+        element.scrollIntoView({
+          behavior: 'smooth',
+          block: 'center' // Center the song in the viewport
+        })
+      }
+    }
+  }, [playingIndex])
 
   // Load scan statuses for all songs when the list changes
   useEffect(() => {
@@ -336,6 +361,7 @@ export function SongList({ songs, onSongClick, playingIndex, sortBy, onSortChang
         {songs.map((file, index) => (
           <li
             key={index}
+            ref={(el) => setSongRef(index, el)}
             className={`song-item ${playingIndex === index ? 'playing' : ''}`}
             onClick={() => onSongClick(file, index)}
           >

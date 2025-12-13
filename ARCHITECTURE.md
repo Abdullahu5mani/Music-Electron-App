@@ -2301,13 +2301,134 @@ const phaseDisplay = {
 
 ---
 
+## Keyboard Shortcuts
+
+Global keyboard shortcuts are registered in `App.tsx` for playback control:
+
+| Key | Action | Implementation |
+|-----|--------|----------------|
+| `Space` | Play / Pause | `togglePlayPause()` |
+| `→` (Arrow Right) | Next track | `playNext()` |
+| `←` (Arrow Left) | Previous track | `playPrevious()` |
+| `↑` (Arrow Up) | Volume up (+5%) | `setVolume(volume + 0.05)` |
+| `↓` (Arrow Down) | Volume down (-5%) | `setVolume(volume - 0.05)` |
+
+**Note:** Shortcuts are disabled when focus is in an input field, textarea, or contenteditable element.
+
+```typescript
+// In App.tsx
+useEffect(() => {
+  const handleKeyDown = (e: KeyboardEvent) => {
+    if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') return
+    
+    switch (e.key) {
+      case ' ':        togglePlayPause(); break
+      case 'ArrowRight': playNext(); break
+      case 'ArrowLeft':  playPrevious(); break
+      case 'ArrowUp':    setVolume(Math.min(1, volume + 0.05)); break
+      case 'ArrowDown':  setVolume(Math.max(0, volume - 0.05)); break
+    }
+  }
+  window.addEventListener('keydown', handleKeyDown)
+  return () => window.removeEventListener('keydown', handleKeyDown)
+}, [togglePlayPause, playNext, playPrevious, volume, setVolume])
+```
+
+---
+
+## Slider Design (Seek Bar & Volume)
+
+The playback seek bar and volume slider use a modern, premium design with gradients and smooth animations.
+
+### Design Features
+
+| Feature | Seek Bar | Volume Slider |
+|---------|----------|---------------|
+| **Track Height** | 4px | 3px |
+| **Track Gradient** | `#667eea → #764ba2 → #f093fb` | `#667eea → #764ba2` |
+| **Track Glow** | 8px purple shadow | 6px purple shadow |
+| **Handle Size** | 14px | 10px |
+| **Handle Style** | White gradient, no border | White gradient, no border |
+| **Handle Visibility** | Hidden until hover | Hidden until hover |
+| **Hover Effect** | Scale 1.2x + glow halo | Scale 1.3x + glow halo |
+| **Drag Effect** | Scale 1.3x + intense glow | Scale 1.4x + intense glow |
+
+### Spotify-Style Hidden Handle
+
+The handle is hidden by default and appears on hover:
+
+```css
+.seek-bar-slider .rc-slider-handle {
+  opacity: 0;  /* Hidden by default */
+}
+
+.seek-bar-wrapper:hover .seek-bar-slider .rc-slider-handle {
+  opacity: 1;  /* Show on hover */
+}
+```
+
+### Gradient & Glow
+
+```css
+.seek-bar-slider .rc-slider-track {
+  background: linear-gradient(90deg, #667eea 0%, #764ba2 50%, #f093fb 100%);
+  box-shadow: 0 0 8px rgba(102, 126, 234, 0.4);
+}
+```
+
+---
+
+## Auto-Scroll to Playing Song
+
+When navigating tracks (via keyboard or buttons), the song list automatically scrolls to keep the currently playing song **centered** in the viewport.
+
+### Implementation (`SongList.tsx`)
+
+```typescript
+// Refs for each song item
+const songRefs = useRef<Map<number, HTMLLIElement>>(new Map())
+
+// Callback to register refs
+const setSongRef = useCallback((index: number, el: HTMLLIElement | null) => {
+  if (el) songRefs.current.set(index, el)
+  else songRefs.current.delete(index)
+}, [])
+
+// Auto-scroll when playingIndex changes
+useEffect(() => {
+  if (playingIndex !== null && playingIndex >= 0) {
+    songRefs.current.get(playingIndex)?.scrollIntoView({
+      behavior: 'smooth',
+      block: 'center'  // Center in viewport
+    })
+  }
+}, [playingIndex])
+```
+
+### Usage in JSX
+
+```tsx
+<li ref={(el) => setSongRef(index, el)} className={...}>
+```
+
+### Behavior
+
+| Action | Result |
+|--------|--------|
+| Press `→` (next) | List smoothly scrolls to center new song |
+| Press `←` (prev) | List smoothly scrolls to center new song |
+| Click next/prev button | Same scroll behavior |
+| Song ends, auto-advances | List follows to next song |
+
+---
+
 ## Known Limitations & Future Work
 
 - **Library UX:** Search bar added; no multi-select for bulk actions yet.
 - **Downloads:** No download queue/history; single-link flow with fixed delay.
 - **Cover art:** Downloaded art cleaned immediately after embedding; backup cleanup at 30 days.
 - **Incremental updates:** No file-system watch; rescans are manual.
-- **Accessibility/shortcuts:** No renderer keyboard shortcuts; limited accessibility.
+- **Keyboard shortcuts:** Basic playback controls implemented; no mute toggle or seek shortcuts yet.
 - **Testing/observability:** No automated tests; limited structured logging.
 - **ARM64 Support:** fpcalc not available for Windows ARM64 or Linux ARM64 platforms.
 

@@ -8,6 +8,9 @@ import backwardButtonIcon from '../../../assets/backwardButton.svg'
 import forwardButtonIcon from '../../../assets/forwardButton.svg'
 import volumeControlIcon from '../../../assets/volumeControl.svg'
 import trayIcon from '../../../assets/trayIcon.svg'
+import { extractColorsFromImage, type ExtractedColors } from '../../../utils/colorExtractor'
+import { AudioVisualizer, type VisualizerMode } from '../../common/AudioVisualizer/AudioVisualizer'
+import type { Howl } from 'howler'
 
 interface PlaybackBarProps {
   currentSong: MusicFile | null
@@ -24,6 +27,8 @@ interface PlaybackBarProps {
   onSeek: (time: number) => void
   volume: number
   onVolumeChange: (volume: number) => void
+  currentSound?: Howl | null
+  visualizerMode: VisualizerMode
 }
 
 /**
@@ -36,6 +41,14 @@ function formatTime(seconds: number): string {
   const mins = Math.floor(seconds / 60)
   const secs = Math.floor(seconds % 60)
   return `${mins}:${secs.toString().padStart(2, '0')}`
+}
+
+// Default colors when no album art
+const defaultColors: ExtractedColors = {
+  primary: '#667eea',
+  secondary: '#764ba2',
+  accent: '#f093fb',
+  background: '#1a1a2e',
 }
 
 /**
@@ -56,9 +69,22 @@ export function PlaybackBar({
   onSeek,
   volume,
   onVolumeChange,
+  currentSound,
+  visualizerMode,
 }: PlaybackBarProps) {
   const [isDragging, setIsDragging] = useState(false)
   const [dragTime, setDragTime] = useState<number>(currentTime)
+  const [glowColors, setGlowColors] = useState<ExtractedColors>(defaultColors)
+
+  // Extract colors from album art when song changes
+  useEffect(() => {
+    const albumArt = currentSong?.metadata?.albumArt
+    if (albumArt) {
+      extractColorsFromImage(albumArt).then(setGlowColors)
+    } else {
+      setGlowColors(defaultColors)
+    }
+  }, [currentSong?.metadata?.albumArt])
 
   // Update dragTime when currentTime changes (but not while dragging)
   useEffect(() => {
@@ -87,20 +113,34 @@ export function PlaybackBar({
   return (
     <div className="playback-bar">
       <div className="playback-content">
-        <div className="playback-album-art">
-          {currentSong?.metadata?.albumArt ? (
-            <img
-              src={currentSong.metadata.albumArt}
-              alt="Album cover"
-              className="playback-art"
-            />
-          ) : (
-            <img
-              src={trayIcon}
-              alt="No song playing"
-              className="playback-art-placeholder"
-            />
-          )}
+        <div className={`playback-album-art-wrapper ${isPlaying ? 'playing' : ''}`}>
+          <div
+            className="glow-border"
+            style={{
+              background: `conic-gradient(
+                from 0deg,
+                ${glowColors.primary},
+                ${glowColors.secondary},
+                ${glowColors.accent},
+                ${glowColors.primary}
+              )`
+            }}
+          ></div>
+          <div className="playback-album-art">
+            {currentSong?.metadata?.albumArt ? (
+              <img
+                src={currentSong.metadata.albumArt}
+                alt="Album cover"
+                className="playback-art"
+              />
+            ) : (
+              <img
+                src={trayIcon}
+                alt="No song playing"
+                className="playback-art-placeholder"
+              />
+            )}
+          </div>
         </div>
         <div className="playback-info">
           <div className="playback-title">
@@ -113,6 +153,17 @@ export function PlaybackBar({
             )}
           </div>
           <div className="seek-bar-container">
+            {/* Audio Visualizer behind the seek bar */}
+            {isPlaying && currentSound && (
+              <AudioVisualizer
+                mode={visualizerMode}
+                colors={{
+                  primary: glowColors.primary,
+                  secondary: glowColors.secondary
+                }}
+                howl={currentSound}
+              />
+            )}
             <div className="seek-bar-wrapper">
               <Slider
                 min={0}
@@ -122,19 +173,18 @@ export function PlaybackBar({
                 onChangeComplete={handleSeekAfterChange}
                 className="seek-bar-slider"
                 disabled={!currentSong}
-                trackStyle={{ backgroundColor: '#646cff', height: 8 }}
+                trackStyle={{ height: 4 }}
                 handleStyle={{
-                  borderColor: '#646cff',
-                  backgroundColor: '#fff',
-                  width: 16,
-                  height: 16,
-                  marginTop: -4,
-                  boxShadow: '0 2px 6px rgba(0, 0, 0, 0.3)',
+                  width: 14,
+                  height: 14,
+                  marginTop: -5,
                 }}
-                railStyle={{ backgroundColor: 'rgba(255, 255, 255, 0.1)', height: 8 }}
+                railStyle={{ height: 4 }}
               />
             </div>
-            <div className="time-display">
+            <div
+              className="time-display"
+            >
               <span>{formatTime(isDragging ? dragTime : currentTime)}</span>
               <span>{formatTime(duration)}</span>
             </div>
@@ -209,16 +259,13 @@ export function PlaybackBar({
               value={volume}
               onChange={(value) => onVolumeChange(Array.isArray(value) ? value[0] : value)}
               className="volume-slider"
-              trackStyle={{ backgroundColor: '#646cff', height: 6 }}
+              trackStyle={{ height: 3 }}
               handleStyle={{
-                borderColor: '#646cff',
-                backgroundColor: '#fff',
-                width: 12,
-                height: 12,
-                marginTop: -3,
-                boxShadow: '0 2px 4px rgba(0, 0, 0, 0.3)',
+                width: 10,
+                height: 10,
+                marginTop: -3.5,
               }}
-              railStyle={{ backgroundColor: 'rgba(255, 255, 255, 0.1)', height: 6 }}
+              railStyle={{ height: 3 }}
             />
           </div>
         </div>

@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import type { AppSettings, BinaryStatus, PlatformInfo } from '../../../types/electron.d'
+import type { VisualizerMode } from '../../common/AudioVisualizer/AudioVisualizer'
 import './Settings.css'
 
 interface SettingsProps {
@@ -10,6 +11,8 @@ interface SettingsProps {
   isBatchScanning?: boolean
   unscannedCount?: number
   totalSongCount?: number
+  visualizerMode: VisualizerMode
+  onVisualizerModeChange: (mode: VisualizerMode) => void
 }
 
 export function Settings({
@@ -19,7 +22,9 @@ export function Settings({
   onScanAll,
   isBatchScanning = false,
   unscannedCount = 0,
-  totalSongCount = 0
+  totalSongCount = 0,
+  visualizerMode,
+  onVisualizerModeChange
 }: SettingsProps) {
   const [settings, setSettings] = useState<AppSettings>({
     musicFolderPath: null,
@@ -225,6 +230,36 @@ export function Settings({
                     ) : (
                       <>🔍 Scan {unscannedCount} Unscanned Songs</>
                     )}
+                  </button>
+                </div>
+              </div>
+
+              <div className="settings-section">
+                <label className="settings-label">Visualizer Mode</label>
+                <p className="settings-description">
+                  Choose the style of the audio visualizer in the playback bar
+                </p>
+                <div className="settings-options-group">
+                  <button
+                    type="button"
+                    className={`settings-option ${visualizerMode === 'bars' ? 'active' : ''}`}
+                    onClick={() => onVisualizerModeChange('bars')}
+                  >
+                    Bars
+                  </button>
+                  <button
+                    type="button"
+                    className={`settings-option ${visualizerMode === 'wave' ? 'active' : ''}`}
+                    onClick={() => onVisualizerModeChange('wave')}
+                  >
+                    Wave
+                  </button>
+                  <button
+                    type="button"
+                    className={`settings-option ${visualizerMode === 'off' ? 'active' : ''}`}
+                    onClick={() => onVisualizerModeChange('off')}
+                  >
+                    Off
                   </button>
                 </div>
               </div>

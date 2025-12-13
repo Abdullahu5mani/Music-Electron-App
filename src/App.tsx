@@ -19,6 +19,7 @@ import { DownloadNotification } from './components/download/DownloadNotification
 import { NotificationToast } from './components/common/NotificationToast/NotificationToast'
 // Types
 import type { ScanStatusType } from './types/electron.d'
+import type { VisualizerMode } from './components/common/AudioVisualizer/AudioVisualizer'
 import './App.css'
 
 function App() {
@@ -26,6 +27,7 @@ function App() {
   const [selectedView, setSelectedView] = useState<string>('all')
   const [searchTerm, setSearchTerm] = useState<string>('')
   const [scanStatuses, setScanStatuses] = useState<Record<string, ScanStatusType>>({})
+  const [visualizerMode, setVisualizerMode] = useState<VisualizerMode>('bars')
   const [toastMessage, setToastMessage] = useState<string>('')
   const [toastType, setToastType] = useState<'success' | 'error' | 'warning' | 'info'>('info')
   const [showToast, setShowToast] = useState(false)
@@ -88,7 +90,8 @@ function App() {
     duration,
     seek,
     volume,
-    setVolume
+    setVolume,
+    currentSound,
   } = useAudioPlayer(sortedMusicFiles)
   const [isDownloading, setIsDownloading] = useState(false)
   const [downloadProgress, setDownloadProgress] = useState(0)
@@ -190,6 +193,43 @@ function App() {
     }
     loadSettings()
   }, [])
+
+  // Global keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Don't trigger shortcuts when typing in input fields
+      const target = e.target as HTMLElement
+      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) {
+        return
+      }
+
+      switch (e.key) {
+        case ' ': // Space - Play/Pause
+          e.preventDefault()
+          togglePlayPause()
+          break
+        case 'ArrowRight': // Next track
+          e.preventDefault()
+          playNext()
+          break
+        case 'ArrowLeft': // Previous track
+          e.preventDefault()
+          playPrevious()
+          break
+        case 'ArrowUp': // Volume up
+          e.preventDefault()
+          setVolume(Math.min(1, volume + 0.05))
+          break
+        case 'ArrowDown': // Volume down
+          e.preventDefault()
+          setVolume(Math.max(0, volume - 0.05))
+          break
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [togglePlayPause, playNext, playPrevious, volume, setVolume])
 
   const handleSettingsChange = async () => {
     // Reload settings after save
@@ -339,6 +379,8 @@ function App() {
         onSeek={seek}
         volume={volume}
         onVolumeChange={setVolume}
+        currentSound={currentSound}
+        visualizerMode={visualizerMode}
       />
 
       <DownloadNotification
@@ -362,6 +404,8 @@ function App() {
         isBatchScanning={batchProgress.isScanning}
         unscannedCount={unscannedFiles.length}
         totalSongCount={sortedMusicFiles.length}
+        visualizerMode={visualizerMode}
+        onVisualizerModeChange={setVisualizerMode}
       />
 
       <BatchScanProgress
