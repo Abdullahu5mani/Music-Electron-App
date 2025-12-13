@@ -41,24 +41,8 @@ export async function ensureFpcalcReady(): Promise<boolean> {
 }
 
 /**
- * Check if fpcalc is available without downloading
+ * Result of a single fingerprint operation in a batch
  */
-export async function isFpcalcAvailable(): Promise<boolean> {
-  try {
-    const result = await window.electronAPI.fingerprintCheckReady()
-    fpcalcReady = result.ready
-    return result.ready
-  } catch (error) {
-    console.error('Error checking fpcalc availability:', error)
-    return false
-  }
-}
-
-export interface FingerprintResult {
-  fingerprint: string
-  duration: number
-}
-
 export interface BatchFingerprintResult {
   filePath: string
   success: boolean
@@ -99,41 +83,6 @@ export async function generateFingerprint(filePath: string): Promise<string | nu
   } catch (error: any) {
     consecutiveErrors++
     console.error('Error generating fingerprint:', error.message || error)
-    return null
-  }
-}
-
-/**
- * Generate fingerprint and return both fingerprint and duration
- */
-export async function generateFingerprintWithDuration(filePath: string): Promise<FingerprintResult | null> {
-  try {
-    if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
-      return null
-    }
-
-    if (!fpcalcReady) {
-      const ready = await ensureFpcalcReady()
-      if (!ready) {
-        consecutiveErrors++
-        return null
-      }
-    }
-
-    const result = await window.electronAPI.generateFingerprint(filePath)
-
-    if (result.success && result.fingerprint && result.duration) {
-      consecutiveErrors = 0
-      return {
-        fingerprint: result.fingerprint,
-        duration: result.duration
-      }
-    } else {
-      consecutiveErrors++
-      return null
-    }
-  } catch (error) {
-    consecutiveErrors++
     return null
   }
 }
@@ -189,37 +138,8 @@ export async function generateFingerprintsBatch(
 }
 
 /**
- * Get info about the fingerprint worker pool
- */
-export async function getFingerprintPoolInfo(): Promise<{ cpuCount: number; workerCount: number }> {
-  try {
-    return await window.electronAPI.fingerprintGetPoolInfo()
-  } catch (error) {
-    return { cpuCount: 1, workerCount: 1 }
-  }
-}
-
-/**
  * Reset the error counter - call when starting a new scan session
  */
 export function resetFingerprintErrors(): void {
   consecutiveErrors = 0
 }
-
-/**
- * Get current error state (for debugging/UI)
- */
-export function getFingerprintStatus(): {
-  consecutiveErrors: number
-  maxErrors: number
-  isCircuitBroken: boolean
-  fpcalcReady: boolean
-} {
-  return {
-    consecutiveErrors,
-    maxErrors: MAX_CONSECUTIVE_ERRORS,
-    isCircuitBroken: consecutiveErrors >= MAX_CONSECUTIVE_ERRORS,
-    fpcalcReady
-  }
-}
-
