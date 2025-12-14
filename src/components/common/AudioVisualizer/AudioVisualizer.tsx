@@ -41,11 +41,30 @@ export function AudioVisualizer({
             return
         }
 
+        // Track this connection attempt to prevent stale callbacks
+        let retryCount = 0
+        const maxRetries = 10
+        let timeoutId: NodeJS.Timeout | null = null
+
         const connectToAudio = () => {
+            // Check if we've been cancelled or exceeded retries
+            if (retryCount >= maxRetries) {
+                console.warn('AudioVisualizer: Max retries exceeded, giving up')
+                return
+            }
+            retryCount++
+
             // Access Howler's AudioContext
             const audioCtx = Howler.ctx
             if (!audioCtx) {
-                setTimeout(connectToAudio, 100)
+                timeoutId = setTimeout(connectToAudio, 100)
+                return
+            }
+
+            // Verify howl is still valid (might have been unloaded during rapid switching)
+            // @ts-expect-error - accessing internal Howler property
+            if (!howl._sounds || howl._state === 'unloaded') {
+                // Howl was unloaded, stop trying
                 return
             }
 
@@ -53,13 +72,13 @@ export function AudioVisualizer({
             // @ts-expect-error - accessing internal Howler property
             const sounds = howl._sounds
             if (!sounds || sounds.length === 0) {
-                setTimeout(connectToAudio, 100)
+                timeoutId = setTimeout(connectToAudio, 100)
                 return
             }
 
             const audioElement = sounds[0]._node as HTMLAudioElement
             if (!audioElement) {
-                setTimeout(connectToAudio, 100)
+                timeoutId = setTimeout(connectToAudio, 100)
                 return
             }
 
@@ -86,7 +105,11 @@ export function AudioVisualizer({
                 if (audioElement._sourceNode) {
                     // @ts-expect-error - custom property
                     sourceNodeRef.current = audioElement._sourceNode
-                    sourceNodeRef.current?.connect(globalAnalyser)
+                    try {
+                        sourceNodeRef.current?.connect(globalAnalyser)
+                    } catch (e) {
+                        // Already connected, that's fine
+                    }
                 } else {
                     // Create MediaElementAudioSourceNode from the audio element
                     const source = audioCtx.createMediaElementSource(audioElement)
@@ -104,10 +127,12 @@ export function AudioVisualizer({
                 connectedHowlId = howlId
                 setIsReady(true)
             } catch (err) {
-                console.error('AudioVisualizer connection error:', err)
                 // If we get "already connected" error, that's okay
                 if ((err as Error).message?.includes('already connected')) {
                     setIsReady(true)
+                } else {
+                    // Don't log every error during rapid switching
+                    // console.error('AudioVisualizer connection error:', err)
                 }
             }
         }
@@ -115,7 +140,10 @@ export function AudioVisualizer({
         connectToAudio()
 
         return () => {
-            // Don't disconnect on cleanup - the source stays connected
+            // Cleanup pending timeouts on unmount or howl change
+            if (timeoutId) {
+                clearTimeout(timeoutId)
+            }
         }
     }, [mode, howl])
 
@@ -168,9 +196,17 @@ export function AudioVisualizer({
 
             ctx.clearRect(0, 0, width, height)
 
-            const bufferLength = analyser.frequencyBinCount
-            const barWidth = width / bufferLength
+            // Only use the lower ~55% of frequency bins (where most music content is)
+            // This removes the empty high-frequency space on the right side
+            const fullBufferLength = analyser.frequencyBinCount
+            const usableBins = Math.floor(fullBufferLength * 0.55)
+
+            // Calculate bar dimensions to fit and center
             const gap = 1
+            const minBarWidth = 2
+            const barWidth = Math.max(minBarWidth, (width * 0.9) / usableBins) // Use 90% of width
+            const actualTotalWidth = usableBins * barWidth
+            const offsetX = (width - actualTotalWidth) / 2 // Center the bars
 
             const gradient = ctx.createLinearGradient(0, height, 0, 0)
             gradient.addColorStop(0, primary + '40') // increased opacity
@@ -183,9 +219,9 @@ export function AudioVisualizer({
 
             ctx.fillStyle = gradient
 
-            for (let i = 0; i < bufferLength; i++) {
+            for (let i = 0; i < usableBins; i++) {
                 const barHeight = (frequencyData[i] / 255) * height * 0.95
-                const x = i * barWidth
+                const x = offsetX + (i * barWidth)
 
                 // Draw outline for better contrast
                 if (barHeight > 0) {

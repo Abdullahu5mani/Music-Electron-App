@@ -1,4 +1,4 @@
-import type { MusicFile } from '../electron/musicScanner'
+import type { MusicFile } from '../../electron/musicScanner'
 
 export interface BinaryDownloadProgress {
   status: 'checking' | 'not-found' | 'downloading' | 'downloaded' | 'installed' | 'updating' | 'version-check'
@@ -54,6 +54,22 @@ export interface CacheScanStatistics {
   total: number
   withMetadata: number
   withoutMetadata: number
+}
+
+// Playlist types
+export interface Playlist {
+  id: number
+  name: string
+  description: string | null
+  coverArtPath: string | null
+  songCount: number
+  totalDuration: number
+  createdAt: number
+  updatedAt: number
+}
+
+export interface PlaylistWithSongs extends Playlist {
+  songs: MusicFile[]
 }
 
 export interface ElectronAPI {
@@ -126,6 +142,21 @@ export interface ElectronAPI {
     fileName: string
     percentage: number
   }) => void) => () => void
+  // Playlist operations
+  playlistCreate: (name: string, description?: string) => Promise<{ success: boolean; playlist?: Playlist; error?: string }>
+  playlistDelete: (playlistId: number) => Promise<{ success: boolean; error?: string }>
+  playlistRename: (playlistId: number, newName: string) => Promise<{ success: boolean; error?: string }>
+  playlistUpdateDescription: (playlistId: number, description: string | null) => Promise<{ success: boolean; error?: string }>
+  playlistUpdateCover: (playlistId: number, coverArtPath: string | null) => Promise<{ success: boolean; error?: string }>
+  playlistGetAll: () => Promise<{ success: boolean; playlists: Playlist[]; error?: string }>
+  playlistGetById: (playlistId: number) => Promise<{ success: boolean; playlist: Playlist | null; error?: string }>
+  playlistGetSongs: (playlistId: number) => Promise<{ success: boolean; songPaths: string[]; error?: string }>
+  playlistAddSongs: (playlistId: number, filePaths: string[]) => Promise<{ success: boolean; error?: string }>
+  playlistRemoveSong: (playlistId: number, filePath: string) => Promise<{ success: boolean; error?: string }>
+  playlistReorderSongs: (playlistId: number, newOrder: Array<{ filePath: string; position: number }>) => Promise<{ success: boolean; error?: string }>
+  playlistIsSongIn: (playlistId: number, filePath: string) => Promise<{ success: boolean; isIn: boolean; error?: string }>
+  playlistGetContainingSong: (filePath: string) => Promise<{ success: boolean; playlists: Playlist[]; error?: string }>
+  playlistCleanupMissing: () => Promise<{ success: boolean; removedCount: number; error?: string }>
 }
 
 declare global {
@@ -133,4 +164,5 @@ declare global {
     electronAPI: ElectronAPI
   }
 }
+
 

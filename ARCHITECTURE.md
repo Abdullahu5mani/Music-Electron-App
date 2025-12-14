@@ -10,13 +10,15 @@
 6. [Main Process](#main-process)
 7. [Renderer Process](#renderer-process)
 8. [IPC Communication](#ipc-communication)
-9. [Core Flows](#core-flows)
-10. [External API Integration](#external-api-integration)
-11. [Security Architecture](#security-architecture)
-12. [Cross-Platform Strategy](#cross-platform-strategy)
-13. [Key Design Patterns](#key-design-patterns)
-14. [Known Limitations & Future Work](#known-limitations--future-work)
-15. [Running the App](#running-the-app)
+9. [Playlist System](#playlist-system)
+10. [Core Flows](#core-flows)
+11. [External API Integration](#external-api-integration)
+12. [Security Architecture](#security-architecture)
+13. [Cross-Platform Strategy](#cross-platform-strategy)
+14. [Key Design Patterns](#key-design-patterns)
+15. [Visual Enhancements](#visual-enhancements)
+16. [Known Limitations & Future Work](#known-limitations--future-work)
+17. [Running the App](#running-the-app)
 
 ---
 
@@ -135,11 +137,16 @@ Music-Electron-App/
 │   ├── preload.ts               # IPC bridge (Main ↔ Renderer)
 │   ├── tray.ts                  # System tray icon and menu
 │   ├── musicScanner.ts          # File system scanning & metadata
+│   ├── parallelMetadataScanner.ts # Parallel scanning with worker pool
 │   ├── youtubeDownloader.ts     # YouTube download with yt-dlp
 │   ├── settings.ts              # Settings persistence (JSON)
 │   ├── binaryManager.ts         # Binary status checking (yt-dlp)
 │   ├── fpcalcManager.ts         # fpcalc binary download & fingerprinting
+│   ├── fingerprintWorkerPool.ts # Worker pool for fingerprint processing
 │   ├── metadataCache.ts         # SQLite database for scan tracking
+│   ├── playlistDatabase.ts      # SQLite database for playlist storage
+│   ├── electron-env.d.ts        # Electron environment types
+│   ├── __tests__/               # Electron unit tests
 │   └── ipc/
 │       ├── handlers.ts          # Main IPC registration (imports modules)
 │       └── modules/             # Modular IPC handlers
@@ -148,68 +155,98 @@ Music-Electron-App/
 │           ├── youtubeHandlers.ts   # YouTube download, binary status
 │           ├── systemHandlers.ts    # Window controls, settings, platform
 │           ├── cacheHandlers.ts     # Metadata cache operations
-│           └── fingerprintHandlers.ts # Audio fingerprinting (fpcalc)
+│           ├── fingerprintHandlers.ts # Audio fingerprinting (fpcalc)
+│           ├── playlistHandlers.ts  # Playlist CRUD operations
+│           └── __tests__/           # IPC handler tests
 │
 ├── src/                         # Renderer Process (React)
 │   ├── main.tsx                 # React entry point
-│   ├── App.tsx                  # App shell (routing, providers)
+│   ├── App.tsx                  # App shell with hooks and component integration
+│   ├── App.css                  # Main app styles
 │   ├── index.css                # Global CSS variables/resets
+│   ├── __tests__/               # React component tests
 │   │
 │   ├── types/                   # TypeScript definitions
-│   │   ├── electron.d.ts        # IPC type definitions
+│   │   ├── electron.d.ts        # IPC type definitions (includes playlist types)
+│   │   ├── playlist.ts          # Playlist-specific type definitions
 │   │   └── vite-env.d.ts        # Vite environment types
 │   │
 │   ├── assets/                  # Images, SVGs, fonts
-│   │   └── icons/               # App icons and UI graphics
-│   │
-│   ├── styles/                  # Shared/global styles
-│   │   ├── variables.css        # CSS custom properties
-│   │   ├── animations.css       # Keyframe animations
-│   │   └── components.css       # Shared component styles
 │   │
 │   ├── components/              # UI Components (feature-based)
 │   │   ├── common/              # Reusable UI primitives
-│   │   │   ├── Button/
-│   │   │   └── NotificationToast/
+│   │   │   ├── AudioVisualizer/     # Canvas-based spectrum visualizer
+│   │   │   │   ├── AudioVisualizer.tsx
+│   │   │   │   └── AudioVisualizer.css
+│   │   │   ├── ContextMenu/         # Right-click context menu
+│   │   │   │   ├── ContextMenu.tsx
+│   │   │   │   └── ContextMenu.css
+│   │   │   └── NotificationToast/   # Toast notifications
+│   │   │       ├── NotificationToast.tsx
+│   │   │       └── NotificationToast.css
 │   │   │
 │   │   ├── layout/              # App structure components
-│   │   │   ├── TitleBar/
-│   │   │   ├── Sidebar/
-│   │   │   └── PlaybackBar/
+│   │   │   ├── TitleBar/            # Custom window title bar
+│   │   │   │   ├── TitleBar.tsx
+│   │   │   │   └── TitleBar.css
+│   │   │   ├── Sidebar/             # Library navigation + playlists
+│   │   │   │   ├── Sidebar.tsx
+│   │   │   │   └── Sidebar.css
+│   │   │   └── PlaybackBar/         # Audio controls and progress
+│   │   │       └── PlaybackBar.tsx
 │   │   │
 │   │   ├── library/             # Music library feature
-│   │   │   ├── SongList/
-│   │   │   └── BatchScanProgress/
+│   │   │   ├── SongList/            # Song list with context menu
+│   │   │   │   └── SongList.tsx
+│   │   │   └── BatchScanProgress/   # Batch scan progress UI
+│   │   │       ├── BatchScanProgress.tsx
+│   │   │       └── BatchScanProgress.css
+│   │   │
+│   │   ├── playlists/           # Playlist feature (flat structure)
+│   │   │   ├── PlaylistList.tsx     # Sidebar playlist section
+│   │   │   ├── PlaylistList.css
+│   │   │   ├── CreatePlaylistModal.tsx
+│   │   │   ├── CreatePlaylistModal.css
+│   │   │   └── index.ts             # Re-exports components
 │   │   │
 │   │   ├── settings/            # Settings feature
 │   │   │   └── Settings/
+│   │   │       ├── Settings.tsx
+│   │   │       └── Settings.css
 │   │   │
 │   │   └── download/            # YouTube download feature
 │   │       ├── DownloadButton/
+│   │       │   ├── DownloadButton.tsx
+│   │       │   └── DownloadButton.css
 │   │       └── DownloadNotification/
+│   │           ├── DownloadNotification.tsx
+│   │           └── DownloadNotification.css
 │   │
-│   ├── hooks/                   # Custom React Hooks
-│   │   ├── useAudioPlayer/
-│   │   │   ├── index.ts         # Main hook export
-│   │   │   └── useAudioPlayer.ts
-│   │   ├── useMusicLibrary/
-│   │   └── useSongScanner/
+│   ├── hooks/                   # Custom React Hooks (flat structure)
+│   │   ├── useAudioPlayer.ts    # Audio playback management
+│   │   ├── useMusicLibrary.ts   # Music library state
+│   │   ├── useSongScanner.ts    # Batch scanning logic
+│   │   ├── usePlaylists.ts      # Playlist state management
+│   │   └── __tests__/           # Hook tests
 │   │
 │   ├── services/                # API/IPC communication layer
 │   │   ├── acoustid.ts          # AcoustID API client
 │   │   ├── musicbrainz.ts       # MusicBrainz API client
 │   │   ├── fingerprint.ts       # Fingerprint generation service
-│   │   └── electronBridge.ts    # Wrapper for window.electronAPI
+│   │   └── __tests__/           # Service tests
 │   │
 │   └── utils/                   # Pure utility functions
+│       ├── colorExtractor.ts    # Extract colors from album art
 │       ├── rateLimiter.ts       # API rate limiting
 │       ├── sortMusicFiles.ts    # Sorting utilities
 │       ├── pathResolver.ts      # Convert paths to file:// URLs
-│       └── formatters.ts        # Time, file size formatting
+│       └── __tests__/           # Utility tests
 │
 ├── vite.config.ts               # Vite + Electron build configuration
 ├── electron-builder.json5       # Packaging configuration
 ├── package.json                 # Dependencies and scripts
+├── tsconfig.json                # TypeScript configuration
+├── ARCHITECTURE.md              # This documentation file
 └── index.html                   # Entry HTML file
 ```
 
@@ -408,7 +445,7 @@ Boots the application with this startup flow:
 | File | Purpose |
 |------|---------|
 | **`window.ts`** | Creates frameless BrowserWindow with sizing limits, background color, preload script. Sets `webSecurity: false` for `file://` playback. Handles show/hide/maximize events and forwards window state changes to renderer. |
-| **`preload.ts`** | Runs in isolated context; exposes typed `electronAPI` via `contextBridge`. Maps renderer calls to `ipcRenderer.invoke/send` and registers event listeners with cleanup functions. |
+| **`preload.ts`** | Runs in isolated context; exposes typed `electronAPI` via `contextBridge`. Maps renderer calls to `ipcRenderer.invoke/send` and registers event listeners with cleanup functions. Includes playlist API methods. |
 | **`tray.ts`** | Builds system tray icon and menu (Show/Hide, Play/Pause, Quit). Updates labels based on playback state and window visibility. Forwards tray play/pause clicks to renderer. |
 | **`musicScanner.ts`** | Recursively scans folders for supported audio extensions, reads tags with `music-metadata`, converts album art to base64. Provides single-file metadata read for in-place UI updates. |
 | **`youtubeDownloader.ts`** | Ensures yt-dlp binary exists (platform/arch-specific download if missing). Executes downloads with audio extraction, thumbnail embedding, and metadata. Emits progress events with 10s cooldown between downloads. |
@@ -416,6 +453,7 @@ Boots the application with this startup flow:
 | **`binaryManager.ts`** | Resolves yt-dlp binary path per platform/arch. Checks installation and version, flags corrupted binaries for redownload. Resolves ffmpeg path from asar. |
 | **`fpcalcManager.ts`** | Manages fpcalc (Chromaprint) binary for audio fingerprinting. Auto-downloads platform-specific binary on first use. Runs fingerprinting in subprocess to avoid memory limits. |
 | **`metadataCache.ts`** | SQLite cache keyed by file hash (path + size + mtime) to track scan status and avoid reprocessing unchanged files. |
+| **`playlistDatabase.ts`** | SQLite database for playlist storage. Manages playlist CRUD operations, song ordering, and playlist-song relationships with foreign key constraints. |
 
 ### Window Configuration
 
@@ -648,19 +686,21 @@ The orchestrator that combines all hooks and components.
 │  │  useMusicLibrary() → musicFiles, loading, sortBy, scanFolder  │  │
 │  │  useAudioPlayer() → playSong, togglePlayPause, seek, volume   │  │
 │  │  useSongScanner() → scanBatch, progress, cancelBatchScan      │  │
+│  │  usePlaylists() → playlists, createPlaylist, addSongs, etc.   │  │
 │  └───────────────────────────────────────────────────────────────┘  │
 │                                                                     │
 │  ┌───────────────────────────────────────────────────────────────┐  │
 │  │  Layout                                                       │  │
 │  │  ──────                                                       │  │
 │  │  <TitleBar />                    ← Custom window controls     │  │
-│  │  <Sidebar />                     ← Library filtering          │  │
+│  │  <Sidebar />                     ← Library + Playlists        │  │
 │  │  <DownloadButton />              ← YouTube download trigger   │  │
 │  │  <SongList />                    ← Display music files        │  │
 │  │  <PlaybackBar />                 ← Controls, seek, volume     │  │
 │  │  <Settings />                    ← Settings modal             │  │
 │  │  <DownloadNotification />        ← Active download progress   │  │
 │  │  <NotificationToast />           ← Success/error messages     │  │
+│  │  <CreatePlaylistModal />         ← Create new playlists       │  │
 │  └───────────────────────────────────────────────────────────────┘  │
 └─────────────────────────────────────────────────────────────────────┘
 ```
@@ -670,13 +710,17 @@ The orchestrator that combines all hooks and components.
 | Component | Purpose |
 |-----------|---------|
 | **`TitleBar.tsx`** | Custom draggable title bar for frameless window; listens for window state changes to toggle maximize/restore icon |
-| **`Sidebar.tsx`** | Derives artist/album facets from library, renders filters with active selection |
-| **`SongList.tsx`** | Displays songs with metadata, duration, album art, scan status indicators; handles play selection and per-song scan actions |
-| **`PlaybackBar.tsx`** | Shows current track info/art, playback controls, seek bar, and volume slider |
+| **`Sidebar.tsx`** | Collapsible artist/album/playlist sections with search functionality; shows album art thumbnails; integrates PlaylistList component; filters library with active selection |
+| **`SongList.tsx`** | Displays songs with metadata, duration, album art, scan status indicators; handles play selection and per-song scan actions; includes context menu with "Add to Playlist" options; auto-scrolls to current track |
+| **`PlaybackBar.tsx`** | Shows current track info/art with dynamic glow border, playback controls, seek bar with audio visualizer, and volume slider |
+| **`AudioVisualizer.tsx`** | Canvas-based audio spectrum analyzer with "bars" (mirrored spectrum) and "wave" (liquid waveform) modes; extracts audio data from Howler.js |
 | **`DownloadButton.tsx`** | Accepts YouTube URL, triggers download IPC, disables during active download |
 | **`DownloadNotification.tsx`** | Floating banner for active download progress/title |
 | **`NotificationToast.tsx`** | General-purpose toasts (success/warning/info/error) with auto-dismiss |
-| **`Settings.tsx`** | Modal for folder selection, binary status, platform info, and batch scan |
+| **`Settings.tsx`** | Modal for folder selection, binary status, platform info, batch scan, and visualizer mode toggle |
+| **`ContextMenu.tsx`** | Generic right-click context menu with icons, dividers, and nested items; used for song actions including playlist additions |
+| **`PlaylistList.tsx`** | Sidebar component displaying user playlists with create/delete buttons; shows playlist names and song counts; supports active selection state |
+| **`CreatePlaylistModal.tsx`** | Modal dialog for creating new playlists with name input, optional description, and animated backdrop; glassmorphism design |
 
 ### Custom Hooks
 
@@ -778,6 +822,43 @@ Manages batch scan queue with progress tracking and cancellation.
 └─────────────────────────────────────────────────────────────┘
 ```
 
+#### `usePlaylists.ts` - Playlist Management
+
+Manages playlist state and CRUD operations in the renderer process.
+
+**State:**
+- `playlists` - Array of all user playlists
+- `activePlaylist` - Currently selected playlist with songs loaded
+- `loading` - Loading state for async operations
+
+**Actions:**
+- `createPlaylist(name, description?)` - Create a new playlist
+- `deletePlaylist(playlistId)` - Delete a playlist and all its songs
+- `renamePlaylist(playlistId, newName)` - Rename a playlist
+- `addSongsToPlaylist(playlistId, filePaths[])` - Add songs to a playlist
+- `removeSongFromPlaylist(playlistId, filePath)` - Remove a song from playlist
+- `loadPlaylist(playlistId)` - Load a playlist with its songs
+- `clearActivePlaylist()` - Clear the active playlist selection
+- `refreshPlaylists()` - Reload all playlists from database
+
+**Integration with App.tsx:**
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  App.tsx                                                     │
+│       │                                                      │
+│       ├──► usePlaylists({ musicFiles, onShowNotification }) │
+│       │         │                                            │
+│       │         ├──► Loads playlists on mount               │
+│       │         ├──► Provides CRUD functions to components  │
+│       │         └──► Resolves file paths to MusicFile objs  │
+│       │                                                      │
+│       ├──► <Sidebar playlists={playlists} />                │
+│       ├──► <SongList onAddToPlaylist={addSongsToPlaylist} />│
+│       └──► <CreatePlaylistModal onCreate={createPlaylist} />│
+└─────────────────────────────────────────────────────────────┘
+```
+
 ### Utilities
 
 | Utility | Purpose |
@@ -822,7 +903,8 @@ electron/ipc/
     ├── youtubeHandlers.ts   # YouTube download operations
     ├── systemHandlers.ts    # Window & settings operations
     ├── cacheHandlers.ts     # Metadata cache operations
-    └── fingerprintHandlers.ts # Audio fingerprinting (fpcalc)
+    ├── fingerprintHandlers.ts # Audio fingerprinting (fpcalc)
+    └── playlistHandlers.ts  # Playlist CRUD operations
 ```
 
 ### All IPC Endpoints
@@ -861,10 +943,461 @@ electron/ipc/
 | **fingerprintHandlers** | `generate-fingerprint` | invoke | Generate AcoustID fingerprint using fpcalc |
 | | `fingerprint-check-ready` | invoke | Check if fpcalc is installed |
 | | `fingerprint-ensure-ready` | invoke | Download fpcalc if missing |
+| **playlistHandlers** | `playlist-create` | invoke | Create a new playlist |
+| | `playlist-delete` | invoke | Delete a playlist |
+| | `playlist-rename` | invoke | Rename a playlist |
+| | `playlist-update-description` | invoke | Update playlist description |
+| | `playlist-update-cover` | invoke | Update playlist cover art |
+| | `playlist-get-all` | invoke | Get all playlists |
+| | `playlist-get-by-id` | invoke | Get a single playlist by ID |
+| | `playlist-get-songs` | invoke | Get song paths in a playlist |
+| | `playlist-add-songs` | invoke | Add songs to a playlist |
+| | `playlist-remove-song` | invoke | Remove a song from a playlist |
+| | `playlist-reorder-songs` | invoke | Reorder songs in a playlist |
+| | `playlist-is-song-in` | invoke | Check if a song is in a playlist |
+| | `playlist-get-containing-song` | invoke | Get all playlists containing a song |
+| | `playlist-cleanup-missing` | invoke | Remove non-existent files from playlists |
 
 ### Renderer Type Safety
 
 `src/electron.d.ts` provides TypeScript definitions for `window.electronAPI`. It is **compile-time only** and doesn't enforce runtime checks. Keep it in sync with `preload.ts` to avoid runtime errors.
+
+---
+
+## Playlist System
+
+The playlist system enables users to create, manage, and play custom collections of songs. It uses SQLite for persistent storage and follows the same IPC pattern as other features.
+
+### Architecture Overview
+
+```
+┌───────────────────────────────────────────────────────────────────────────────┐
+│                         PLAYLIST SYSTEM ARCHITECTURE                           │
+├───────────────────────────────────────────────────────────────────────────────┤
+│                                                                                │
+│  ┌──────────────────────────────────────────────────────────────────────────┐  │
+│  │                           RENDERER PROCESS                                │  │
+│  │                                                                           │  │
+│  │   App.tsx                                                                 │  │
+│  │      │                                                                    │  │
+│  │      ├──► usePlaylists()  ←──────────────────────────────────────────┐   │  │
+│  │      │        │                                                       │   │  │
+│  │      │        ├──► State: playlists[], activePlaylist                │   │  │
+│  │      │        ├──► Actions: create, delete, addSongs, removeSong     │   │  │
+│  │      │        └──► Resolves filePaths → MusicFile objects            │   │  │
+│  │      │                                                                │   │  │
+│  │      ├──► Sidebar                                                     │   │  │
+│  │      │        └──► PlaylistList                                       │   │  │
+│  │      │                ├──► Shows all playlists with song counts      │   │  │
+│  │      │                ├──► Create button → CreatePlaylistModal       │   │  │
+│  │      │                └──► Delete button (with confirmation)         │   │  │
+│  │      │                                                                │   │  │
+│  │      ├──► SongList                                                    │   │  │
+│  │      │        └──► ContextMenu                                        │   │  │
+│  │      │                ├──► "Add to [Playlist Name]" (x5)              │   │  │
+│  │      │                └──► "Create playlist with song"               │   │  │
+│  │      │                                                                │   │  │
+│  │      └──► CreatePlaylistModal                                         │   │  │
+│  │               ├──► Name input (required)                             │   │  │
+│  │               ├──► Description textarea (optional)                   │   │  │
+│  │               └──► onCreate → createPlaylist() + addSongs()          │   │  │
+│  └──────────────────────────────────────────────────────────────────────────┘  │
+│                                       │                                        │
+│                                       │ IPC (invoke)                           │
+│                                       ▼                                        │
+│  ┌──────────────────────────────────────────────────────────────────────────┐  │
+│  │                            MAIN PROCESS                                   │  │
+│  │                                                                           │  │
+│  │   preload.ts                                                              │  │
+│  │      └──► Exposes playlistCreate, playlistDelete, playlistAddSongs, etc. │  │
+│  │                                                                           │  │
+│  │   ipc/modules/playlistHandlers.ts                                         │  │
+│  │      └──► Registers IPC handlers for all playlist operations             │  │
+│  │                  │                                                        │  │
+│  │                  ▼                                                        │  │
+│  │   playlistDatabase.ts                                                     │  │
+│  │      ├──► Initializes SQLite database on first use                       │  │
+│  │      ├──► Creates tables: playlists, playlist_songs                      │  │
+│  │      ├──► CRUD operations with transactions                              │  │
+│  │      └──► Position-based ordering with gap reorder                       │  │
+│  └──────────────────────────────────────────────────────────────────────────┘  │
+│                                       │                                        │
+│                                       ▼                                        │
+│  ┌──────────────────────────────────────────────────────────────────────────┐  │
+│  │                         SQLite DATABASE                                   │  │
+│  │                                                                           │  │
+│  │   Location: %APPDATA%/music-sync-app/playlists.db                        │  │
+│  │                                                                           │  │
+│  │   ┌─────────────────────────────────────────────────────────────────┐    │  │
+│  │   │                                                                  │    │  │
+│  │   │   playlists                      playlist_songs                  │    │  │
+│  │   │   ┌─────────────────┐            ┌──────────────────────────┐   │    │  │
+│  │   │   │ id (PK)         │            │ playlistId (PK, FK)      │   │    │  │
+│  │   │   │ name            │───────────►│ filePath (PK)            │   │    │  │
+│  │   │   │ description     │   1:N      │ position                 │   │    │  │
+│  │   │   │ coverArtPath    │            │ addedAt                  │   │    │  │
+│  │   │   │ createdAt       │            └──────────────────────────┘   │    │  │
+│  │   │   │ updatedAt       │                                            │    │  │
+│  │   │   └─────────────────┘                                            │    │  │
+│  │   │                                                                  │    │  │
+│  │   └─────────────────────────────────────────────────────────────────┘    │  │
+│  └──────────────────────────────────────────────────────────────────────────┘  │
+└───────────────────────────────────────────────────────────────────────────────┘
+```
+
+### Database Schema
+
+**Database Location:**
+- Windows: `%APPDATA%/music-sync-app/playlists.db`
+- macOS: `~/Library/Application Support/music-sync-app/playlists.db`
+- Linux: `~/.config/music-sync-app/playlists.db`
+
+**Table: `playlists`**
+
+```sql
+CREATE TABLE playlists (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,  -- Unique playlist identifier
+  name TEXT NOT NULL,                     -- Playlist display name
+  description TEXT,                       -- Optional description
+  coverArtPath TEXT,                      -- Optional custom cover art path
+  createdAt INTEGER NOT NULL,             -- Unix timestamp of creation
+  updatedAt INTEGER NOT NULL              -- Unix timestamp of last modification
+);
+```
+
+**Table: `playlist_songs`**
+
+```sql
+CREATE TABLE playlist_songs (
+  playlistId INTEGER NOT NULL,            -- Reference to playlists.id
+  filePath TEXT NOT NULL,                 -- Full path to the music file
+  position INTEGER NOT NULL,              -- 0-based order in playlist
+  addedAt INTEGER NOT NULL,               -- Unix timestamp when added
+  
+  PRIMARY KEY (playlistId, filePath),     -- Composite key (no duplicates)
+  FOREIGN KEY (playlistId) REFERENCES playlists(id) ON DELETE CASCADE
+);
+
+-- Index for efficient playlist song retrieval
+CREATE INDEX idx_playlist_songs_playlist ON playlist_songs(playlistId);
+CREATE INDEX idx_playlist_songs_position ON playlist_songs(playlistId, position);
+```
+
+**Entity Relationship Diagram:**
+
+```
+┌──────────────────────────┐         ┌──────────────────────────────────┐
+│        playlists         │         │         playlist_songs           │
+├──────────────────────────┤         ├──────────────────────────────────┤
+│ • id           INTEGER   │ ◄───┐   │ • playlistId   INTEGER (FK)      │
+│ • name         TEXT      │     │   │ • filePath     TEXT              │
+│ • description  TEXT      │     └───│   (PK: playlistId + filePath)    │
+│ • coverArtPath TEXT      │   1:N   │ • position     INTEGER           │
+│ • createdAt    INTEGER   │         │ • addedAt      INTEGER           │
+│ • updatedAt    INTEGER   │         └──────────────────────────────────┘
+└──────────────────────────┘                            │
+                                                        │
+                                                        ▼
+                                           ┌────────────────────────────┐
+                                           │     Music File System      │
+                                           │                            │
+                                           │  filePath points to actual │
+                                           │  .mp3, .flac, .m4a files  │
+                                           │  on the local filesystem   │
+                                           └────────────────────────────┘
+```
+
+### Data Flow: Creating a Playlist
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                          CREATE PLAYLIST FLOW                                │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│   User Action                                                                │
+│   ───────────                                                                │
+│   Click "+" button in Playlist section                                       │
+│       │                                                                      │
+│       ▼                                                                      │
+│   CreatePlaylistModal opens                                                  │
+│       │                                                                      │
+│       ├──► User enters: name="My Favorites"                                 │
+│       ├──► User enters: description="Songs I love" (optional)              │
+│       └──► User clicks "Create Playlist"                                    │
+│                │                                                             │
+│                ▼                                                             │
+│   App.tsx: onCreate handler                                                  │
+│       │                                                                      │
+│       ├──► await createPlaylist("My Favorites", "Songs I love")             │
+│       │         │                                                            │
+│       │         ▼                                                            │
+│       │   usePlaylists.createPlaylist()                                      │
+│       │         │                                                            │
+│       │         ▼                                                            │
+│       │   window.electronAPI.playlistCreate(name, description)              │
+│       │         │                                                            │
+│       │         │  IPC invoke: 'playlist-create'                            │
+│       │         ▼                                                            │
+│       │   playlistHandlers.ts → playlistDatabase.createPlaylist()           │
+│       │         │                                                            │
+│       │         ▼                                                            │
+│       │   SQLite INSERT INTO playlists (name, description, ...)             │
+│       │         │                                                            │
+│       │         ▼                                                            │
+│       │   Returns { success: true, playlist: { id: 1, name: "..." } }       │
+│       │                                                                      │
+│       ├──► If pendingSongs.length > 0:                                      │
+│       │         await addSongsToPlaylist(playlist.id, pendingSongs)         │
+│       │                                                                      │
+│       └──► setPlaylists([...playlists, newPlaylist])                        │
+│                │                                                             │
+│                ▼                                                             │
+│   UI updates: PlaylistList re-renders with new playlist                      │
+│   Toast shows: "Playlist 'My Favorites' created"                            │
+│                                                                              │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+### Data Flow: Adding Song to Playlist
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                        ADD SONG TO PLAYLIST FLOW                             │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│   User Action                                                                │
+│   ───────────                                                                │
+│   Right-click on song → Select "Add to 'My Favorites'"                      │
+│       │                                                                      │
+│       ▼                                                                      │
+│   ContextMenu onClick handler                                                │
+│       │                                                                      │
+│       ▼                                                                      │
+│   onAddToPlaylist(playlistId: 1, filePaths: ["C:/music/song.mp3"])         │
+│       │                                                                      │
+│       ▼                                                                      │
+│   usePlaylists.addSongsToPlaylist(1, ["C:/music/song.mp3"])                 │
+│       │                                                                      │
+│       ├──► window.electronAPI.playlistAddSongs(1, filePaths)                │
+│       │         │                                                            │
+│       │         │  IPC invoke: 'playlist-add-songs'                         │
+│       │         ▼                                                            │
+│       │   playlistHandlers.ts → playlistDatabase.addSongsToPlaylist()       │
+│       │         │                                                            │
+│       │         ▼                                                            │
+│       │   ┌─────────────────────────────────────────────────────────────┐   │
+│       │   │  SQLite Transaction:                                         │   │
+│       │   │                                                              │   │
+│       │   │  1. SELECT MAX(position) FROM playlist_songs                 │   │
+│       │   │     WHERE playlistId = 1                                     │   │
+│       │   │     → maxPos = 3 (existing songs: 0, 1, 2, 3)               │   │
+│       │   │                                                              │   │
+│       │   │  2. INSERT OR IGNORE INTO playlist_songs                     │   │
+│       │   │     (playlistId, filePath, position, addedAt)               │   │
+│       │   │     VALUES (1, 'C:/music/song.mp3', 4, 1702500000)          │   │
+│       │   │                                                              │   │
+│       │   │  3. UPDATE playlists SET updatedAt = NOW()                  │   │
+│       │   │     WHERE id = 1                                             │   │
+│       │   └─────────────────────────────────────────────────────────────┘   │
+│       │                                                                      │
+│       ├──► Update local state: playlist.songCount++                         │
+│       │                                                                      │
+│       └──► If activePlaylist.id === playlistId: reload playlist             │
+│                                                                              │
+│   Toast shows: "Added 1 song to 'My Favorites'"                             │
+│                                                                              │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+### Data Flow: Viewing Playlist Songs
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                          VIEW PLAYLIST FLOW                                  │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│   User Action                                                                │
+│   ───────────                                                                │
+│   Click on "My Favorites" in sidebar                                        │
+│       │                                                                      │
+│       ▼                                                                      │
+│   Sidebar.handlePlaylistClick(playlistId: 1)                                │
+│       │                                                                      │
+│       ├──► setSelectedView('playlist:1')                                    │
+│       │                                                                      │
+│       └──► loadPlaylist(1)                                                  │
+│                │                                                             │
+│                ▼                                                             │
+│   usePlaylists.loadPlaylist(1)                                              │
+│       │                                                                      │
+│       ├──► playlistGetById(1) → Playlist metadata                           │
+│       │                                                                      │
+│       ├──► playlistGetSongs(1) → string[] of filePaths                      │
+│       │         │                                                            │
+│       │         ▼                                                            │
+│       │   ["C:/music/song1.mp3", "C:/music/song2.flac", ...]               │
+│       │                                                                      │
+│       └──► Resolve filePaths to MusicFile objects:                          │
+│                │                                                             │
+│                ▼                                                             │
+│           filePaths.map(path => musicFiles.find(f => f.path === path))      │
+│                │                                                             │
+│                ▼                                                             │
+│           setActivePlaylist({                                                │
+│             ...playlist,                                                     │
+│             songs: [MusicFile, MusicFile, ...]                              │
+│           })                                                                 │
+│                │                                                             │
+│                ▼                                                             │
+│   filteredMusicFiles in App.tsx:                                            │
+│       selectedView.startsWith('playlist:') && activePlaylist                │
+│       → returns activePlaylist.songs                                        │
+│                │                                                             │
+│                ▼                                                             │
+│   SongList renders with playlist songs (ordered by position)                │
+│                                                                              │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+### Playlist TypeScript Types
+
+```typescript
+// src/types/electron.d.ts
+
+interface Playlist {
+  id: number
+  name: string
+  description: string | null
+  coverArtPath: string | null
+  songCount: number
+  totalDuration: number
+  createdAt: number
+  updatedAt: number
+}
+
+interface PlaylistWithSongs extends Playlist {
+  songs: MusicFile[]  // Resolved MusicFile objects
+}
+
+// src/types/playlist.ts
+
+interface PlaylistSong {
+  playlistId: number
+  filePath: string
+  position: number
+  addedAt: number
+}
+
+interface PlaylistCreateResponse {
+  success: boolean
+  playlist?: Playlist
+  error?: string
+}
+```
+
+### UI Component Structure
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                          PLAYLIST UI COMPONENTS                              │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│   src/components/playlists/          # Flat structure (no nested folders)   │
+│   ├── index.ts                       # Re-exports: PlaylistList,            │
+│   │                                  #             CreatePlaylistModal      │
+│   ├── PlaylistList.tsx               # Sidebar playlist section             │
+│   ├── PlaylistList.css               # Component styles                     │
+│   ├── CreatePlaylistModal.tsx        # Modal for creating playlists         │
+│   └── CreatePlaylistModal.css        # Glassmorphism styling                │
+│                                                                              │
+│   ┌─────────────────────────────────────────────────────────────────────┐   │
+│   │  PlaylistList Component                                              │   │
+│   ├─────────────────────────────────────────────────────────────────────┤   │
+│   │  Props:                                                              │   │
+│   │  • playlists: Playlist[]                                            │   │
+│   │  • selectedPlaylistId: number | null                                │   │
+│   │  • onPlaylistClick: (id) => void                                    │   │
+│   │  • onCreateNew: () => void                                          │   │
+│   │  • onDeletePlaylist?: (id) => void                                  │   │
+│   ├─────────────────────────────────────────────────────────────────────┤   │
+│   │  Renders:                                                            │   │
+│   │  • Header: "Playlists" + "+" create button                          │   │
+│   │  • List of playlist items with:                                     │   │
+│   │    - Icon (🎵 or cover art thumbnail)                               │   │
+│   │    - Playlist name                                                   │   │
+│   │    - Song count ("5 songs")                                         │   │
+│   │    - Delete button (on hover)                                       │   │
+│   │  • Empty state: "No playlists yet"                                  │   │
+│   └─────────────────────────────────────────────────────────────────────┘   │
+│                                                                              │
+│   ┌─────────────────────────────────────────────────────────────────────┐   │
+│   │  CreatePlaylistModal Component                                       │   │
+│   ├─────────────────────────────────────────────────────────────────────┤   │
+│   │  Props:                                                              │   │
+│   │  • isOpen: boolean                                                   │   │
+│   │  • onClose: () => void                                               │   │
+│   │  • onCreate: (name, description?) => Promise<any>                   │   │
+│   ├─────────────────────────────────────────────────────────────────────┤   │
+│   │  Features:                                                           │   │
+│   │  • Animated overlay with blur backdrop                               │   │
+│   │  • Auto-focus on name input when opened                              │   │
+│   │  • ESC to close, Enter to submit                                    │   │
+│   │  • Disabled submit when name is empty                               │   │
+│   │  • Loading state during creation                                     │   │
+│   └─────────────────────────────────────────────────────────────────────┘   │
+│                                                                              │
+│   Import Usage:                                                              │
+│   ─────────────                                                              │
+│   import { PlaylistList, CreatePlaylistModal } from './components/playlists'│
+│                                                                              │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+### Position-Based Ordering
+
+Songs in a playlist maintain order via the `position` column:
+
+```
+┌──────────────────────────────────────────────────────────────────────────────┐
+│  Playlist: "My Favorites" (id: 1)                                            │
+├──────────────────────────────────────────────────────────────────────────────┤
+│                                                                               │
+│  playlist_songs table:                                                        │
+│  ┌─────────────────────────────────────────────────────────────────────────┐ │
+│  │ playlistId │ filePath                        │ position │ addedAt       │ │
+│  ├────────────┼─────────────────────────────────┼──────────┼───────────────┤ │
+│  │     1      │ C:/music/song_a.mp3             │    0     │ 1702500000    │ │
+│  │     1      │ C:/music/song_b.flac            │    1     │ 1702500001    │ │
+│  │     1      │ C:/music/song_c.m4a             │    2     │ 1702500002    │ │
+│  └─────────────────────────────────────────────────────────────────────────┘ │
+│                                                                               │
+│  Operations:                                                                  │
+│  ───────────────                                                              │
+│                                                                               │
+│  ADD SONG:                                                                    │
+│  • position = MAX(position) + 1  →  New song at position 3                   │
+│                                                                               │
+│  REMOVE SONG (position 1):                                                    │
+│  • DELETE WHERE position = 1                                                  │
+│  • RENUMBER remaining: 0, 2 → 0, 1 (close the gap)                          │
+│                                                                               │
+│  REORDER (drag song from position 0 to position 2):                          │
+│  • Update all positions in a transaction                                     │
+│  • API: playlistReorderSongs(id, [{filePath, newPosition}, ...])            │
+│                                                                               │
+└──────────────────────────────────────────────────────────────────────────────┘
+```
+
+### Error Handling & Edge Cases
+
+| Scenario | Handling |
+|----------|----------|
+| **Duplicate song** | `INSERT OR IGNORE` - silently skips if song already in playlist |
+| **Deleted music file** | `playlistCleanupMissing()` removes entries for files that no longer exist on disk |
+| **Playlist deletion** | `ON DELETE CASCADE` automatically removes all `playlist_songs` entries |
+| **Empty playlist** | Allowed - displays properly in UI with "0 songs" |
+| **Long playlist name** | Limited to 100 characters via frontend validation |
+| **Missing music files** | Songs are stored by `filePath` and resolved at load time; missing files are filtered out |
 
 ---
 
@@ -877,9 +1410,10 @@ electron/ipc/
 
 ### Renderer Boot
 
-1. `App.tsx` mounts → hooks initialize (`useMusicLibrary`, `useAudioPlayer`, `useSongScanner`)
+1. `App.tsx` mounts → hooks initialize (`useMusicLibrary`, `useAudioPlayer`, `useSongScanner`, `usePlaylists`)
 2. IPC listeners attach (download progress/title, binary progress, window-state, tray play/pause)
-3. UI renders title bar, sidebar, list, playback bar, settings, notifications
+3. `usePlaylists` loads all playlists from database
+4. UI renders title bar, sidebar (with playlists), list, playback bar, settings, notifications
 
 ### Library Scan (Initial Folder Scan)
 
@@ -2419,6 +2953,123 @@ useEffect(() => {
 | Press `←` (prev) | List smoothly scrolls to center new song |
 | Click next/prev button | Same scroll behavior |
 | Song ends, auto-advances | List follows to next song |
+
+---
+
+## Visual Enhancements
+
+### Dynamic Album Art Glow
+
+The playback bar features an animated glow effect around the album art that dynamically adapts to the currently playing album's colors.
+
+**Implementation:**
+- **Color Extraction** (`src/utils/colorExtractor.ts`): Samples album art using canvas pixel analysis to extract dominant colors (primary, secondary, accent, background)
+- **Conic Gradient Border**: Uses CSS `conic-gradient` with extracted colors for a spinning light effect
+- **Ambient Animation** (`@keyframes ambient-glow`): 16-second animation combining:
+  - Slow 360° rotation
+  - Subtle scale breathing (0.98 → 1.02)
+  - Pulsing blur intensity
+  - Varying opacity
+- **Interactivity**: Animation pauses on hover; only active when music is playing
+
+```css
+.glow-border {
+  background: conic-gradient(from 0deg, primary, secondary, accent, primary);
+  animation: ambient-glow 16s ease-in-out infinite;
+  filter: blur(8px);
+}
+```
+
+### Audio Visualizer
+
+A canvas-based real-time audio spectrum analyzer that sits behind the seek bar.
+
+**Location:** `src/components/common/AudioVisualizer/`
+
+**Integration with HTML5 Audio:**
+Since Howler.js uses `html5: true` for file:// playback in Electron, the visualizer creates a `MediaElementAudioSourceNode` from Howler's internal `<audio>` element:
+
+```typescript
+// Access internal audio element
+const audioElement = howl._sounds[0]._node as HTMLAudioElement
+
+// Create Web Audio API source
+const source = Howler.ctx.createMediaElementSource(audioElement)
+source.connect(analyser)
+analyser.connect(Howler.ctx.destination)
+```
+
+**Visualization Modes:**
+
+| Mode | Description |
+|------|-------------|
+| `bars` | Mirrored spectrum analyzer - frequency bars spread from center outward with glow effects |
+| `wave` | Liquid waveform - filled area under the waveform curve with gradient and stroke overlay |
+| `off` | Disabled (returns null) |
+
+**Technical Details:**
+- Uses `requestAnimationFrame` for smooth 60fps animation
+- `AnalyserNode.fftSize = 256` → 128 frequency bins
+- Canvas scales with `devicePixelRatio` for crisp rendering on HiDPI displays
+- Colors derived from album art via `colorExtractor`
+- Mode toggleable from Settings panel
+
+**Memory Management:**
+- Global singleton `AnalyserNode` shared across song changes
+- Source node stored on audio element to prevent re-creation
+- Animation frame cancelled on unmount
+
+### Enhanced Sidebar
+
+The sidebar has been upgraded with collapsible sections, search functionality, and visual improvements.
+
+**Features:**
+
+| Feature | Description |
+|---------|-------------|
+| **Collapsible Sections** | Click Artists/Albums header to collapse/expand; rotating arrow indicator |
+| **Search** | Inline search box appears when section has >5 items; real-time filtering |
+| **Album Art Thumbnails** | 24×24px album covers displayed instead of emoji icons |
+| **Flexible Layout** | Uses CSS flexbox with `flex: 1` for expanded sections; proper overflow scrolling |
+
+**CSS Architecture:**
+```css
+.sidebar-section.expanded {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.sidebar-section.collapsed {
+  flex: 0 0 auto;
+}
+
+.sidebar-list {
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;
+}
+```
+
+**State Management:**
+- `artistsCollapsed` / `albumsCollapsed` - Boolean state for section visibility
+- `artistSearch` / `albumSearch` - Search query strings
+- Filtered lists computed with `useMemo` for performance
+
+### Modern Seek Bar & Volume Slider
+
+Redesigned sliders with gradient fills, glow effects, and smooth animations.
+
+**Seek Bar Features:**
+- Gradient track: `#667eea → #764ba2 → #f093fb`
+- Circular handle with glow on hover/drag
+- Handle appears on container hover
+- Thinner 4px profile
+
+**Volume Slider Features:**
+- Matching gradient design
+- Compact vertical layout
+- Handle scales up on hover
 
 ---
 

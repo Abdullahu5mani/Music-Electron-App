@@ -3,6 +3,7 @@ import { OverlayScrollbarsComponent } from 'overlayscrollbars-react'
 import { useMusicLibrary } from './hooks/useMusicLibrary'
 import { useAudioPlayer } from './hooks/useAudioPlayer'
 import { useSongScanner } from './hooks/useSongScanner'
+import { usePlaylists } from './hooks/usePlaylists'
 // Layout components
 import { TitleBar } from './components/layout/TitleBar/TitleBar'
 import { Sidebar } from './components/layout/Sidebar/Sidebar'
@@ -17,6 +18,8 @@ import { DownloadButton } from './components/download/DownloadButton/DownloadBut
 import { DownloadNotification } from './components/download/DownloadNotification/DownloadNotification'
 // Common components
 import { NotificationToast } from './components/common/NotificationToast/NotificationToast'
+// Playlist components
+import { CreatePlaylistModal } from './components/playlists'
 // Types
 import type { ScanStatusType } from './types/electron.d'
 import type { VisualizerMode } from './components/common/AudioVisualizer/AudioVisualizer'
@@ -51,7 +54,41 @@ function App() {
     onStatusUpdate: handleStatusUpdate
   })
 
-  // Filter music files based on selected view
+  // Initialize the playlists hook
+  const {
+    playlists,
+    activePlaylist,
+    createPlaylist,
+    deletePlaylist,
+    addSongsToPlaylist,
+    loadPlaylist,
+    clearActivePlaylist
+  } = usePlaylists({
+    onShowNotification: showToastNotification,
+    musicFiles: sortedMusicFiles
+  })
+
+  // Playlist modal state
+  const [showCreatePlaylistModal, setShowCreatePlaylistModal] = useState(false)
+  const [pendingSongsForPlaylist, setPendingSongsForPlaylist] = useState<string[]>([])
+  const [selectedPlaylistId, setSelectedPlaylistId] = useState<number | null>(null)
+
+  // Playback context - stores what's currently being played (separate from view)
+  // This allows viewing "All Songs" while still playing from a playlist
+  const [playbackContext, setPlaybackContext] = useState<{
+    type: 'all' | 'playlist' | 'artist' | 'album'
+    name: string
+    songs: typeof sortedMusicFiles
+  }>({ type: 'all', name: 'All Songs', songs: sortedMusicFiles })
+
+  // Update playback context when sortedMusicFiles changes (for "All Songs" context)
+  useEffect(() => {
+    if (playbackContext.type === 'all') {
+      setPlaybackContext(prev => ({ ...prev, songs: sortedMusicFiles }))
+    }
+  }, [sortedMusicFiles])
+
+  // Filter music files based on selected view (for display only)
   const filteredMusicFiles = useMemo(() => {
     let base = sortedMusicFiles
 
@@ -61,6 +98,9 @@ function App() {
     } else if (selectedView.startsWith('album:')) {
       const album = selectedView.replace('album:', '')
       base = base.filter(file => file.metadata?.album === album)
+    } else if (selectedView.startsWith('playlist:') && activePlaylist) {
+      // Show songs from the active playlist
+      base = activePlaylist.songs
     }
 
     const query = searchTerm.trim().toLowerCase()
@@ -72,12 +112,13 @@ function App() {
       const album = (file.metadata?.album || '').toLowerCase()
       return title.includes(query) || artist.includes(query) || album.includes(query)
     })
-  }, [sortedMusicFiles, selectedView, searchTerm])
+  }, [sortedMusicFiles, selectedView, searchTerm, activePlaylist])
 
-  // Use full library for audio player (not filtered) so playback continues when switching views
+  // Use playback context for audio player (NOT the view's filteredMusicFiles)
+  // This ensures playback stays within the context where it started
   const {
     playingIndex,
-    playSong,
+    playSong: playSongFromContext,
     togglePlayPause,
     playNext,
     playPrevious,
@@ -92,7 +133,42 @@ function App() {
     volume,
     setVolume,
     currentSound,
-  } = useAudioPlayer(sortedMusicFiles)
+  } = useAudioPlayer(playbackContext.songs)
+
+  // Wrapper to play song that also sets the playback context
+  const playSong = useCallback((file: typeof sortedMusicFiles[0], index: number) => {
+    // Determine the context based on current view
+    if (selectedView.startsWith('playlist:') && activePlaylist) {
+      setPlaybackContext({
+        type: 'playlist',
+        name: activePlaylist.name,
+        songs: activePlaylist.songs
+      })
+    } else if (selectedView.startsWith('artist:')) {
+      const artist = selectedView.replace('artist:', '')
+      setPlaybackContext({
+        type: 'artist',
+        name: artist,
+        songs: filteredMusicFiles
+      })
+    } else if (selectedView.startsWith('album:')) {
+      const album = selectedView.replace('album:', '')
+      setPlaybackContext({
+        type: 'album',
+        name: album,
+        songs: filteredMusicFiles
+      })
+    } else {
+      setPlaybackContext({
+        type: 'all',
+        name: 'All Songs',
+        songs: sortedMusicFiles
+      })
+    }
+
+    // Play the song
+    playSongFromContext(file, index)
+  }, [selectedView, activePlaylist, filteredMusicFiles, sortedMusicFiles, playSongFromContext])
   const [isDownloading, setIsDownloading] = useState(false)
   const [downloadProgress, setDownloadProgress] = useState(0)
   const [binaryDownloadStatus, setBinaryDownloadStatus] = useState<string>('')
@@ -330,8 +406,26 @@ function App() {
         <div className="main-content">
           <Sidebar
             selectedView={selectedView}
-            onViewChange={setSelectedView}
+            onViewChange={(view) => {
+              setSelectedView(view)
+              // Clear active playlist when switching away from playlist view
+              if (!view.startsWith('playlist:')) {
+                clearActivePlaylist()
+                setSelectedPlaylistId(null)
+              }
+            }}
             musicFiles={sortedMusicFiles}
+            playlists={playlists}
+            selectedPlaylistId={selectedPlaylistId}
+            onPlaylistClick={(playlistId) => {
+              setSelectedPlaylistId(playlistId)
+              loadPlaylist(playlistId)
+            }}
+            onCreatePlaylist={() => {
+              setPendingSongsForPlaylist([])
+              setShowCreatePlaylistModal(true)
+            }}
+            onDeletePlaylist={deletePlaylist}
           />
           <div className="music-list-container">
             <OverlayScrollbarsComponent
@@ -358,6 +452,14 @@ function App() {
                 onSortChange={setSortBy}
                 onUpdateSingleFile={updateSingleFile}
                 onShowNotification={showToastNotification}
+                isPlaying={isPlaying}
+                onPlayPause={togglePlayPause}
+                playlists={playlists}
+                onAddToPlaylist={addSongsToPlaylist}
+                onCreatePlaylistWithSongs={(filePaths) => {
+                  setPendingSongsForPlaylist(filePaths)
+                  setShowCreatePlaylistModal(true)
+                }}
               />
             </OverlayScrollbarsComponent>
           </div>
@@ -365,7 +467,7 @@ function App() {
       </div>
 
       <PlaybackBar
-        currentSong={playingIndex !== null && sortedMusicFiles[playingIndex] ? sortedMusicFiles[playingIndex] : null}
+        currentSong={playingIndex !== null && playbackContext.songs[playingIndex] ? playbackContext.songs[playingIndex] : null}
         isPlaying={isPlaying}
         onPlayPause={togglePlayPause}
         onNext={playNext}
@@ -381,6 +483,7 @@ function App() {
         onVolumeChange={setVolume}
         currentSound={currentSound}
         visualizerMode={visualizerMode}
+        playbackContextName={playbackContext.name}
       />
 
       <DownloadNotification
@@ -415,6 +518,21 @@ function App() {
         currentSongName={batchProgress.currentSongName}
         apiPhase={batchProgress.apiPhase}
         onCancel={cancelBatchScan}
+      />
+
+      <CreatePlaylistModal
+        isOpen={showCreatePlaylistModal}
+        onClose={() => {
+          setShowCreatePlaylistModal(false)
+          setPendingSongsForPlaylist([])
+        }}
+        onCreate={async (name, description) => {
+          const playlist = await createPlaylist(name, description)
+          if (playlist && pendingSongsForPlaylist.length > 0) {
+            await addSongsToPlaylist(playlist.id, pendingSongsForPlaylist)
+          }
+          return playlist
+        }}
       />
     </div>
   )

@@ -646,6 +646,15 @@
   text-overflow: ellipsis;
 }
 
+.playback-context {
+  font-size: 0.75rem;
+  color: #667eea;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-top: 2px;
+}
+
 .seek-bar-container {
   position: relative;
   display: flex;

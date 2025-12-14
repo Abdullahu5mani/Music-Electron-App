@@ -1,4 +1,6 @@
 import { useState, useMemo } from 'react'
+import { PlaylistList } from '../../playlists'
+import type { Playlist } from '../../../types/electron.d'
 import './Sidebar.css'
 
 interface MusicFileData {
@@ -13,12 +15,28 @@ interface SidebarProps {
   selectedView: string
   onViewChange: (view: string) => void
   musicFiles: MusicFileData[]
+  // Playlist props
+  playlists?: Playlist[]
+  selectedPlaylistId?: number | null
+  onPlaylistClick?: (playlistId: number) => void
+  onCreatePlaylist?: () => void
+  onDeletePlaylist?: (playlistId: number) => void
 }
 
-export function Sidebar({ selectedView, onViewChange, musicFiles }: SidebarProps) {
+export function Sidebar({
+  selectedView,
+  onViewChange,
+  musicFiles,
+  playlists = [],
+  selectedPlaylistId = null,
+  onPlaylistClick,
+  onCreatePlaylist,
+  onDeletePlaylist
+}: SidebarProps) {
   // Collapsible section states
   const [artistsCollapsed, setArtistsCollapsed] = useState(false)
   const [albumsCollapsed, setAlbumsCollapsed] = useState(false)
+  const [playlistsCollapsed, setPlaylistsCollapsed] = useState(false)
 
   // Search states
   const [artistSearch, setArtistSearch] = useState('')
@@ -66,18 +84,45 @@ export function Sidebar({ selectedView, onViewChange, musicFiles }: SidebarProps
     return albumsWithArt.filter(album => album.name.toLowerCase().includes(query))
   }, [albumsWithArt, albumSearch])
 
+  // Handle playlist click - clears current view and selects playlist
+  const handlePlaylistClick = (playlistId: number) => {
+    onViewChange(`playlist:${playlistId}`)
+    onPlaylistClick?.(playlistId)
+  }
+
   return (
     <div className="sidebar">
-      {/* Playlists section - for future playlist implementation */}
-      <div className="sidebar-section playlists-section">
-        <h3 className="sidebar-title">Playlists</h3>
-        <button
-          className={`sidebar-item ${selectedView === 'all' ? 'active' : ''}`}
-          onClick={() => onViewChange('all')}
+      {/* Unified Playlists section - includes All Songs + user playlists */}
+      <div className={`sidebar-section ${playlistsCollapsed ? 'collapsed' : 'expanded'}`}>
+        <div
+          className="sidebar-title collapsible"
+          onClick={() => setPlaylistsCollapsed(!playlistsCollapsed)}
         >
-          <span>🎵</span>
-          <span>All Songs</span>
-        </button>
+          <span className={`collapse-icon ${playlistsCollapsed ? 'collapsed' : ''}`}>▼</span>
+          <span>Playlists</span>
+        </div>
+
+        {!playlistsCollapsed && (
+          <div className="sidebar-list">
+            {/* All Songs - always at the top */}
+            <button
+              className={`sidebar-item ${selectedView === 'all' ? 'active' : ''}`}
+              onClick={() => onViewChange('all')}
+            >
+              <span className="playlist-icon-emoji">🎵</span>
+              <span>All Songs</span>
+            </button>
+
+            {/* User playlists */}
+            <PlaylistList
+              playlists={playlists}
+              selectedPlaylistId={selectedPlaylistId}
+              onPlaylistClick={handlePlaylistClick}
+              onCreateNew={onCreatePlaylist || (() => { })}
+              onDeletePlaylist={onDeletePlaylist}
+            />
+          </div>
+        )}
       </div>
 
       {/* Artists section */}
@@ -174,3 +219,4 @@ export function Sidebar({ selectedView, onViewChange, musicFiles }: SidebarProps
     </div>
   )
 }
+

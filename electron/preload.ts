@@ -127,6 +127,21 @@ export interface ElectronAPI {
     fileName: string
     percentage: number
   }) => void) => () => void
+  // Playlist operations
+  playlistCreate: (name: string, description?: string) => Promise<{ success: boolean; playlist?: any; error?: string }>
+  playlistDelete: (playlistId: number) => Promise<{ success: boolean; error?: string }>
+  playlistRename: (playlistId: number, newName: string) => Promise<{ success: boolean; error?: string }>
+  playlistUpdateDescription: (playlistId: number, description: string | null) => Promise<{ success: boolean; error?: string }>
+  playlistUpdateCover: (playlistId: number, coverArtPath: string | null) => Promise<{ success: boolean; error?: string }>
+  playlistGetAll: () => Promise<{ success: boolean; playlists: any[]; error?: string }>
+  playlistGetById: (playlistId: number) => Promise<{ success: boolean; playlist: any | null; error?: string }>
+  playlistGetSongs: (playlistId: number) => Promise<{ success: boolean; songPaths: string[]; error?: string }>
+  playlistAddSongs: (playlistId: number, filePaths: string[]) => Promise<{ success: boolean; error?: string }>
+  playlistRemoveSong: (playlistId: number, filePath: string) => Promise<{ success: boolean; error?: string }>
+  playlistReorderSongs: (playlistId: number, newOrder: Array<{ filePath: string; position: number }>) => Promise<{ success: boolean; error?: string }>
+  playlistIsSongIn: (playlistId: number, filePath: string) => Promise<{ success: boolean; isIn: boolean; error?: string }>
+  playlistGetContainingSong: (filePath: string) => Promise<{ success: boolean; playlists: any[]; error?: string }>
+  playlistCleanupMissing: () => Promise<{ success: boolean; removedCount: number; error?: string }>
 }
 
 // Expose a typed API to the Renderer process
@@ -303,6 +318,49 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.on('fingerprint-batch-progress', handler)
     return () => ipcRenderer.removeListener('fingerprint-batch-progress', handler)
   },
+
+  // Playlist operations
+  playlistCreate: (name: string, description?: string) =>
+    ipcRenderer.invoke('playlist-create', name, description),
+
+  playlistDelete: (playlistId: number) =>
+    ipcRenderer.invoke('playlist-delete', playlistId),
+
+  playlistRename: (playlistId: number, newName: string) =>
+    ipcRenderer.invoke('playlist-rename', playlistId, newName),
+
+  playlistUpdateDescription: (playlistId: number, description: string | null) =>
+    ipcRenderer.invoke('playlist-update-description', playlistId, description),
+
+  playlistUpdateCover: (playlistId: number, coverArtPath: string | null) =>
+    ipcRenderer.invoke('playlist-update-cover', playlistId, coverArtPath),
+
+  playlistGetAll: () =>
+    ipcRenderer.invoke('playlist-get-all'),
+
+  playlistGetById: (playlistId: number) =>
+    ipcRenderer.invoke('playlist-get-by-id', playlistId),
+
+  playlistGetSongs: (playlistId: number) =>
+    ipcRenderer.invoke('playlist-get-songs', playlistId),
+
+  playlistAddSongs: (playlistId: number, filePaths: string[]) =>
+    ipcRenderer.invoke('playlist-add-songs', playlistId, filePaths),
+
+  playlistRemoveSong: (playlistId: number, filePath: string) =>
+    ipcRenderer.invoke('playlist-remove-song', playlistId, filePath),
+
+  playlistReorderSongs: (playlistId: number, newOrder: Array<{ filePath: string; position: number }>) =>
+    ipcRenderer.invoke('playlist-reorder-songs', playlistId, newOrder),
+
+  playlistIsSongIn: (playlistId: number, filePath: string) =>
+    ipcRenderer.invoke('playlist-is-song-in', playlistId, filePath),
+
+  playlistGetContainingSong: (filePath: string) =>
+    ipcRenderer.invoke('playlist-get-containing-song', filePath),
+
+  playlistCleanupMissing: () =>
+    ipcRenderer.invoke('playlist-cleanup-missing'),
 } as ElectronAPI)
 
 // Keep the old ipcRenderer for backward compatibility if needed

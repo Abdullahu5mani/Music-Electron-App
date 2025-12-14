@@ -1,10 +1,11 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import type { MusicFile } from '../../../../electron/musicScanner'
 import type { SortOption } from '../../../utils/sortMusicFiles'
-import type { ScanStatusType } from '../../../types/electron.d'
+import type { ScanStatusType, Playlist } from '../../../types/electron.d'
 import { generateFingerprint } from '../../../services/fingerprint'
 import { lookupFingerprint } from '../../../services/acoustid'
 import { lookupRecording, getCoverArtUrls, pickBestRelease } from '../../../services/musicbrainz'
+import { ContextMenu, type ContextMenuItem } from '../../common/ContextMenu/ContextMenu'
 
 interface SongListProps {
   songs: MusicFile[]
@@ -14,15 +15,41 @@ interface SongListProps {
   onSortChange: (sortBy: SortOption) => void
   onUpdateSingleFile?: (filePath: string) => Promise<MusicFile | null>
   onShowNotification?: (message: string, type: 'success' | 'error' | 'warning' | 'info') => void
+  isPlaying?: boolean
+  onPlayPause?: () => void
+  // Playlist props
+  playlists?: Playlist[]
+  onAddToPlaylist?: (playlistId: number, filePaths: string[]) => Promise<boolean>
+  onCreatePlaylistWithSongs?: (filePaths: string[]) => void
 }
 
 /**
  * Component for displaying the list of songs
  */
-export function SongList({ songs, onSongClick, playingIndex, sortBy, onSortChange, onUpdateSingleFile, onShowNotification }: SongListProps) {
+export function SongList({
+  songs,
+  onSongClick,
+  playingIndex,
+  sortBy,
+  onSortChange,
+  onUpdateSingleFile,
+  onShowNotification,
+  isPlaying,
+  onPlayPause,
+  playlists = [],
+  onAddToPlaylist,
+  onCreatePlaylistWithSongs
+}: SongListProps) {
   const [generatingFingerprint, setGeneratingFingerprint] = useState<string | null>(null)
   const [scanStatuses, setScanStatuses] = useState<Record<string, ScanStatusType>>({})
   const [loadingStatuses, setLoadingStatuses] = useState(false)
+
+  // Context menu state
+  const [contextMenu, setContextMenu] = useState<{
+    x: number
+    y: number
+    songIndex: number
+  } | null>(null)
 
   // Refs for each song item to enable auto-scrolling
   const songRefs = useRef<Map<number, HTMLLIElement>>(new Map())
@@ -364,6 +391,10 @@ export function SongList({ songs, onSongClick, playingIndex, sortBy, onSortChang
             ref={(el) => setSongRef(index, el)}
             className={`song-item ${playingIndex === index ? 'playing' : ''}`}
             onClick={() => onSongClick(file, index)}
+            onContextMenu={(e) => {
+              e.preventDefault()
+              setContextMenu({ x: e.clientX, y: e.clientY, songIndex: index })
+            }}
           >
             <div className="song-content">
               {file.metadata?.albumArt ? (
@@ -394,6 +425,72 @@ export function SongList({ songs, onSongClick, playingIndex, sortBy, onSortChang
           </li>
         ))}
       </ul>
+
+      {/* Context Menu */}
+      {contextMenu && (
+        <ContextMenu
+          x={contextMenu.x}
+          y={contextMenu.y}
+          onClose={() => setContextMenu(null)}
+          items={(() => {
+            const items: ContextMenuItem[] = []
+            const isThisSongPlaying = contextMenu.songIndex === playingIndex
+            const currentSong = songs[contextMenu.songIndex]
+
+            if (isThisSongPlaying && onPlayPause) {
+              // This song is playing - show pause/play toggle
+              items.push({
+                label: isPlaying ? 'Pause' : 'Resume',
+                icon: isPlaying ? '⏸️' : '▶️',
+                onClick: onPlayPause
+              })
+            } else {
+              // Different song - show play option
+              items.push({
+                label: 'Play',
+                icon: '▶️',
+                onClick: () => onSongClick(currentSong, contextMenu.songIndex)
+              })
+            }
+
+            // Add divider before playlist options
+            if (playlists.length > 0 || onCreatePlaylistWithSongs) {
+              items.push({ label: '', icon: '', onClick: () => { }, divider: true })
+            }
+
+            // Add to existing playlists
+            if (playlists.length > 0 && onAddToPlaylist) {
+              playlists.slice(0, 5).forEach(playlist => {
+                items.push({
+                  label: `Add to "${playlist.name}"`,
+                  icon: '📝',
+                  onClick: () => onAddToPlaylist(playlist.id, [currentSong.path])
+                })
+              })
+
+              if (playlists.length > 5) {
+                items.push({
+                  label: `... and ${playlists.length - 5} more playlists`,
+                  icon: '📋',
+                  onClick: () => { },
+                  disabled: true
+                })
+              }
+            }
+
+            // Create new playlist with this song
+            if (onCreatePlaylistWithSongs) {
+              items.push({
+                label: 'Create playlist with song',
+                icon: '➕',
+                onClick: () => onCreatePlaylistWithSongs([currentSong.path])
+              })
+            }
+
+            return items
+          })()}
+        />
+      )}
     </div>
   )
 }

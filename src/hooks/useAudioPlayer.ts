@@ -42,6 +42,9 @@ export function useAudioPlayer(musicFiles: MusicFile[]): UseAudioPlayerReturn {
   const playSongRef = useRef<(file: MusicFile, index: number, recordHistory?: boolean) => void>()
   const currentFilePathRef = useRef<string | null>(null)
   const historyRef = useRef<number[]>([])
+  // Track switching state to prevent race conditions
+  const switchIdRef = useRef<number>(0)
+  const pendingSoundRef = useRef<Howl | null>(null)
 
   const recordHistory = (index: number) => {
     const history = historyRef.current
@@ -51,12 +54,35 @@ export function useAudioPlayer(musicFiles: MusicFile[]): UseAudioPlayerReturn {
   }
 
   const playSong = (file: MusicFile, index: number, record = true) => {
+    // Increment switch ID to invalidate any pending operations
+    const thisSwitchId = ++switchIdRef.current
+
+    // Clean up any pending sound that hasn't started yet
+    if (pendingSoundRef.current) {
+      try {
+        pendingSoundRef.current.stop()
+        pendingSoundRef.current.unload()
+      } catch (e) {
+        // Ignore cleanup errors
+      }
+      pendingSoundRef.current = null
+    }
+
     // Ensure only one Howler instance exists - stop and cleanup current one
     if (currentSound) {
-      currentSound.stop()
-      currentSound.unload()
+      try {
+        currentSound.stop()
+        currentSound.unload()
+      } catch (e) {
+        // Ignore cleanup errors
+      }
       setCurrentSound(null)
     }
+
+    // Reset state immediately for UI responsiveness
+    setCurrentTime(0)
+    setDuration(0)
+    isSeekingRef.current = false
 
     // Convert file path to file:// URL using path resolver
     const fileURL = pathToFileURL(file.path)
@@ -71,29 +97,63 @@ export function useAudioPlayer(musicFiles: MusicFile[]): UseAudioPlayerReturn {
       format: [format], // Specify format (mp3, flac, wav, etc.)
       volume: volume, // Set initial volume
       onload: () => {
+        // Check if this is still the current switch operation
+        if (switchIdRef.current !== thisSwitchId) {
+          // A newer track was requested, abandon this one
+          try {
+            sound.stop()
+            sound.unload()
+          } catch (e) {
+            // Ignore
+          }
+          return
+        }
+
         // Get duration when sound is loaded
         const soundDuration = sound.duration()
         if (soundDuration && isFinite(soundDuration)) {
           setDuration(soundDuration)
         }
+        pendingSoundRef.current = null
+      },
+      onplay: () => {
+        // Verify this is still the current track
+        if (switchIdRef.current !== thisSwitchId) {
+          try {
+            sound.stop()
+            sound.unload()
+          } catch (e) {
+            // Ignore
+          }
+          return
+        }
       },
       onend: () => {
-        // Auto-play next song when current ends
-        setIsPlaying(false)
-        if (playNextRef.current) {
-          playNextRef.current(true)
+        // Only trigger next if this is still the current track
+        if (switchIdRef.current === thisSwitchId) {
+          setIsPlaying(false)
+          if (playNextRef.current) {
+            playNextRef.current(true)
+          }
         }
       },
       onloaderror: () => {
-        console.error('Error loading song')
-        setPlayingIndex(null)
-        setCurrentSound(null)
-        setIsPlaying(false)
-        currentFilePathRef.current = null
-        setDuration(0)
-        setCurrentTime(0)
+        // Only handle error if this is still the current track
+        if (switchIdRef.current === thisSwitchId) {
+          console.error('Error loading song')
+          setPlayingIndex(null)
+          setCurrentSound(null)
+          setIsPlaying(false)
+          currentFilePathRef.current = null
+          setDuration(0)
+          setCurrentTime(0)
+        }
+        pendingSoundRef.current = null
       },
     })
+
+    // Track as pending until loaded
+    pendingSoundRef.current = sound
 
     // Play the song
     sound.play()
@@ -104,8 +164,6 @@ export function useAudioPlayer(musicFiles: MusicFile[]): UseAudioPlayerReturn {
     }
     setIsPlaying(true)
     currentFilePathRef.current = file.path
-    setCurrentTime(0)
-    isSeekingRef.current = false
   }
 
   // Update playingIndex when musicFiles array changes (e.g., when sorting changes)

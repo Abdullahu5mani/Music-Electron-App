@@ -29,6 +29,7 @@ interface PlaybackBarProps {
   onVolumeChange: (volume: number) => void
   currentSound?: Howl | null
   visualizerMode: VisualizerMode
+  playbackContextName?: string  // e.g., "My Favorites" playlist name
 }
 
 /**
@@ -71,6 +72,7 @@ export function PlaybackBar({
   onVolumeChange,
   currentSound,
   visualizerMode,
+  playbackContextName,
 }: PlaybackBarProps) {
   const [isDragging, setIsDragging] = useState(false)
   const [dragTime, setDragTime] = useState<number>(currentTime)
@@ -152,6 +154,11 @@ export function PlaybackBar({
               <span className="playback-album"> • {currentSong.metadata.album}</span>
             )}
           </div>
+          {currentSong && playbackContextName && playbackContextName !== 'All Songs' && (
+            <div className="playback-context">
+              Playing from: {playbackContextName}
+            </div>
+          )}
           <div className="seek-bar-container">
             {/* Audio Visualizer behind the seek bar */}
             {isPlaying && currentSound && (
