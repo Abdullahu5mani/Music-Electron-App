@@ -1,24 +1,349 @@
 # Music Sync App - Architecture Documentation
 
+> 🎓 **For Beginners**: This guide is written for developers new to Electron. Start with the [Quick Start Guide](#-quick-start-guide-for-beginners) section to understand how the app works.
+
 ## Table of Contents
 
-1. [Overview](#overview)
-2. [Tech Stack](#tech-stack)
-3. [Electron Primer (For Beginners)](#electron-primer-for-beginners)
-4. [High-Level Architecture](#high-level-architecture)
-5. [Directory Structure](#directory-structure)
-6. [Main Process](#main-process)
-7. [Renderer Process](#renderer-process)
-8. [IPC Communication](#ipc-communication)
-9. [Playlist System](#playlist-system)
-10. [Core Flows](#core-flows)
-11. [External API Integration](#external-api-integration)
-12. [Security Architecture](#security-architecture)
-13. [Cross-Platform Strategy](#cross-platform-strategy)
-14. [Key Design Patterns](#key-design-patterns)
-15. [Visual Enhancements](#visual-enhancements)
-16. [Known Limitations & Future Work](#known-limitations--future-work)
-17. [Running the App](#running-the-app)
+1. [🚀 Quick Start Guide (For Beginners)](#-quick-start-guide-for-beginners)
+2. [Overview](#overview)
+3. [Tech Stack](#tech-stack)
+4. [Electron Primer (For Beginners)](#electron-primer-for-beginners)
+5. [High-Level Architecture](#high-level-architecture)
+6. [Directory Structure](#directory-structure)
+7. [Main Process](#main-process)
+8. [Renderer Process](#renderer-process)
+9. [IPC Communication](#ipc-communication)
+10. [Playlist System](#playlist-system)
+11. [Core Flows](#core-flows)
+12. [External API Integration](#external-api-integration)
+13. [Security Architecture](#security-architecture)
+14. [Cross-Platform Strategy](#cross-platform-strategy)
+15. [Key Design Patterns](#key-design-patterns)
+16. [Visual Enhancements](#visual-enhancements)
+17. [Known Limitations & Future Work](#known-limitations--future-work)
+18. [Running the App](#running-the-app)
+
+---
+
+## 🚀 Quick Start Guide (For Beginners)
+
+If you're new to Electron, this section will help you understand how every file connects to create a working desktop music player.
+
+### The Two Worlds of Electron
+
+Think of this app as having two separate programs running at the same time:
+
+| World | Folder | What it does | Technology |
+|-------|--------|--------------|------------|
+| **Backend** | `electron/` | Handles system stuff (files, downloads, database) | Node.js |
+| **Frontend** | `src/` | Shows the UI (buttons, lists, player) | React |
+
+These two worlds **cannot directly talk to each other** for security. They communicate through a "bridge" called the **Preload Script**.
+
+### 📁 File Map: What Does What?
+
+Here's every important file and what it exports:
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                          ELECTRON (Backend - Node.js)                       │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  electron/main.ts          ─── ENTRY POINT ───                              │
+│  ├── imports: window.ts, tray.ts, handlers.ts, settings.ts                  │
+│  ├── creates: The app window                                                │
+│  └── starts: Everything when you run `npm run dev`                          │
+│                                                                             │
+│  electron/window.ts                                                         │
+│  ├── exports: createWindow()                                                │
+│  └── does: Creates the app window with custom title bar                     │
+│                                                                             │
+│  electron/preload.ts       ─── THE BRIDGE ───                               │
+│  ├── exports: electronAPI (exposed to React)                                │
+│  └── does: Safely exposes backend functions to the frontend                 │
+│                                                                             │
+│  electron/tray.ts                                                           │
+│  ├── exports: createTray(), updateTrayMenu()                                │
+│  └── does: System tray icon with play/pause controls                        │
+│                                                                             │
+│  electron/musicScanner.ts                                                   │
+│  ├── exports: scanMusicFolder(), MusicFile type                             │
+│  └── does: Finds music files and reads their metadata (title, artist, art)  │
+│                                                                             │
+│  electron/youtubeDownloader.ts                                              │
+│  ├── exports: downloadVideo()                                               │
+│  └── does: Downloads audio from YouTube using yt-dlp                        │
+│                                                                             │
+│  electron/playlistDatabase.ts                                               │
+│  ├── exports: PlaylistDatabase class                                        │
+│  └── does: Saves/loads playlists to SQLite database                         │
+│                                                                             │
+│  electron/ipc/handlers.ts  ─── API ROUTER ───                               │
+│  ├── imports: all handler modules from ./modules/                           │
+│  ├── exports: registerAllHandlers()                                         │
+│  └── does: Connects frontend requests to backend functions                  │
+│                                                                             │
+│  electron/ipc/modules/                                                      │
+│  ├── musicHandlers.ts    → scanning folders, reading files                  │
+│  ├── playlistHandlers.ts → create/delete/update playlists                   │
+│  ├── youtubeHandlers.ts  → download from YouTube                            │
+│  ├── apiHandlers.ts      → call external APIs (AcoustID, MusicBrainz)       │
+│  ├── systemHandlers.ts   → window controls (minimize, close)                │
+│  ├── cacheHandlers.ts    → metadata database operations                     │
+│  └── fingerprintHandlers.ts → audio fingerprinting (fpcalc)                 │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                          SRC (Frontend - React)                             │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  src/main.tsx              ─── ENTRY POINT ───                              │
+│  ├── imports: App.tsx                                                       │
+│  └── does: Mounts React app to the HTML page                                │
+│                                                                             │
+│  src/App.tsx               ─── THE BRAIN ───                                │
+│  ├── imports: ALL hooks, ALL components                                     │
+│  ├── exports: App (default)                                                 │
+│  └── does: Coordinates everything - state, playback, UI                     │
+│                                                                             │
+│  ─────────────────── HOOKS (State Management) ──────────────────            │
+│                                                                             │
+│  src/hooks/useAudioPlayer.ts                                                │
+│  ├── exports: useAudioPlayer()                                              │
+│  ├── imported by: App.tsx                                                   │
+│  └── does: Play, pause, skip, seek, volume control                          │
+│                                                                             │
+│  src/hooks/useMusicLibrary.ts                                               │
+│  ├── exports: useMusicLibrary()                                             │
+│  ├── imported by: App.tsx                                                   │
+│  └── does: Load music files from folder, sort, filter                       │
+│                                                                             │
+│  src/hooks/usePlaylists.ts                                                  │
+│  ├── exports: usePlaylists()                                                │
+│  ├── imported by: App.tsx                                                   │
+│  └── does: Create playlists, add songs, delete playlists                    │
+│                                                                             │
+│  src/hooks/useSongScanner.ts                                                │
+│  ├── exports: useSongScanner()                                              │
+│  ├── imported by: App.tsx                                                   │
+│  └── does: Identify songs using audio fingerprinting                        │
+│                                                                             │
+│  ─────────────────── COMPONENTS (UI Pieces) ────────────────────            │
+│                                                                             │
+│  src/components/layout/                                                     │
+│  ├── TitleBar/TitleBar.tsx   → Custom window controls (min/max/close)       │
+│  ├── Sidebar/Sidebar.tsx     → Navigation: playlists, artists, albums       │
+│  └── PlaybackBar/PlaybackBar.tsx → Player controls at bottom                │
+│                                                                             │
+│  src/components/library/                                                    │
+│  └── SongList/SongList.tsx   → List of songs with right-click menu          │
+│                                                                             │
+│  src/components/playlists/                                                  │
+│  ├── PlaylistList.tsx        → List of playlists in sidebar                 │
+│  └── CreatePlaylistModal.tsx → Modal dialog to create playlist              │
+│                                                                             │
+│  src/components/common/                                                     │
+│  ├── AudioVisualizer/        → Animated bars that react to music            │
+│  ├── ContextMenu/            → Right-click popup menu                       │
+│  └── NotificationToast/      → Pop-up notifications                         │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+### 🔄 How Data Flows: Playing a Song
+
+Let's trace what happens when you click a song:
+
+```
+┌──────────────────────────────────────────────────────────────────────────────┐
+│  STEP 1: You click a song in the UI                                         │
+├──────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│  SongList.tsx                                                                │
+│       │                                                                      │
+│       ▼ calls onPlaySong(file, index)                                        │
+│                                                                              │
+│  App.tsx (receives the call)                                                 │
+│       │                                                                      │
+│       ▼ calls playSong(file, index) from useAudioPlayer hook                 │
+│                                                                              │
+│  useAudioPlayer.ts                                                           │
+│       │                                                                      │
+│       ▼ creates new Howl({ src: 'file://path/to/song.mp3' })                 │
+│       ▼ calls sound.play()                                                   │
+│       ▼ updates state: setIsPlaying(true), setPlayingIndex(index)            │
+│                                                                              │
+│  React re-renders...                                                         │
+│       │                                                                      │
+│       ▼ PlaybackBar shows the song title, artist, album art                  │
+│       ▼ SongList highlights the playing song                                 │
+│       ▼ AudioVisualizer starts animating                                     │
+│                                                                              │
+└──────────────────────────────────────────────────────────────────────────────┘
+```
+
+### 🔄 How Data Flows: Loading Music from a Folder
+
+```
+┌──────────────────────────────────────────────────────────────────────────────┐
+│  STEP 1: You click "Select Folder" button                                   │
+├──────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│  [FRONTEND] App.tsx → TitleBar.tsx                                           │
+│       │                                                                      │
+│       ▼ Button onClick calls: window.electronAPI.openFolderDialog()          │
+│                                                                              │
+├──────────────────────────────────────────────────────────────────────────────┤
+│  STEP 2: Request goes through the bridge                                    │
+├──────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│  [PRELOAD] preload.ts                                                        │
+│       │                                                                      │
+│       ▼ ipcRenderer.invoke('dialog:openFolder')                              │
+│                                                                              │
+├──────────────────────────────────────────────────────────────────────────────┤
+│  STEP 3: Backend handles the request                                        │
+├──────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│  [BACKEND] ipc/handlers.ts → ipc/modules/musicHandlers.ts                    │
+│       │                                                                      │
+│       ▼ Shows native folder picker dialog                                    │
+│       ▼ User selects: "C:\Users\Music"                                       │
+│                                                                              │
+│  [BACKEND] musicScanner.ts                                                   │
+│       │                                                                      │
+│       ▼ Recursively finds all .mp3, .flac, .wav files                        │
+│       ▼ Uses music-metadata to read ID3 tags                                 │
+│       ▼ Returns array of MusicFile objects                                   │
+│                                                                              │
+├──────────────────────────────────────────────────────────────────────────────┤
+│  STEP 4: Data returns to frontend                                           │
+├──────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│  [FRONTEND] useMusicLibrary.ts                                               │
+│       │                                                                      │
+│       ▼ Updates state: setMusicFiles([...667 songs...])                      │
+│                                                                              │
+│  React re-renders...                                                         │
+│       │                                                                      │
+│       ▼ SongList displays all 667 songs                                      │
+│       ▼ Sidebar shows Artists and Albums extracted from songs                │
+│                                                                              │
+└──────────────────────────────────────────────────────────────────────────────┘
+```
+
+### 🔄 How Data Flows: Creating a Playlist
+
+```
+┌──────────────────────────────────────────────────────────────────────────────┐
+│  User clicks "Create Playlist" → types "My Favorites" → clicks Create       │
+├──────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│  [FRONTEND] CreatePlaylistModal.tsx                                          │
+│       │                                                                      │
+│       ▼ onCreate("My Favorites", "Description")                              │
+│                                                                              │
+│  [FRONTEND] App.tsx → usePlaylists.ts                                        │
+│       │                                                                      │
+│       ▼ createPlaylist("My Favorites", "Description")                        │
+│       ▼ Calls: window.electronAPI.createPlaylist(...)                        │
+│                                                                              │
+│  [PRELOAD] preload.ts                                                        │
+│       │                                                                      │
+│       ▼ ipcRenderer.invoke('playlist:create', ...)                           │
+│                                                                              │
+│  [BACKEND] playlistHandlers.ts                                               │
+│       │                                                                      │
+│       ▼ playlistDb.createPlaylist("My Favorites", "Description")             │
+│                                                                              │
+│  [BACKEND] playlistDatabase.ts                                               │
+│       │                                                                      │
+│       ▼ Inserts into SQLite: INSERT INTO playlists (name, description) ...   │
+│       ▼ Returns: { id: 1, name: "My Favorites", songCount: 0 }               │
+│                                                                              │
+│  [FRONTEND] usePlaylists.ts                                                  │
+│       │                                                                      │
+│       ▼ Updates state: setPlaylists([...playlists, newPlaylist])             │
+│                                                                              │
+│  React re-renders...                                                         │
+│       │                                                                      │
+│       ▼ Sidebar now shows "My Favorites" in the playlist list                │
+│                                                                              │
+└──────────────────────────────────────────────────────────────────────────────┘
+```
+
+### 📦 Key Exports Summary
+
+Here's a cheat sheet of what each file exports and who uses it:
+
+| File | Exports | Used By |
+|------|---------|---------|
+| **electron/main.ts** | (entry point) | Electron runtime |
+| **electron/preload.ts** | `electronAPI` | All React components via `window.electronAPI` |
+| **electron/musicScanner.ts** | `scanMusicFolder()`, `MusicFile` type | musicHandlers.ts |
+| **electron/playlistDatabase.ts** | `PlaylistDatabase` class | playlistHandlers.ts |
+| **src/App.tsx** | `App` component | main.tsx |
+| **src/hooks/useAudioPlayer.ts** | `useAudioPlayer()` hook | App.tsx |
+| **src/hooks/useMusicLibrary.ts** | `useMusicLibrary()` hook | App.tsx |
+| **src/hooks/usePlaylists.ts** | `usePlaylists()` hook | App.tsx |
+| **src/components/layout/Sidebar/Sidebar.tsx** | `Sidebar` component | App.tsx |
+| **src/components/layout/PlaybackBar/PlaybackBar.tsx** | `PlaybackBar` component | App.tsx |
+| **src/components/library/SongList/SongList.tsx** | `SongList` component | App.tsx |
+| **src/components/playlists/index.ts** | `PlaylistList`, `CreatePlaylistModal` | Sidebar.tsx, App.tsx |
+
+### 🎯 Where to Start Reading Code
+
+If you're new, read the files in this order:
+
+1. **`electron/main.ts`** - See how the app starts
+2. **`electron/preload.ts`** - See the API bridge between backend and frontend
+3. **`src/main.tsx`** and **`src/App.tsx`** - See how React starts and coordinates everything
+4. **`src/hooks/useAudioPlayer.ts`** - See how music playback works
+5. **`src/components/layout/PlaybackBar/PlaybackBar.tsx`** - See a complete UI component
+
+### 🔧 Common Patterns You'll See
+
+#### Pattern 1: IPC Call (Frontend → Backend → Frontend)
+```typescript
+// Frontend (React component or hook)
+const result = await window.electronAPI.someFunction(arg1, arg2)
+
+// Preload (preload.ts) - the bridge
+someFunction: (arg1, arg2) => ipcRenderer.invoke('channel:name', arg1, arg2)
+
+// Backend (handler in ipc/modules/)
+ipcMain.handle('channel:name', async (event, arg1, arg2) => {
+  // Do work...
+  return result
+})
+```
+
+#### Pattern 2: React Hook State
+```typescript
+// In a hook file like useAudioPlayer.ts
+export function useAudioPlayer() {
+  const [isPlaying, setIsPlaying] = useState(false)  // State
+  
+  const play = () => { /* ... */ setIsPlaying(true) }  // Actions that update state
+  
+  return { isPlaying, play }  // Return state and actions for components to use
+}
+
+// In App.tsx
+const { isPlaying, play } = useAudioPlayer()  // Use the hook
+```
+
+#### Pattern 3: Component Props Flow
+```
+App.tsx (holds all state)
+    │
+    ├── passes props to → PlaybackBar (currentSong, isPlaying, onPlayPause)
+    │
+    ├── passes props to → SongList (songs, playingIndex, onPlaySong)
+    │
+    └── passes props to → Sidebar (playlists, selectedPlaylist, onPlaylistClick)
+```
 
 ---
 
@@ -32,6 +357,7 @@ This is an **Electron + React + TypeScript** desktop music player application. I
 - Identify songs using audio fingerprinting (AcoustID + MusicBrainz)
 - Custom frameless window with a soft blue title bar
 - Filter library by artist/album via sidebar
+- Create and manage playlists
 
 ---
 
@@ -3104,3 +3430,2226 @@ npm run dev
 ```bash
 npm run build
 ```
+
+---
+
+## 📚 Electron Backend Reference
+
+This section provides detailed documentation for every file in the `electron/` folder. Each file is explained with its purpose and all exported functions.
+
+---
+
+### 📁 `electron/main.ts`
+
+**Purpose**: The entry point for the Electron main process. Initializes the application.
+
+**What it does**:
+- Removes the default menu bar
+- Registers all IPC handlers
+- Sets up window event handlers  
+- Registers keyboard shortcuts (F12, Ctrl+Shift+I for dev tools)
+- Initializes the metadata cache database
+- Creates the main window and system tray
+
+**Flow**:
+```
+app.whenReady() 
+    → initializeDatabase()
+    → createWindow()
+    → createTray()
+```
+
+**No exported functions** - this is the entry point.
+
+---
+
+### 📁 `electron/window.ts`
+
+**Purpose**: Creates and manages the main application window.
+
+| Function | Parameters | Returns | Description |
+|----------|------------|---------|-------------|
+| `createWindow()` | none | `BrowserWindow` | Creates the main app window with custom settings (frameless, dark theme, preload script) |
+| `setupWindowEvents()` | none | `void` | Sets up window lifecycle events (close, activate for macOS dock) |
+
+**Window Configuration**:
+- Size: 820×720 (min), resizable
+- Frame: Hidden (custom title bar)
+- Background: `#1a1a1a`
+- Preload: `preload.mjs`
+- Dev tools: Enabled
+
+---
+
+### 📁 `electron/preload.ts`
+
+**Purpose**: The secure bridge between main process and renderer. Exposes a typed `electronAPI` to the React frontend.
+
+**Exposed API Methods** (via `window.electronAPI`):
+
+| Method | Description |
+|--------|-------------|
+| **Music Scanning** | |
+| `scanMusicFolder(folderPath)` | Scans a folder for music files with metadata |
+| `selectMusicFolder()` | Opens folder picker dialog |
+| `readSingleFileMetadata(filePath)` | Reads metadata for one file |
+| **Settings** | |
+| `getSettings()` | Gets stored app settings |
+| `saveSettings(settings)` | Saves app settings |
+| `selectDownloadFolder()` | Opens folder picker for downloads |
+| **Binaries** | |
+| `getBinaryStatuses()` | Checks yt-dlp installation status |
+| `getPlatformInfo()` | Returns OS platform and architecture |
+| **Playback Control** | |
+| `onTrayPlayPause(callback)` | Listens for tray play/pause commands |
+| `sendPlaybackState(isPlaying)` | Updates tray with playback state |
+| **Window Control** | |
+| `minimizeWindow()` | Minimizes the window |
+| `maximizeWindow()` | Toggles maximize/restore |
+| `closeWindow()` | Closes the window |
+| `onWindowStateChanged(callback)` | Listens for maximize/restore events |
+| **YouTube Download** | |
+| `downloadYouTube(url, outputPath)` | Downloads audio from YouTube |
+| `onDownloadProgress(callback)` | Listens for download progress |
+| `onBinaryDownloadProgress(callback)` | Listens for yt-dlp download progress |
+| `onDownloadTitle(callback)` | Receives video title |
+| **API Calls** | |
+| `lookupFingerprint(fingerprint, duration)` | Queries AcoustID for song match |
+| `fetchCoverArt(mbid)` | Gets album art from MusicBrainz |
+| `downloadImage(url, filePath)` | Downloads an image to disk |
+| **Fingerprinting** | |
+| `ensureFpcalc()` | Downloads fpcalc if needed |
+| `generateFingerprint(filePath)` | Generates audio fingerprint |
+| `generateFingerprintsParallel(filePaths)` | Batch fingerprinting |
+| `getFingerprintPoolInfo()` | Gets worker pool status |
+| `onFingerprintProgress(callback)` | Listens for batch progress |
+| **Cache** | |
+| `getFileScanStatus(filePath)` | Checks if file was scanned |
+| `markFileAsScanned(...)` | Records scan result in database |
+| `getBatchScanStatuses(filePaths)` | Batch status check |
+| `getUnscannedFiles(filePaths)` | Filters to unscanned files |
+| `getScanStatistics()` | Gets scan counts |
+| **Playlists** | |
+| `playlistGetAll()` | Gets all playlists |
+| `playlistCreate(name, description)` | Creates a new playlist |
+| `playlistDelete(id)` | Deletes a playlist |
+| `playlistAddSongs(id, filePaths)` | Adds songs to playlist |
+| `playlistRemoveSong(id, filePath)` | Removes a song |
+| `playlistGetSongPaths(id)` | Gets song paths in playlist |
+| `playlistRename(id, newName)` | Renames a playlist |
+
+---
+
+### 📁 `electron/tray.ts`
+
+**Purpose**: Creates and manages the system tray icon with context menu.
+
+| Function | Parameters | Returns | Description |
+|----------|------------|---------|-------------|
+| `createTray()` | none | `Tray` | Creates the tray icon with context menu (Show/Hide, Play/Pause, Quit) |
+| `updateTrayMenu()` | none | `void` | Refreshes the tray menu with current state |
+| `updatePlaybackState(playing)` | `boolean` | `void` | Updates the Play/Pause label |
+| `updateWindowVisibility(_visible)` | `boolean` | `void` | Updates the Show/Hide label |
+| `getTray()` | none | `Tray | null` | Returns the current tray instance |
+
+**Tray Menu Items**:
+1. **Show/Hide** - Toggles window visibility
+2. **Play/Pause** - Sends command to renderer
+3. **Quit** - Exits the application
+
+---
+
+### 📁 `electron/musicScanner.ts`
+
+**Purpose**: Scans directories for music files and extracts ID3 metadata.
+
+| Function | Parameters | Returns | Description |
+|----------|------------|---------|-------------|
+| `scanMusicFiles(directoryPath)` | `string` | `Promise<MusicFile[]>` | Recursively scans directory for music files, extracts metadata from each |
+| `readSingleFileMetadata(filePath)` | `string` | `Promise<MusicFile \| null>` | Reads metadata for a single file (used after cover art is written) |
+
+**MusicFile Interface**:
+```typescript
+interface MusicFile {
+  path: string           // Full file path
+  name: string           // Filename
+  extension: string      // e.g., ".mp3"
+  size: number           // Bytes
+  dateAdded?: number     // Modification timestamp
+  metadata?: {
+    title?: string
+    artist?: string
+    album?: string
+    albumArtist?: string
+    genre?: string[]
+    year?: number
+    track?: { no: number; of: number }
+    disk?: { no: number; of: number }
+    duration?: number
+    albumArt?: string    // Base64 data URL
+  }
+}
+```
+
+**Supported Extensions**: `.mp3`, `.flac`, `.wav`, `.m4a`, `.aac`, `.ogg`, `.opus`, `.wma`, `.aiff`, `.mp4`, `.m4p`, `.amr`
+
+---
+
+### 📁 `electron/youtubeDownloader.ts`
+
+**Purpose**: Downloads audio from YouTube using yt-dlp. Auto-downloads the binary if needed.
+
+| Function | Parameters | Returns | Description |
+|----------|------------|---------|-------------|
+| `getYtDlpWrap(onBinaryProgress?)` | callback? | `Promise<YTDlpWrap>` | Gets or initializes yt-dlp-wrap, downloads binary if needed |
+| `downloadYouTubeAudio(options)` | `DownloadOptions` | `Promise<{success, filePath?, error?, title?}>` | Downloads audio from YouTube URL |
+| `getVideoTitle(url, ytDlp)` | url, instance | `Promise<string>` | Fetches video title before download |
+| `checkBinaryVersion(binaryPath, onProgress?)` | path, callback? | `Promise<{isUpToDate, versions}>` | Checks if yt-dlp is up to date |
+| `downloadBinaryWithProgress(binaryPath, onProgress?)` | path, callback? | `Promise<void>` | Downloads yt-dlp binary with progress |
+| `getInstalledVersion(binaryPath)` | `string` | `Promise<string \| null>` | Gets installed yt-dlp version |
+| `getLatestVersion()` | none | `Promise<string \| null>` | Gets latest version from GitHub |
+| `getAssetNameForPlatform()` | none | `string \| null` | Returns correct binary name for OS |
+| `findAssetForPlatform(assets)` | `any[]` | `any \| null` | Finds correct download asset from GitHub release |
+
+**Download Options**:
+```typescript
+interface DownloadOptions {
+  url: string
+  outputPath: string
+  onProgress?: (progress: DownloadProgress) => void
+  onBinaryProgress?: (progress: BinaryDownloadProgress) => void
+  onTitleReceived?: (title: string) => void
+}
+```
+
+---
+
+### 📁 `electron/settings.ts`
+
+**Purpose**: Persists user settings to a JSON config file.
+
+| Function | Parameters | Returns | Description |
+|----------|------------|---------|-------------|
+| `getStoredSettings()` | none | `AppSettings` | Reads settings from config file |
+| `saveSettings(settings)` | `AppSettings` | `void` | Writes settings to config file |
+| `getStoredMusicFolder()` | none | `string \| null` | Gets stored music folder path |
+| `getStoredDownloadFolder()` | none | `string \| null` | Gets stored download folder path |
+
+**AppSettings Interface**:
+```typescript
+interface AppSettings {
+  musicFolderPath: string | null
+  downloadFolderPath: string | null
+}
+```
+
+**Config Location**: `{userData}/app-config.json`
+
+---
+
+### 📁 `electron/binaryManager.ts`
+
+**Purpose**: Checks status of external binaries (currently yt-dlp).
+
+| Function | Parameters | Returns | Description |
+|----------|------------|---------|-------------|
+| `getYtDlpStatus()` | none | `Promise<BinaryStatus>` | Checks if yt-dlp is installed, gets version info |
+| `getAllBinaryStatuses()` | none | `Promise<BinaryStatus[]>` | Gets status for all managed binaries |
+
+**BinaryStatus Interface**:
+```typescript
+interface BinaryStatus {
+  name: string              // "yt-dlp"
+  installed: boolean        // true if working
+  version: string | null    // e.g., "2024.12.06"
+  path: string | null       // Full path to binary
+  latestVersion: string | null  // From GitHub
+  needsUpdate: boolean      // true if outdated
+}
+```
+
+---
+
+### 📁 `electron/fpcalcManager.ts`
+
+**Purpose**: Manages the fpcalc (Chromaprint) binary for audio fingerprinting.
+
+| Function | Parameters | Returns | Description |
+|----------|------------|---------|-------------|
+| `getFpcalcPath()` | none | `string` | Returns path to fpcalc binary |
+| `isFpcalcInstalled()` | none | `Promise<boolean>` | Checks if fpcalc exists and works |
+| `downloadFpcalc(onProgress?)` | callback? | `Promise<boolean>` | Downloads and extracts fpcalc |
+| `ensureFpcalc(onProgress?)` | callback? | `Promise<boolean>` | Ensures fpcalc is available, downloads if needed |
+| `generateFingerprintWithFpcalc(filePath)` | `string` | `Promise<FingerprintResult \| null>` | Generates fingerprint using fpcalc |
+
+**FingerprintResult**:
+```typescript
+interface FingerprintResult {
+  fingerprint: string   // Chromaprint fingerprint
+  duration: number      // Seconds
+}
+```
+
+---
+
+### 📁 `electron/metadataCache.ts`
+
+**Purpose**: SQLite database for tracking which files have been scanned/fingerprinted.
+
+| Function | Parameters | Returns | Description |
+|----------|------------|---------|-------------|
+| `initializeDatabase()` | none | `Database` | Opens/creates the SQLite database |
+| `closeDatabase()` | none | `void` | Closes database connection |
+| `generateFileHash(filePath)` | `string` | `string \| null` | Creates hash from path+size+mtime for change detection |
+| `getFileScanStatus(filePath)` | `string` | `ScanStatusType` | Returns scan status for a file |
+| `isFileScanned(filePath)` | `string` | `boolean` | Quick check if file was scanned |
+| `markFileScanned(filePath, mbid, hasMetadata)` | path, mbid?, bool | `boolean` | Records scan result |
+| `getBatchScanStatus(filePaths)` | `string[]` | `Map<string, ScanStatusType>` | Batch status check |
+| `getUnscannedFiles(filePaths)` | `string[]` | `string[]` | Filters to unscanned/changed files |
+| `getScanStatistics()` | none | `{total, withMetadata, withoutMetadata}` | Gets scan counts |
+| `cleanupOrphanedEntries()` | none | `number` | Removes entries for deleted files |
+| `getCachedEntry(filePath)` | `string` | `FileScanStatus \| null` | Gets full cached entry |
+| `clearCache()` | none | `void` | Deletes all cache entries |
+
+**ScanStatusType**: `'unscanned' | 'scanned-tagged' | 'scanned-no-match' | 'file-changed'`
+
+---
+
+### 📁 `electron/playlistDatabase.ts`
+
+**Purpose**: SQLite database for storing playlists and their songs.
+
+| Function | Parameters | Returns | Description |
+|----------|------------|---------|-------------|
+| `initializePlaylistDatabase()` | none | `Database` | Opens/creates the playlist database |
+| `closePlaylistDatabase()` | none | `void` | Closes database connection |
+| `createPlaylist(name, description?)` | name, desc? | `Playlist \| null` | Creates a new playlist |
+| `deletePlaylist(playlistId)` | `number` | `boolean` | Deletes playlist and its songs |
+| `renamePlaylist(playlistId, newName)` | id, name | `boolean` | Renames a playlist |
+| `updatePlaylistDescription(id, desc)` | id, desc | `boolean` | Updates description |
+| `updatePlaylistCoverArt(id, path)` | id, path | `boolean` | Sets cover art path |
+| `getAllPlaylists()` | none | `Playlist[]` | Gets all playlists with song counts |
+| `getPlaylistById(playlistId)` | `number` | `Playlist \| null` | Gets single playlist |
+| `getPlaylistSongPaths(playlistId)` | `number` | `string[]` | Gets ordered song paths |
+| `addSongsToPlaylist(playlistId, filePaths)` | id, paths | `boolean` | Adds songs to playlist |
+| `removeSongFromPlaylist(playlistId, filePath)` | id, path | `boolean` | Removes a song |
+| `reorderPlaylistSongs(id, newOrder)` | id, order | `boolean` | Reorders songs (drag-drop) |
+| `isSongInPlaylist(playlistId, filePath)` | id, path | `boolean` | Checks if song is in playlist |
+| `getPlaylistsContainingSong(filePath)` | `string` | `Playlist[]` | Finds playlists with a song |
+| `cleanupMissingSongs()` | none | `number` | Removes songs that no longer exist |
+
+**Playlist Interface**:
+```typescript
+interface Playlist {
+  id: number
+  name: string
+  description: string | null
+  coverArtPath: string | null
+  songCount: number
+  totalDuration: number
+  createdAt: number
+  updatedAt: number
+}
+```
+
+---
+
+### 📁 `electron/parallelMetadataScanner.ts`
+
+**Purpose**: Parallel processing for scanning music file metadata using multiple "workers".
+
+**Class: `ParallelMetadataScanner`**
+
+| Method | Parameters | Returns | Description |
+|--------|------------|---------|-------------|
+| `constructor(concurrency?)` | workers? | instance | Creates scanner with N workers (default: CPU cores - 1) |
+| `setProgressCallback(callback)` | callback | `void` | Sets progress listener |
+| `getPoolInfo()` | none | `{cpuCount, workerCount}` | Returns pool configuration |
+| `discoverFiles(directoryPath)` | `string` | `Promise<FileInfo[]>` | Fast filesystem walk to find music files |
+| `parseFileMetadata(...)` | path, name, ext, workerId | `Promise<MusicFile \| null>` | Parses one file's metadata |
+| `scanAll(files)` | `FileInfo[]` | `Promise<MusicFile[]>` | Parallel metadata parsing |
+| `scanDirectory(directoryPath)` | `string` | `Promise<MusicFile[]>` | Full scan: discover + parse |
+
+| Helper Function | Returns | Description |
+|-----------------|---------|-------------|
+| `getParallelScanner()` | `ParallelMetadataScanner` | Gets singleton scanner instance |
+
+---
+
+### 📁 `electron/fingerprintWorkerPool.ts`
+
+**Purpose**: Manages parallel fpcalc processes for batch audio fingerprinting.
+
+**Class: `FingerprintWorkerPool`**
+
+| Method | Parameters | Returns | Description |
+|--------|------------|---------|-------------|
+| `constructor(workerCount?)` | count? | instance | Creates pool with N worker slots |
+| `setProgressCallback(callback)` | callback | `void` | Sets progress listener |
+| `enqueue(filePath, index)` | path, index | `Promise<FingerprintJobResult>` | Adds file to processing queue |
+| `processAll(filePaths)` | `string[]` | `Promise<FingerprintJobResult[]>` | Processes all files in parallel |
+| `getStatus()` | none | status object | Returns queue length, active workers, etc. |
+| `clearQueue()` | none | `void` | Clears pending jobs |
+
+| Helper Function | Returns | Description |
+|-----------------|---------|-------------|
+| `getFingerprintPool(workerCount?)` | `FingerprintWorkerPool` | Gets singleton pool instance |
+| `generateFingerprintsParallel(filePaths, onProgress?)` | `Promise<FingerprintJobResult[]>` | Main entry point for batch fingerprinting |
+| `getCPUCount()` | `number` | Number of CPU cores |
+| `getDefaultWorkerCount()` | `number` | CPU cores - 1 |
+
+---
+
+### 📁 `electron/ipc/handlers.ts`
+
+**Purpose**: Central router that registers all IPC handlers.
+
+| Function | Description |
+|----------|-------------|
+| `registerIpcHandlers()` | Calls all handler registration functions |
+
+**Registered Modules**:
+- `registerMusicHandlers()` - Folder scanning, file reading
+- `registerApiHandlers()` - AcoustID, MusicBrainz, image download
+- `registerYoutubeHandlers()` - YouTube download
+- `registerSystemHandlers()` - Window controls, settings
+- `registerCacheHandlers()` - Metadata cache operations
+- `registerFingerprintHandlers()` - Audio fingerprinting
+- `registerPlaylistHandlers()` - Playlist management
+
+---
+
+### 📁 `electron/ipc/modules/musicHandlers.ts`
+
+**Purpose**: IPC handlers for music file operations.
+
+| IPC Channel | Description |
+|-------------|-------------|
+| `music:scan-folder` | Scans folder for music files |
+| `music:read-single-file` | Reads metadata for one file |
+| `dialog:open-folder` | Opens folder picker for music library |
+| `music:write-cover-art` | Writes album art to file using taglib-wasm |
+| `music:read-file-buffer` | Reads file as Buffer for taglib-wasm |
+| `music:write-file-buffer` | Writes Buffer back to disk |
+| `metadata:scan-progress` | Sends real-time scan progress to renderer |
+
+---
+
+### 📁 `electron/ipc/modules/apiHandlers.ts`
+
+**Purpose**: IPC handlers for external API calls.
+
+| IPC Channel | Description |
+|-------------|-------------|
+| `api:lookup-fingerprint` | Queries AcoustID with fingerprint |
+| `api:fetch-musicbrainz-release` | Gets release info from MusicBrainz |
+| `api:fetch-cover-art` | Gets cover art URL from Cover Art Archive |
+| `api:download-image` | Downloads image from URL to disk |
+
+---
+
+### 📁 `electron/ipc/modules/youtubeHandlers.ts`
+
+**Purpose**: IPC handlers for YouTube downloading.
+
+| IPC Channel | Description |
+|-------------|-------------|
+| `youtube:download` | Downloads audio from YouTube URL |
+| `download:progress` | Sends download progress to renderer |
+| `download:title` | Sends video title to renderer |
+| `binary:download-progress` | Sends yt-dlp download progress |
+| `binary:status` | Gets yt-dlp installation status |
+
+---
+
+### 📁 `electron/ipc/modules/systemHandlers.ts`
+
+**Purpose**: IPC handlers for window controls and system info.
+
+| IPC Channel | Description |
+|-------------|-------------|
+| `window:minimize` | Minimizes the window |
+| `window:maximize` | Toggles maximize/restore |
+| `window:close` | Closes the window |
+| `settings:get` | Gets stored settings |
+| `settings:save` | Saves settings |
+| `dialog:open-download-folder` | Opens folder picker for downloads |
+| `system:platform-info` | Returns OS and architecture |
+
+---
+
+### 📁 `electron/ipc/modules/cacheHandlers.ts`
+
+**Purpose**: IPC handlers for metadata cache operations.
+
+| IPC Channel | Description |
+|-------------|-------------|
+| `cache:get-file-status` | Gets scan status for a file |
+| `cache:mark-scanned` | Records scan result |
+| `cache:get-batch-status` | Batch status check |
+| `cache:get-unscanned` | Filters to unscanned files |
+| `cache:get-statistics` | Gets scan counts |
+
+---
+
+### 📁 `electron/ipc/modules/fingerprintHandlers.ts`
+
+**Purpose**: IPC handlers for audio fingerprinting.
+
+| IPC Channel | Description |
+|-------------|-------------|
+| `fpcalc:ensure` | Downloads fpcalc if needed |
+| `fpcalc:generate` | Generates fingerprint for one file |
+| `fpcalc:generate-batch` | Batch fingerprinting with progress |
+| `fpcalc:pool-info` | Gets worker pool status |
+| `fingerprint:progress` | Sends batch progress to renderer |
+
+---
+
+### 📁 `electron/ipc/modules/playlistHandlers.ts`
+
+**Purpose**: IPC handlers for playlist management.
+
+| IPC Channel | Description |
+|-------------|-------------|
+| `playlist:get-all` | Gets all playlists |
+| `playlist:get-by-id` | Gets single playlist |
+| `playlist:create` | Creates new playlist |
+| `playlist:delete` | Deletes playlist |
+| `playlist:rename` | Renames playlist |
+| `playlist:add-songs` | Adds songs to playlist |
+| `playlist:remove-song` | Removes song from playlist |
+| `playlist:get-song-paths` | Gets ordered song paths |
+| `playlist:reorder-songs` | Reorders songs (drag-drop) |
+| `playlist:cleanup` | Removes missing songs |
+
+---
+
+## 🎨 React Components Reference
+
+This section documents all React components in the `src/components/` folder with their props and internal functions.
+
+---
+
+### 📂 **Layout Components** (`src/components/layout/`)
+
+---
+
+#### 📁 `TitleBar/TitleBar.tsx`
+
+**Purpose**: Custom frameless window title bar with window control buttons.
+
+**Props**: None (stateless regarding props)
+
+**Internal State**:
+| State | Type | Description |
+|-------|------|-------------|
+| `isMaximized` | `boolean` | Tracks if window is maximized |
+
+**Internal Functions**:
+| Function | Description |
+|----------|-------------|
+| `handleMinimize()` | Calls `electronAPI.minimizeWindow()` |
+| `handleMaximize()` | Calls `electronAPI.maximizeWindow()` to toggle |
+| `handleClose()` | Calls `electronAPI.closeWindow()` |
+
+**Features**:
+- Displays app icon and title
+- Minimize, Maximize/Restore, Close buttons
+- Listens for window state changes to update the maximize button icon
+
+---
+
+#### 📁 `Sidebar/Sidebar.tsx`
+
+**Purpose**: Navigation panel showing playlists, artists, and albums.
+
+**Props**:
+| Prop | Type | Description |
+|------|------|-------------|
+| `selectedView` | `string` | Current view (e.g., `"all"`, `"artist:Artist Name"`) |
+| `onViewChange` | `(view: string) => void` | Callback when view changes |
+| `musicFiles` | `MusicFileData[]` | All loaded music files (for extracting artists/albums) |
+| `playlists` | `Playlist[]` | User playlists |
+| `selectedPlaylistId` | `number \| null` | Currently selected playlist |
+| `onPlaylistClick` | `(playlistId: number) => void` | Playlist selection callback |
+| `onCreatePlaylist` | `() => void` | Opens create playlist modal |
+| `onDeletePlaylist` | `(playlistId: number) => void` | Deletes a playlist |
+
+**Internal Functions**:
+| Function | Description |
+|----------|-------------|
+| `handlePlaylistClick(playlistId)` | Combines view change with playlist selection |
+
+**Features**:
+- **Playlists section**: All Songs + user playlists (collapsible)
+- **Artists section**: Extracted from music files, searchable (collapsible)
+- **Albums section**: With thumbnail art, searchable (collapsible)
+
+---
+
+#### 📁 `PlaybackBar/PlaybackBar.tsx`
+
+**Purpose**: Fixed bottom bar with playback controls, seek bar, volume, and visualizer.
+
+**Props**:
+| Prop | Type | Description |
+|------|------|-------------|
+| `currentSong` | `MusicFile \| null` | Currently playing song |
+| `isPlaying` | `boolean` | Playback state |
+| `onPlayPause` | `() => void` | Toggle play/pause |
+| `onNext` | `() => void` | Skip to next song |
+| `onPrevious` | `() => void` | Go to previous song |
+| `shuffle` | `boolean` | Shuffle enabled state |
+| `repeatMode` | `'off' \| 'all' \| 'one'` | Repeat mode |
+| `onToggleShuffle` | `() => void` | Toggle shuffle |
+| `onCycleRepeatMode` | `() => void` | Cycle through repeat modes |
+| `currentTime` | `number` | Current playback position (seconds) |
+| `duration` | `number` | Total song duration (seconds) |
+| `onSeek` | `(time: number) => void` | Seek to position |
+| `volume` | `number` | Volume level (0-1) |
+| `onVolumeChange` | `(volume: number) => void` | Change volume |
+| `currentSound` | `Howl \| null` | Howler.js sound instance (for visualizer) |
+| `visualizerMode` | `VisualizerMode` | Visualizer display mode |
+| `playbackContextName?` | `string` | Name of current playlist context |
+
+**Internal Functions**:
+| Function | Description |
+|----------|-------------|
+| `formatTime(seconds)` | Converts seconds to `MM:SS` format |
+| `handleSeekChange(value)` | Updates visual seek position during drag |
+| `handleSeekAfterChange(value)` | Performs actual seek when drag ends |
+
+**Features**:
+- Album art display (with extracted colors for styling)
+- Song title, artist, album display
+- Playback context display ("Playing from: Playlist Name")
+- Seek bar with time display
+- Volume slider
+- Shuffle, Repeat, Previous, Play/Pause, Next buttons
+- Integrated audio visualizer
+
+---
+
+### 📂 **Common Components** (`src/components/common/`)
+
+---
+
+#### 📁 `AudioVisualizer/AudioVisualizer.tsx`
+
+**Purpose**: Animated audio visualization using Web Audio API.
+
+**Props**:
+| Prop | Type | Description |
+|------|------|-------------|
+| `mode` | `VisualizerMode` | `'bars'`, `'wave'`, or `'off'` |
+| `colors?` | `{ primary?: string, secondary?: string }` | Gradient colors |
+| `howl?` | `Howl \| null` | Howler.js sound instance to analyze |
+
+**VisualizerMode**: `'bars' | 'wave' | 'off'`
+
+**Internal Functions**:
+| Function | Description |
+|----------|-------------|
+| `connectToAudio()` | Creates Web Audio AnalyserNode from Howler |
+| `ensureVisibleColor(color)` | Adjusts color for dark background visibility |
+| `resizeCanvas()` | Handles responsive canvas sizing |
+| `drawBars()` | Renders frequency bar visualization |
+| `drawWave()` | Renders waveform visualization |
+| `animate()` | Animation loop using requestAnimationFrame |
+
+**Features**:
+- Connects to Howler.js HTML5 audio
+- Two visualization modes (bars/wave)
+- Automatic color extraction from album art
+- Glow effects and gradients
+
+---
+
+#### 📁 `ContextMenu/ContextMenu.tsx`
+
+**Purpose**: Custom right-click context menu.
+
+**Props**:
+| Prop | Type | Description |
+|------|------|-------------|
+| `x` | `number` | X position (pixels) |
+| `y` | `number` | Y position (pixels) |
+| `items` | `ContextMenuItem[]` | Menu items to display |
+| `onClose` | `() => void` | Close callback |
+
+**ContextMenuItem Interface**:
+```typescript
+interface ContextMenuItem {
+  label: string
+  icon?: string        // Emoji or text
+  onClick: () => void
+  disabled?: boolean
+  divider?: boolean    // Renders separator line
+}
+```
+
+**Internal Functions**:
+| Function | Description |
+|----------|-------------|
+| `handleClickOutside(e)` | Closes menu when clicking outside |
+| `handleEscape(e)` | Closes menu on Escape key |
+
+**Features**:
+- Auto-repositions if would go off-screen
+- Supports disabled items
+- Supports divider lines
+
+---
+
+#### 📁 `NotificationToast/NotificationToast.tsx`
+
+**Purpose**: Temporary notification popup.
+
+**Props**:
+| Prop | Type | Description |
+|------|------|-------------|
+| `message` | `string` | Toast message text |
+| `type` | `'success' \| 'error' \| 'warning' \| 'info'` | Toast style |
+| `isVisible` | `boolean` | Visibility state |
+| `duration?` | `number` | Auto-hide duration (ms), default 3000 |
+| `onClose?` | `() => void` | Close callback |
+
+**Features**:
+- Animated fade-in/fade-out
+- Color-coded by type (green/red/yellow/blue)
+- Auto-dismiss with configurable duration
+- Optional close button
+
+---
+
+### 📂 **Download Components** (`src/components/download/`)
+
+---
+
+#### 📁 `DownloadButton/DownloadButton.tsx`
+
+**Purpose**: YouTube download button with modal input.
+
+**Props**:
+| Prop | Type | Description |
+|------|------|-------------|
+| `onDownload` | `(url: string) => void` | Download callback |
+| `isDownloading` | `boolean` | Download in progress |
+| `progress?` | `number` | Download percentage |
+| `binaryStatus?` | `string` | yt-dlp download status message |
+| `binaryProgress?` | `number` | yt-dlp download percentage |
+
+**Internal State**:
+| State | Type | Description |
+|-------|------|-------------|
+| `isOpen` | `boolean` | Modal visibility |
+| `url` | `string` | YouTube URL input |
+
+**Internal Functions**:
+| Function | Description |
+|----------|-------------|
+| `handleSubmit(e)` | Validates and submits URL |
+
+**Features**:
+- Expandable modal with URL input
+- Shows yt-dlp binary download progress
+- Rate limiting notice display
+
+---
+
+#### 📁 `DownloadNotification/DownloadNotification.tsx`
+
+**Purpose**: Floating notification showing download progress.
+
+**Props**:
+| Prop | Type | Description |
+|------|------|-------------|
+| `title` | `string` | Video/song title |
+| `progress` | `number` | Download percentage (0-100) |
+| `isVisible` | `boolean` | Visibility state |
+| `onClose?` | `() => void` | Close callback |
+
+**Features**:
+- Fixed position notification
+- Progress bar with percentage
+- Animated visibility transitions
+
+---
+
+### 📂 **Library Components** (`src/components/library/`)
+
+---
+
+#### 📁 `SongList/SongList.tsx`
+
+**Purpose**: Main song list display with sorting, scanning, and context menu.
+
+**Props**:
+| Prop | Type | Description |
+|------|------|-------------|
+| `songs` | `MusicFile[]` | Array of songs to display |
+| `onSongClick` | `(file, index) => void` | Song play callback |
+| `playingIndex` | `number \| null` | Currently playing song index |
+| `sortBy` | `SortOption` | Current sort option |
+| `onSortChange` | `(sortBy: SortOption) => void` | Sort change callback |
+| `onUpdateSingleFile` | `(filePath: string) => Promise<...>` | Refresh file metadata |
+| `onShowNotification` | `(message, type) => void` | Show toast notification |
+| `isPlaying?` | `boolean` | Playback state |
+| `onPlayPause?` | `() => void` | Toggle playback |
+| `playlists?` | `Playlist[]` | Available playlists (for context menu) |
+| `onAddToPlaylist?` | `(playlistId, filePaths) => Promise<boolean>` | Add to playlist |
+| `onCreatePlaylistWithSongs?` | `(filePaths) => void` | Create playlist with songs |
+
+**SortOption**: `'title' | 'artist' | 'album' | 'dateAdded'`
+
+**Internal Functions**:
+| Function | Description |
+|----------|-------------|
+| `loadScanStatuses()` | Loads scan status for all songs |
+| `handleGenerateFingerprint(e, file)` | Triggers song identification pipeline |
+
+**Features**:
+- Sortable columns (Title, Artist, Album, Date Added)
+- Album art thumbnails
+- Context menu option to "Identify Song" or "Retry Identification"
+- Right-click context menu (Play, Add to Playlist, Scan, etc.)
+- Highlights currently playing song
+
+---
+
+#### 📁 `BatchScanProgress/BatchScanProgress.tsx`
+
+**Purpose**: Floating notification showing batch library scan progress.
+
+**Props**:
+| Prop | Type | Description |
+|------|------|-------------|
+| `isVisible` | `boolean` | Visibility state |
+| `currentIndex` | `number` | Current song being processed |
+| `totalCount` | `number` | Total songs to process |
+| `currentSongName` | `string` | Name of current song |
+| `apiPhase?` | `ApiPhase` | Current processing phase |
+| `onCancel?` | `() => void` | Cancel callback |
+
+**ApiPhase**: `'acoustid' | 'musicbrainz' | 'coverart' | 'writing' | null`
+
+**Features**:
+- Progress bar with count
+- Shows current API phase with icon
+- Cancel button
+- Displays truncated song name
+
+---
+
+### 📂 **Playlist Components** (`src/components/playlists/`)
+
+---
+
+#### 📁 `PlaylistList.tsx`
+
+**Purpose**: List of user playlists for the sidebar.
+
+**Props**:
+| Prop | Type | Description |
+|------|------|-------------|
+| `playlists` | `Playlist[]` | Array of playlists |
+| `selectedPlaylistId` | `number \| null` | Currently selected playlist |
+| `onPlaylistClick` | `(playlistId: number) => void` | Selection callback |
+| `onCreateNew` | `() => void` | Opens create modal |
+| `onDeletePlaylist?` | `(playlistId: number) => void` | Delete callback |
+
+**Features**:
+- Shows playlist cover art or default icon
+- Displays song count
+- Delete button with confirmation
+- "Create Playlist" button at bottom
+
+---
+
+#### 📁 `CreatePlaylistModal.tsx`
+
+**Purpose**: Modal dialog for creating new playlists.
+
+**Props**:
+| Prop | Type | Description |
+|------|------|-------------|
+| `isOpen` | `boolean` | Modal visibility |
+| `onClose` | `() => void` | Close callback |
+| `onCreate` | `(name, description?) => Promise<any>` | Create callback |
+
+**Internal State**:
+| State | Type | Description |
+|-------|------|-------------|
+| `name` | `string` | Playlist name input |
+| `description` | `string` | Optional description |
+| `isCreating` | `boolean` | Loading state |
+
+**Internal Functions**:
+| Function | Description |
+|----------|-------------|
+| `handleKeyDown(e)` | Handles Escape (close) and Enter (submit) |
+| `handleCreate()` | Validates and creates playlist |
+
+**Features**:
+- Auto-focuses name input when opened
+- Resets form when closed
+- Keyboard shortcuts (Enter to create, Escape to close)
+- Loading state during creation
+
+---
+
+### 📂 **Settings Components** (`src/components/settings/`)
+
+---
+
+#### 📁 `Settings/Settings.tsx`
+
+**Purpose**: Full-page settings panel.
+
+**Props**:
+| Prop | Type | Description |
+|------|------|-------------|
+| `isOpen` | `boolean` | Panel visibility |
+| `onClose` | `() => void` | Close callback |
+| `onSettingsChange` | `() => void` | Settings saved callback |
+| `onScanAll?` | `() => void` | Trigger batch library scan |
+| `isBatchScanning?` | `boolean` | Scan in progress |
+| `unscannedCount?` | `number` | Songs needing scan |
+| `totalSongCount?` | `number` | Total library size |
+| `visualizerMode` | `VisualizerMode` | Current visualizer mode |
+| `onVisualizerModeChange` | `(mode: VisualizerMode) => void` | Change visualizer mode |
+
+**Internal State**:
+| State | Type | Description |
+|-------|------|-------------|
+| `settings` | `AppSettings` | Current app settings |
+| `binaryStatuses` | `BinaryStatus[]` | External binary statuses |
+| `platformInfo` | `PlatformInfo` | OS and architecture |
+
+**Internal Functions**:
+| Function | Description |
+|----------|-------------|
+| `loadSettings()` | Fetches settings from backend |
+| `loadBinaryStatuses()` | Checks yt-dlp installation status |
+| `loadPlatformInfo()` | Gets platform information |
+| `handleSelectMusicFolder()` | Opens folder picker for music library |
+| `handleSelectDownloadFolder()` | Opens folder picker for downloads |
+| `handleSave()` | Saves settings to backend |
+
+**Features**:
+- Music folder selection with path display
+- Download folder selection
+- Binary status display (yt-dlp version, update status)
+- Platform information
+- Visualizer mode toggle (Bars/Wave/Off)
+- Batch scan trigger with progress indicator
+- Keyboard shortcut to close (Escape)
+
+---
+
+## 🪝 React Hooks Reference
+
+This section documents all custom React hooks in the `src/hooks/` folder with their state, return values, and internal functions.
+
+---
+
+### 📁 `useAudioPlayer.ts`
+
+**Purpose**: Manages audio playback using Howler.js with shuffle, repeat, and playback history.
+
+**Usage**:
+```typescript
+const {
+  currentSound, playingIndex, isPlaying, currentTime, duration, volume,
+  playSong, togglePlayPause, playNext, playPrevious, seek, setVolume,
+  shuffle, repeatMode, toggleShuffle, cycleRepeatMode
+} = useAudioPlayer(musicFiles)
+```
+
+**Parameters**:
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `musicFiles` | `MusicFile[]` | Array of songs available for playback |
+
+**Return Value** (`UseAudioPlayerReturn`):
+| Property | Type | Description |
+|----------|------|-------------|
+| `currentSound` | `Howl \| null` | Current Howler.js sound instance |
+| `playingIndex` | `number \| null` | Index of currently playing song |
+| `isPlaying` | `boolean` | Whether audio is currently playing |
+| `currentTime` | `number` | Current playback position (seconds) |
+| `duration` | `number` | Total song duration (seconds) |
+| `volume` | `number` | Volume level (0-1) |
+| `shuffle` | `boolean` | Shuffle mode enabled |
+| `repeatMode` | `RepeatMode` | `'off'`, `'all'`, or `'one'` |
+
+**Returned Functions**:
+| Function | Parameters | Returns | Description |
+|----------|------------|---------|-------------|
+| `playSong(file, index)` | `MusicFile`, `number` | `void` | Starts playing a song at given index |
+| `togglePlayPause()` | none | `void` | Toggles play/pause state |
+| `playNext(auto?)` | `boolean` | `void` | Skips to next song (auto=true for end-of-song) |
+| `playPrevious()` | none | `void` | Goes to previous song |
+| `seek(time)` | `number` | `void` | Seeks to position in seconds |
+| `setVolume(volume)` | `number` | `void` | Sets volume (0-1) |
+| `toggleShuffle()` | none | `void` | Toggles shuffle on/off |
+| `cycleRepeatMode()` | none | `void` | Cycles: off → all → one → off |
+
+**Internal State**:
+- `playHistory: number[]` - Tracks played song indices for Previous button
+- `historyPosition: number` - Current position in history for navigation
+- Uses `useRef` for tracking mounted state, avoiding stale closures
+
+**Features**:
+- Automatic next song on song end (respects repeat mode)
+- Shuffle uses random selection excluding current song
+- "Repeat One" replays the same song
+- History tracking for Previous button (goes back through played songs)
+- Volume persists across song changes
+- Sends playback state to system tray
+
+---
+
+### 📁 `useMusicLibrary.ts`
+
+**Purpose**: Manages loading, sorting, and updating the music file library.
+
+**Usage**:
+```typescript
+const {
+  musicFiles, sortedMusicFiles, loading, error, selectedFolder,
+  sortBy, setSortBy, handleSelectFolder, scanFolder, updateSingleFile
+} = useMusicLibrary()
+```
+
+**Return Value** (`UseMusicLibraryReturn`):
+| Property | Type | Description |
+|----------|------|-------------|
+| `musicFiles` | `MusicFile[]` | Raw array of all loaded files |
+| `sortedMusicFiles` | `MusicFile[]` | Sorted array based on current sort option |
+| `loading` | `boolean` | Whether a scan is in progress |
+| `error` | `string \| null` | Error message if scan failed |
+| `selectedFolder` | `string \| null` | Currently selected music folder path |
+| `sortBy` | `SortOption` | Current sort option |
+
+**Returned Functions**:
+| Function | Parameters | Returns | Description |
+|----------|------------|---------|-------------|
+| `setSortBy(option)` | `SortOption` | `void` | Changes sort order |
+| `handleSelectFolder()` | none | `Promise<void>` | Opens folder picker and scans |
+| `scanFolder(path)` | `string` | `Promise<void>` | Scans a specific folder |
+| `updateSingleFile(path)` | `string` | `Promise<MusicFile \| null>` | Refreshes one file's metadata in-place |
+
+**SortOption**: `'title' | 'artist' | 'album' | 'dateAdded'`
+
+**Features**:
+- Auto-loads saved music folder on mount
+- Sorted files are memoized for performance
+- `updateSingleFile` updates metadata in-place without re-scanning (preserves scroll position)
+- Uses `dateAdded` from file modification time for sorting
+
+---
+
+### 📁 `usePlaylists.ts`
+
+**Purpose**: Manages playlist CRUD operations and maintains playlist state.
+
+**Usage**:
+```typescript
+const {
+  playlists, activePlaylist, loading,
+  createPlaylist, deletePlaylist, renamePlaylist,
+  addSongsToPlaylist, removeSongFromPlaylist,
+  loadPlaylist, clearActivePlaylist, refreshPlaylists
+} = usePlaylists({ onShowNotification, musicFiles })
+```
+
+**Options**:
+| Option | Type | Description |
+|--------|------|-------------|
+| `onShowNotification?` | `(message, type) => void` | Optional notification callback |
+| `musicFiles?` | `MusicFile[]` | All music files (for resolving paths to full objects) |
+
+**Return Value** (`UsePlaylistsReturn`):
+| Property | Type | Description |
+|----------|------|-------------|
+| `playlists` | `Playlist[]` | All playlists (metadata only) |
+| `activePlaylist` | `PlaylistWithSongs \| null` | Currently loaded playlist with full song data |
+| `loading` | `boolean` | Whether a playlist operation is in progress |
+
+**Returned Functions**:
+| Function | Parameters | Returns | Description |
+|----------|------------|---------|-------------|
+| `createPlaylist(name, desc?)` | `string`, `string?` | `Promise<Playlist \| null>` | Creates a new playlist |
+| `deletePlaylist(id)` | `number` | `Promise<boolean>` | Deletes a playlist |
+| `renamePlaylist(id, name)` | `number`, `string` | `Promise<boolean>` | Renames a playlist |
+| `addSongsToPlaylist(id, paths)` | `number`, `string[]` | `Promise<boolean>` | Adds songs to playlist |
+| `removeSongFromPlaylist(id, path)` | `number`, `string` | `Promise<boolean>` | Removes a song |
+| `loadPlaylist(id)` | `number` | `Promise<void>` | Loads playlist with full song data |
+| `clearActivePlaylist()` | none | `void` | Clears active playlist state |
+| `refreshPlaylists()` | none | `Promise<void>` | Reloads all playlists from database |
+
+**Playlist Interface**:
+```typescript
+interface Playlist {
+  id: number
+  name: string
+  description: string | null
+  coverArtPath: string | null
+  songCount: number
+  totalDuration: number
+  createdAt: number
+  updatedAt: number
+}
+```
+
+**PlaylistWithSongs Interface**:
+```typescript
+interface PlaylistWithSongs extends Playlist {
+  songs: MusicFile[]  // Full song objects, not just paths
+}
+```
+
+**Features**:
+- Auto-loads all playlists on mount
+- Optimistic local state updates (doesn't wait for backend)
+- Shows success/error notifications for all operations
+- Resolves file paths to full `MusicFile` objects when loading playlist
+- Calculates total duration when loading playlist
+
+---
+
+### 📁 `useSongScanner.ts`
+
+**Purpose**: Scans songs for metadata using audio fingerprinting, AcoustID, and MusicBrainz.
+
+**Usage**:
+```typescript
+const {
+  isScanning, batchProgress, scanSong, scanBatch, cancelBatchScan
+} = useSongScanner({
+  onShowNotification,
+  onUpdateSingleFile,
+  onStatusUpdate
+})
+```
+
+**Options**:
+| Option | Type | Description |
+|--------|------|-------------|
+| `onShowNotification?` | `(message, type) => void` | Shows toast notifications |
+| `onUpdateSingleFile?` | `(path) => Promise<MusicFile \| null>` | Refreshes file in library |
+| `onStatusUpdate?` | `(path, status) => void` | Updates scan status in UI |
+
+**Return Value**:
+| Property | Type | Description |
+|----------|------|-------------|
+| `isScanning` | `boolean` | Whether any scan is active |
+| `batchProgress` | `BatchScanProgress` | Current batch scan progress |
+
+**BatchScanProgress**:
+```typescript
+interface BatchScanProgress {
+  isScanning: boolean
+  currentIndex: number
+  totalCount: number
+  currentSongName: string
+  apiPhase?: 'acoustid' | 'musicbrainz' | 'coverart' | 'writing' | null
+}
+```
+
+**Returned Functions**:
+| Function | Parameters | Returns | Description |
+|----------|------------|---------|-------------|
+| `scanSong(file)` | `MusicFile` | `Promise<ScanResult>` | Scans a single song |
+| `scanBatch(files)` | `MusicFile[]` | `Promise<void>` | Scans multiple songs with parallel fingerprinting |
+| `cancelBatchScan()` | none | `void` | Cancels ongoing batch scan |
+
+**ScanResult**:
+```typescript
+interface ScanResult {
+  success: boolean
+  status: 'unscanned' | 'scanned-tagged' | 'scanned-no-match' | 'file-changed'
+  title?: string
+  artist?: string
+  error?: string
+}
+```
+
+**Scan Pipeline (single song)**:
+```
+1. Generate fingerprint (local fpcalc binary)
+   ↓
+2. Query AcoustID API with fingerprint
+   ↓ (rate limited: 3 calls/sec)
+3. Query MusicBrainz API with recording MBID
+   ↓ (rate limited: 1 call/sec)
+4. Download cover art from Cover Art Archive
+   ↓ (rate limited)
+5. Write metadata to file using taglib-wasm
+```
+
+**Batch Scan (parallel fingerprinting)**:
+```
+Phase 1: PARALLEL FINGERPRINTING
+┌─────────────────────────────────────────────────────────┐
+│  Worker 1: song1.mp3 → fingerprint                      │
+│  Worker 2: song2.mp3 → fingerprint                      │
+│  Worker 3: song3.mp3 → fingerprint                      │
+│  Worker 4: song4.mp3 → fingerprint                      │
+│  ... (uses all CPU cores - 1)                           │
+└─────────────────────────────────────────────────────────┘
+
+Phase 2: SEQUENTIAL API LOOKUPS (rate-limited)
+┌─────────────────────────────────────────────────────────┐
+│  For each file with fingerprint:                        │
+│    1. AcoustID lookup (wait for rate limit)             │
+│    2. MusicBrainz lookup (wait for rate limit)          │
+│    3. Cover art download (wait for rate limit)          │
+│    4. Write metadata                                    │
+│    5. Update UI                                         │
+└─────────────────────────────────────────────────────────┘
+```
+
+**Features**:
+- **Parallel fingerprinting**: Uses worker pool (CPU cores - 1) for blazing fast fingerprint generation
+- **Rate limiting**: Respects API rate limits (AcoustID 3/sec, MusicBrainz 1/sec)
+- **Phase display**: Shows current API phase (acoustid/musicbrainz/coverart/writing)
+- **Cancellable**: Batch scan can be cancelled mid-process
+- **Error recovery**: Continues to next file if one fails
+- **Cache integration**: Marks files as scanned in SQLite cache to avoid re-scanning
+
+---
+
+## 🔌 Services Reference
+
+This section documents all API service modules in the `src/services/` folder. These modules provide the core song identification functionality.
+
+---
+
+### 📁 `acoustid.ts`
+
+**Purpose**: Queries the AcoustID API with audio fingerprints to identify songs.
+
+**What is AcoustID?**
+AcoustID is an open-source audio fingerprinting service. Given a fingerprint (generated by Chromaprint/fpcalc), it returns matching MusicBrainz Recording IDs.
+
+**Exported Interface**:
+```typescript
+interface AcoustIDResultData {
+  mbid: string       // MusicBrainz Recording ID
+  title?: string     // Song title (if available)
+  artist?: string    // Artist name (if available)
+}
+```
+
+**Exported Functions**:
+| Function | Parameters | Returns | Description |
+|----------|------------|---------|-------------|
+| `lookupFingerprint(fingerprint, duration)` | `string`, `number` | `Promise<AcoustIDResultData \| null>` | Queries AcoustID API via IPC |
+
+**Usage**:
+```typescript
+import { lookupFingerprint } from '../services/acoustid'
+
+const result = await lookupFingerprint(fingerprint, duration)
+if (result) {
+  console.log(`Found: ${result.title} by ${result.artist}`)
+  console.log(`MBID: ${result.mbid}`)
+}
+```
+
+**Implementation Notes**:
+- The actual API call is made in the backend (main process) via IPC
+- This avoids CORS issues in the renderer
+- API key is stored securely in the backend
+
+---
+
+### 📁 `fingerprint.ts`
+
+**Purpose**: Generates audio fingerprints using the fpcalc binary (Chromaprint) via IPC.
+
+**Why IPC?**
+The fingerprinting runs in the Main Process using the fpcalc binary instead of WASM. This avoids memory exhaustion issues that occur when running fingerprinting in the Renderer process for large libraries.
+
+**Exported Interface**:
+```typescript
+interface BatchFingerprintResult {
+  filePath: string           // Path to the audio file
+  success: boolean           // Whether fingerprinting succeeded
+  fingerprint: string | null // The Chromaprint fingerprint
+  duration: number | null    // Audio duration in seconds
+  workerId: number           // Which worker processed this file
+  processingTimeMs: number   // How long it took
+}
+```
+
+**Exported Functions**:
+| Function | Parameters | Returns | Description |
+|----------|------------|---------|-------------|
+| `ensureFpcalcReady()` | none | `Promise<boolean>` | Ensures fpcalc binary is installed (downloads if needed) |
+| `generateFingerprint(filePath)` | `string` | `Promise<string \| null>` | Generates fingerprint for a single file |
+| `generateFingerprintsBatch(filePaths, onProgress?)` | `string[]`, callback? | `Promise<BatchFingerprintResult[]>` | Parallel fingerprinting for multiple files |
+| `resetFingerprintErrors()` | none | `void` | Resets error counter (call at start of new scan) |
+
+**Usage**:
+```typescript
+import { ensureFpcalcReady, generateFingerprint, generateFingerprintsBatch } from '../services/fingerprint'
+
+// Single file
+await ensureFpcalcReady()
+const fingerprint = await generateFingerprint('/path/to/song.mp3')
+
+// Batch (parallel)
+const results = await generateFingerprintsBatch(
+  ['/path/to/song1.mp3', '/path/to/song2.mp3'],
+  (progress) => {
+    console.log(`${progress.completed}/${progress.total} - Worker ${progress.workerId}`)
+  }
+)
+```
+
+**Circuit Breaker Pattern**:
+- Tracks consecutive errors (max 5)
+- After 5 consecutive failures, skips fingerprinting to avoid wasting resources
+- Call `resetFingerprintErrors()` when starting a new scan session
+
+---
+
+### 📁 `musicbrainz.ts`
+
+**Purpose**: Queries MusicBrainz API for detailed song metadata and cover art URLs.
+
+**What is MusicBrainz?**
+MusicBrainz is an open music encyclopedia with detailed metadata for millions of songs, albums, and artists.
+
+**Exported Interfaces**:
+```typescript
+interface MusicBrainzArtist {
+  id: string
+  name: string
+  'sort-name'?: string
+}
+
+interface MusicBrainzReleaseGroup {
+  id: string
+  title: string
+  'primary-type'?: string       // "Album", "Single", "EP"
+  'secondary-types'?: string[]  // ["Compilation"], ["Soundtrack"]
+}
+
+interface MusicBrainzRelease {
+  id: string
+  title: string
+  date?: string                 // "2023-01-15" or "2023"
+  country?: string              // "US", "GB", "JP"
+  status?: string               // "Official", "Bootleg", "Promotion"
+  'release-group'?: MusicBrainzReleaseGroup
+}
+
+interface MusicBrainzRecording {
+  id: string
+  title: string
+  length?: number               // Duration in milliseconds
+  'artist-credit'?: Array<{
+    artist: MusicBrainzArtist
+    name?: string               // Credit name (e.g., "feat. X")
+    joinphrase?: string         // " & ", ", ", " feat. "
+  }>
+  releases?: MusicBrainzRelease[]
+}
+```
+
+**Exported Functions**:
+| Function | Parameters | Returns | Description |
+|----------|------------|---------|-------------|
+| `lookupRecording(mbid)` | `string` | `Promise<MusicBrainzRecording \| null>` | Fetches recording metadata from MusicBrainz |
+| `getCoverArtUrl(releaseMbid)` | `string` | `string` | Generates URL for 250px cover art |
+| `getCoverArtUrls(releases, releaseGroupId?)` | `MusicBrainzRelease[]`, `string?` | `string[]` | Generates array of cover art URLs to try (with fallbacks) |
+| `pickBestRelease(releases)` | `MusicBrainzRelease[]` | `MusicBrainzRelease \| null` | Picks the most likely "original" release |
+
+**Usage**:
+```typescript
+import { lookupRecording, getCoverArtUrls, pickBestRelease } from '../services/musicbrainz'
+
+// Get recording metadata
+const recording = await lookupRecording('mbid-here')
+if (recording) {
+  // Get the best release (prefers original albums over compilations)
+  const bestRelease = pickBestRelease(recording.releases)
+  
+  // Get cover art URLs to try
+  const coverUrls = getCoverArtUrls(recording.releases, releaseGroupId)
+  
+  // Try downloading cover art (with fallbacks)
+  for (const url of coverUrls) {
+    const success = await tryDownload(url)
+    if (success) break
+  }
+}
+```
+
+**Release Scoring Algorithm** (`pickBestRelease`):
+
+The algorithm scores releases to find the most likely "original" release:
+
+| Criterion | Score Impact |
+|-----------|--------------|
+| Official status | +100 |
+| Promotion status | +20 |
+| Album primary type | +50 |
+| Single primary type | +40 |
+| EP primary type | +30 |
+| Compilation secondary type | **-200** |
+| Soundtrack secondary type | **-150** |
+| Remix secondary type | **-100** |
+| Live secondary type | -50 |
+| Earlier release date | +1 per year old (max +50) |
+
+**Example**: A song appears on:
+1. Original Album (2020, Official) → Score: 100 + 50 + 3 = **153**
+2. Greatest Hits Compilation (2023, Official) → Score: 100 + 50 - 200 = **-50**
+3. Movie Soundtrack (2021, Official) → Score: 100 + 50 - 150 + 2 = **2**
+
+The algorithm correctly picks the **Original Album**.
+
+**Cover Art URL Fallback Strategy**:
+
+```
+Priority 1: Try 250px for each release
+  → /release/{id}/front-250
+
+Priority 2: Try 500px for each release
+  → /release/{id}/front-500
+
+Priority 3: Try full size for each release
+  → /release/{id}/front
+
+Priority 4: Try release group (some only have art at group level)
+  → /release-group/{id}/front-250
+  → /release-group/{id}/front-500
+  → /release-group/{id}/front
+```
+
+---
+
+## 📋 TypeScript Types Reference
+
+This section documents all TypeScript type definitions in the `src/types/` folder. These types provide type safety across the application.
+
+---
+
+### 📁 `electron.d.ts`
+
+**Purpose**: Type definitions for the Electron IPC API exposed to the renderer process.
+
+This file defines the `ElectronAPI` interface and all supporting types for communication between the React frontend and Electron backend.
+
+---
+
+#### **Core Types**
+
+**`AppSettings`** - User preferences stored on disk:
+```typescript
+interface AppSettings {
+  musicFolderPath: string | null   // Path to music library
+  downloadFolderPath: string | null // Path for YouTube downloads
+}
+```
+
+**`BinaryStatus`** - Status of external binaries (yt-dlp):
+```typescript
+interface BinaryStatus {
+  name: string              // "yt-dlp"
+  installed: boolean        // true if working
+  version: string | null    // e.g., "2024.12.06"
+  path: string | null       // Full path to binary
+  latestVersion: string | null  // From GitHub
+  needsUpdate: boolean      // true if outdated
+}
+```
+
+**`PlatformInfo`** - Operating system information:
+```typescript
+interface PlatformInfo {
+  platform: string  // "win32", "darwin", "linux"
+  arch: string      // "x64", "arm64"
+}
+```
+
+**`BinaryDownloadProgress`** - Progress when downloading binaries:
+```typescript
+interface BinaryDownloadProgress {
+  status: 'checking' | 'not-found' | 'downloading' | 'downloaded' | 'installed' | 'updating' | 'version-check'
+  message: string
+  percentage?: number
+}
+```
+
+---
+
+#### **Audio Metadata Types**
+
+**`AudioMetadata`** - Metadata to write to audio files:
+```typescript
+interface AudioMetadata {
+  title?: string
+  artist?: string
+  album?: string
+  albumArtist?: string
+  year?: number
+  trackNumber?: number
+  trackTotal?: number
+  discNumber?: number
+  discTotal?: number
+  genre?: string
+  comment?: string
+  coverArtPath?: string  // Path to cover art image file
+}
+```
+
+---
+
+#### **Scan Cache Types**
+
+**`ScanStatusType`** - Status of a file's scan state:
+```typescript
+type ScanStatusType = 'unscanned' | 'scanned-tagged' | 'scanned-no-match' | 'file-changed'
+```
+
+| Status | Description |
+|--------|-------------|
+| `unscanned` | File has never been scanned |
+| `scanned-tagged` | Scanned and metadata was written |
+| `scanned-no-match` | Scanned but no match found |
+| `file-changed` | File modified since last scan, needs rescan |
+
+**`FileScanStatus`** - Full scan record from database:
+```typescript
+interface FileScanStatus {
+  filePath: string      // Full path to file
+  fileHash: string      // Hash of path+size+mtime for change detection
+  scannedAt: number     // Timestamp of scan
+  mbid: string | null   // MusicBrainz ID if matched
+  hasMetadata: boolean  // Whether metadata was written
+}
+```
+
+**`CacheScanStatistics`** - Scan summary counts:
+```typescript
+interface CacheScanStatistics {
+  total: number          // Total files scanned
+  withMetadata: number   // Files with metadata written
+  withoutMetadata: number // Files with no match
+}
+```
+
+---
+
+#### **Playlist Types**
+
+**`Playlist`** - Playlist metadata (without songs):
+```typescript
+interface Playlist {
+  id: number
+  name: string
+  description: string | null
+  coverArtPath: string | null
+  songCount: number
+  totalDuration: number    // Seconds
+  createdAt: number        // Timestamp
+  updatedAt: number        // Timestamp
+}
+```
+
+**`PlaylistWithSongs`** - Playlist with full song data:
+```typescript
+interface PlaylistWithSongs extends Playlist {
+  songs: MusicFile[]  // Full song objects, not just paths
+}
+```
+
+---
+
+#### **ElectronAPI Interface**
+
+The main interface exposed to the renderer via `window.electronAPI`:
+
+```typescript
+interface ElectronAPI {
+  // MUSIC LIBRARY
+  scanMusicFolder(folderPath: string): Promise<MusicFile[]>
+  selectMusicFolder(): Promise<string | null>
+  readSingleFileMetadata(filePath: string): Promise<MusicFile | null>
+  
+  // SETTINGS
+  getSettings(): Promise<AppSettings>
+  saveSettings(settings: AppSettings): Promise<{ success: boolean; error?: string }>
+  selectDownloadFolder(): Promise<string | null>
+  getBinaryStatuses(): Promise<BinaryStatus[]>
+  getPlatformInfo(): Promise<PlatformInfo>
+  
+  // WINDOW CONTROL
+  minimizeWindow(): void
+  maximizeWindow(): void
+  closeWindow(): void
+  onWindowStateChanged(callback: (maximized: boolean) => void): () => void
+  
+  // TRAY INTEGRATION
+  onTrayPlayPause(callback: () => void): () => void
+  sendPlaybackState(isPlaying: boolean): void
+  sendWindowVisibility(visible: boolean): void
+  
+  // YOUTUBE DOWNLOAD
+  downloadYouTube(url: string, outputPath: string): Promise<{
+    success: boolean
+    filePath?: string
+    error?: string
+    title?: string
+  }>
+  onDownloadProgress(callback: (progress) => void): () => void
+  onBinaryDownloadProgress(callback: (progress) => void): () => void
+  onDownloadTitle(callback: (title: string) => void): () => void
+  
+  // API LOOKUPS
+  lookupAcoustid(fingerprint: string, duration: number): Promise<{
+    mbid: string
+    title?: string
+    artist?: string
+  } | null>
+  lookupMusicBrainz(mbid: string): Promise<any>
+  downloadImage(url: string, filePath: string): Promise<{ success: boolean; error?: string }>
+  downloadImageWithFallback(urls: string[], filePath: string): Promise<{
+    success: boolean
+    url?: string
+    error?: string
+  }>
+  
+  // METADATA WRITING
+  writeMetadata(filePath: string, metadata: AudioMetadata): Promise<{
+    success: boolean
+    error?: string
+  }>
+  writeCoverArt(filePath: string, imagePath: string): Promise<{
+    success: boolean
+    error?: string
+  }>
+  
+  // FINGERPRINTING
+  generateFingerprint(filePath: string): Promise<{
+    success: boolean
+    fingerprint?: string
+    duration?: number
+    error?: string
+  }>
+  fingerprintCheckReady(): Promise<{ ready: boolean; path: string | null }>
+  fingerprintEnsureReady(): Promise<{
+    success: boolean
+    path?: string | null
+    error?: string
+  }>
+  generateFingerprintsBatch(filePaths: string[]): Promise<{
+    success: boolean
+    results?: BatchFingerprintResult[]
+    stats?: BatchStats
+    error?: string
+  }>
+  fingerprintGetPoolInfo(): Promise<{ cpuCount: number; workerCount: number }>
+  onFingerprintBatchProgress(callback: (progress) => void): () => void
+  
+  // CACHE OPERATIONS
+  cacheGetFileStatus(filePath: string): Promise<ScanStatusType>
+  cacheMarkFileScanned(filePath: string, mbid: string | null, hasMetadata: boolean): Promise<boolean>
+  cacheGetBatchStatus(filePaths: string[]): Promise<Record<string, ScanStatusType>>
+  cacheGetUnscannedFiles(filePaths: string[]): Promise<string[]>
+  cacheGetStatistics(): Promise<CacheScanStatistics>
+  cacheGetEntry(filePath: string): Promise<FileScanStatus | null>
+  cacheCleanupOrphaned(): Promise<number>
+  cacheClear(): Promise<boolean>
+  
+  // PLAYLIST OPERATIONS
+  playlistCreate(name: string, description?: string): Promise<PlaylistResponse>
+  playlistDelete(playlistId: number): Promise<PlaylistResponse>
+  playlistRename(playlistId: number, newName: string): Promise<PlaylistResponse>
+  playlistUpdateDescription(playlistId: number, description: string | null): Promise<PlaylistResponse>
+  playlistUpdateCover(playlistId: number, coverArtPath: string | null): Promise<PlaylistResponse>
+  playlistGetAll(): Promise<{ success: boolean; playlists: Playlist[]; error?: string }>
+  playlistGetById(playlistId: number): Promise<{ success: boolean; playlist: Playlist | null }>
+  playlistGetSongs(playlistId: number): Promise<{ success: boolean; songPaths: string[] }>
+  playlistAddSongs(playlistId: number, filePaths: string[]): Promise<PlaylistResponse>
+  playlistRemoveSong(playlistId: number, filePath: string): Promise<PlaylistResponse>
+  playlistReorderSongs(playlistId: number, newOrder: ReorderItem[]): Promise<PlaylistResponse>
+  playlistIsSongIn(playlistId: number, filePath: string): Promise<{ success: boolean; isIn: boolean }>
+  playlistGetContainingSong(filePath: string): Promise<{ success: boolean; playlists: Playlist[] }>
+  playlistCleanupMissing(): Promise<{ success: boolean; removedCount: number }>
+}
+```
+
+**Global Declaration**:
+```typescript
+declare global {
+  interface Window {
+    electronAPI: ElectronAPI
+  }
+}
+```
+
+This makes `window.electronAPI` available everywhere in the React app with full TypeScript support.
+
+---
+
+### 📁 `playlist.ts`
+
+**Purpose**: Additional playlist type definitions and API response types.
+
+**Core Types**:
+```typescript
+// Playlist metadata
+interface Playlist {
+  id: number
+  name: string
+  description: string | null
+  coverArtPath: string | null
+  songCount: number
+  totalDuration: number
+  createdAt: number
+  updatedAt: number
+}
+
+// Playlist with songs loaded
+interface PlaylistWithSongs extends Playlist {
+  songs: MusicFile[]
+}
+
+// Song entry in playlist table
+interface PlaylistSong {
+  playlistId: number
+  filePath: string
+  position: number   // Order in playlist
+  addedAt: number    // Timestamp
+}
+```
+
+**API Response Types**:
+| Type | Fields | Description |
+|------|--------|-------------|
+| `PlaylistCreateResponse` | `success`, `playlist?`, `error?` | Response when creating playlist |
+| `PlaylistResponse` | `success`, `error?` | Generic success/error response |
+| `PlaylistGetAllResponse` | `success`, `playlists`, `error?` | Response with all playlists |
+| `PlaylistGetByIdResponse` | `success`, `playlist`, `error?` | Response with single playlist |
+| `PlaylistGetSongsResponse` | `success`, `songPaths`, `error?` | Response with song paths |
+| `PlaylistContainingSongResponse` | `success`, `playlists`, `error?` | Playlists containing a song |
+| `PlaylistIsSongInResponse` | `success`, `isIn`, `error?` | Check if song is in playlist |
+| `PlaylistCleanupResponse` | `success`, `removedCount`, `error?` | Cleanup missing songs |
+
+---
+
+### 📁 `vite-env.d.ts`
+
+**Purpose**: Vite environment type declarations.
+
+```typescript
+/// <reference types="vite/client" />
+```
+
+This single line enables TypeScript support for:
+- Vite-specific globals (`import.meta.env`)
+- Static asset imports (`.svg`, `.png`, etc.)
+- CSS module imports (`.module.css`)
+- Hot Module Replacement (HMR) types
+
+**Environment Variables** (via `import.meta.env`):
+| Variable | Type | Description |
+|----------|------|-------------|
+| `import.meta.env.DEV` | `boolean` | True in development |
+| `import.meta.env.PROD` | `boolean` | True in production |
+| `import.meta.env.MODE` | `string` | `'development'` or `'production'` |
+| `import.meta.env.VITE_*` | `string` | Custom env variables prefixed with `VITE_` |
+
+---
+
+## 🔧 Utility Functions Reference
+
+This section documents all utility modules in the `src/utils/` folder. These provide reusable helper functions across the application.
+
+---
+
+### 📁 `colorExtractor.ts`
+
+**Purpose**: Extracts dominant colors from album art for dynamic UI theming.
+
+**Exported Interface**:
+```typescript
+interface ExtractedColors {
+  primary: string    // Most dominant color
+  secondary: string  // Second most dominant
+  accent: string     // Third most dominant
+  background: string // Fourth most dominant (for backgrounds)
+}
+```
+
+**Exported Functions**:
+| Function | Parameters | Returns | Description |
+|----------|------------|---------|-------------|
+| `extractColorsFromImage(imageUrl)` | `string` | `Promise<ExtractedColors>` | Extracts 4 dominant colors from an image |
+
+**Usage**:
+```typescript
+import { extractColorsFromImage } from '../utils/colorExtractor'
+
+const colors = await extractColorsFromImage(albumArt)
+// colors.primary → "#667eea"
+// colors.secondary → "#764ba2"
+// colors.accent → "#f093fb"
+// colors.background → "#1a1a2e"
+
+// Use for dynamic styling
+element.style.background = `linear-gradient(135deg, ${colors.primary}, ${colors.secondary})`
+```
+
+**Algorithm**:
+1. Load image onto a canvas (50x50 for performance)
+2. Sample every 4th pixel
+3. Skip transparent, very dark, and very light pixels
+4. Quantize colors (reduce to nearest 32-step)
+5. Count color occurrences
+6. Return top 4 colors sorted by frequency
+
+**Default Colors** (used when extraction fails):
+```typescript
+{
+  primary: '#667eea',
+  secondary: '#764ba2',
+  accent: '#f093fb',
+  background: '#1a1a2e'
+}
+```
+
+---
+
+### 📁 `pathResolver.ts`
+
+**Purpose**: Converts file system paths to `file://` URLs in a cross-platform way.
+
+**Exported Functions**:
+| Function | Parameters | Returns | Description |
+|----------|------------|---------|-------------|
+| `pathToFileURL(filePath)` | `string` | `string` | Converts a path to a file:// URL |
+
+**Usage**:
+```typescript
+import { pathToFileURL } from '../utils/pathResolver'
+
+// Windows
+pathToFileURL('C:\\Users\\music\\song.mp3')
+// → "file:///C:/Users/music/song.mp3"
+
+// macOS/Linux  
+pathToFileURL('/Users/music/song.mp3')
+// → "file:///Users/music/song.mp3"
+```
+
+**Platform Handling**:
+| Platform | Input | Output |
+|----------|-------|--------|
+| Windows | `C:\Users\song.mp3` | `file:///C:/Users/song.mp3` |
+| macOS/Linux | `/Users/song.mp3` | `file:///Users/song.mp3` |
+| Relative | `./song.mp3` | `file:///./song.mp3` |
+
+**Why This Is Needed**:
+- Howler.js and HTML5 Audio require `file://` URLs
+- Windows paths use backslashes (`\`) which aren't valid in URLs
+- Different path formats between Windows and Unix-like systems
+
+---
+
+### 📁 `rateLimiter.ts`
+
+**Purpose**: Provides delays between API calls to respect rate limits.
+
+**Rate Limits**:
+| API | Official Limit | Our Delay |
+|-----|----------------|-----------|
+| AcoustID | 3 requests/sec | 500ms (2/sec) |
+| MusicBrainz | 1 request/sec | 1100ms |
+| Cover Art Archive | 1 request/sec | 1100ms |
+| Between Songs | N/A | 500ms buffer |
+
+**Exported Constants**:
+```typescript
+const API_DELAYS = {
+  ACOUSTID: 500,        // ms
+  MUSICBRAINZ: 1100,    // ms
+  COVERART: 1100,       // ms
+  BETWEEN_SONGS: 500,   // ms
+} as const
+```
+
+**Exported Functions**:
+| Function | Returns | Description |
+|----------|---------|-------------|
+| `delay(ms)` | `Promise<void>` | Simple delay function |
+| `waitForAcoustID()` | `Promise<void>` | Waits 500ms for AcoustID |
+| `waitForMusicBrainz()` | `Promise<void>` | Waits 1100ms for MusicBrainz |
+| `waitForCoverArt()` | `Promise<void>` | Waits 1100ms for Cover Art |
+| `waitBetweenSongs()` | `Promise<void>` | Waits 500ms between songs |
+
+**Usage**:
+```typescript
+import { waitForAcoustID, waitForMusicBrainz, waitForCoverArt } from '../utils/rateLimiter'
+
+// In scan pipeline:
+await waitForAcoustID()
+const acoustidResult = await lookupFingerprint(fingerprint, duration)
+
+await waitForMusicBrainz()
+const mbData = await lookupRecording(mbid)
+
+await waitForCoverArt()
+const coverArt = await downloadImage(url)
+```
+
+**Why Conservative Delays?**
+- APIs may block/ban for exceeding limits
+- Error responses (429 Too Many Requests) waste time
+- Small buffer prevents issues from timing variations
+
+---
+
+### 📁 `sortMusicFiles.ts`
+
+**Purpose**: Sorts music file arrays by various criteria.
+
+**Exported Type**:
+```typescript
+type SortOption = 'title' | 'artist' | 'track' | 'dateAdded'
+```
+
+**Exported Functions**:
+| Function | Parameters | Returns | Description |
+|----------|------------|---------|-------------|
+| `sortMusicFiles(files, sortBy)` | `MusicFile[]`, `SortOption` | `MusicFile[]` | Returns sorted copy of files |
+
+**Usage**:
+```typescript
+import { sortMusicFiles, type SortOption } from '../utils/sortMusicFiles'
+
+const [sortBy, setSortBy] = useState<SortOption>('title')
+
+const sortedFiles = sortMusicFiles(musicFiles, sortBy)
+```
+
+**Sort Behaviors**:
+
+| Sort Option | Primary Sort | Secondary Sort | Order |
+|-------------|--------------|----------------|-------|
+| `title` | Song title | — | A-Z |
+| `artist` | Artist name | Title | A-Z, A-Z |
+| `track` | Album name | Track number | A-Z, 1-99 |
+| `dateAdded` | Date added | — | Newest first |
+
+**Sort Details**:
+
+**`title`**: Sorts by song title (or filename if no title)
+```
+"Another One Bites the Dust"
+"Bohemian Rhapsody"  
+"Crazy Little Thing Called Love"
+```
+
+**`artist`**: Sorts by artist, then by title within same artist
+```
+ABBA - "Dancing Queen"
+ABBA - "Mamma Mia"
+Queen - "Bohemian Rhapsody"
+Queen - "We Will Rock You"
+```
+
+**`track`**: Sorts by album, then by track number (perfect for playing albums in order)
+```
+A Night at the Opera - Track 1
+A Night at the Opera - Track 2
+News of the World - Track 1
+News of the World - Track 2
+```
+
+**`dateAdded`**: Newest files first (descending order)
+```
+song_added_today.mp3
+song_added_yesterday.mp3
+song_added_last_week.mp3
+```
+
+**Note**: The function creates a copy of the array to avoid mutating the original.
+
+---
+
+## 🏠 Core Application Files Reference
+
+This section documents the root-level files in the `src/` folder that form the application's entry point and main component.
+
+---
+
+### 📁 `main.tsx`
+
+**Purpose**: React application entry point.
+
+```typescript
+import React from 'react'
+import ReactDOM from 'react-dom/client'
+import App from './App.tsx'
+import './index.css'
+
+ReactDOM.createRoot(document.getElementById('root')!).render(
+  <React.StrictMode>
+    <App />
+  </React.StrictMode>,
+)
+```
+
+**What It Does**:
+1. Imports the root `App` component
+2. Imports global styles (`index.css`)
+3. Creates a React root attached to `#root` element
+4. Renders the app wrapped in `StrictMode` for development checks
+
+**StrictMode Benefits**:
+- Highlights potential problems
+- Detects legacy lifecycle methods
+- Double-invokes effects (dev only) to catch side-effect bugs
+
+---
+
+### 📁 `App.tsx`
+
+**Purpose**: Main application component that orchestrates all features.
+
+**Hooks Used**:
+```typescript
+// Custom hooks
+const { sortedMusicFiles, loading, error, ... } = useMusicLibrary()
+const { playlists, activePlaylist, createPlaylist, ... } = usePlaylists(options)
+const { batchProgress, scanBatch, cancelBatchScan } = useSongScanner(options)
+const { playingIndex, playSong, togglePlayPause, ... } = useAudioPlayer(songs)
+```
+
+---
+
+#### **State Management**
+
+| State | Type | Purpose |
+|-------|------|---------|
+| `selectedView` | `string` | Current view (`'all'`, `'artist:Name'`, `'album:Name'`, `'playlist:1'`) |
+| `searchTerm` | `string` | Search filter |
+| `scanStatuses` | `Record<string, ScanStatusType>` | Scan status for each file |
+| `visualizerMode` | `VisualizerMode` | `'bars'`, `'wave'`, or `'off'` |
+| `playbackContext` | `object` | Current playback source (separate from view) |
+| `isDownloading` | `boolean` | YouTube download in progress |
+| `downloadProgress` | `number` | Download percentage |
+| `showSettings` | `boolean` | Settings panel visibility |
+| `toastMessage` | `string` | Current notification message |
+| `selectedPlaylistId` | `number \| null` | Currently selected playlist |
+
+---
+
+#### **Core Functions**
+
+| Function | Description |
+|----------|-------------|
+| `showToastNotification(message, type)` | Displays a toast notification |
+| `handleStatusUpdate(filePath, status)` | Updates scan status for a file |
+| `loadScanStatuses()` | Loads scan statuses for all files from cache |
+| `loadSettings()` | Loads download folder from settings |
+| `handleKeyDown(e)` | Handles global keyboard shortcuts |
+| `handleSettingsChange()` | Reloads settings after changes |
+| `handleDownload(url)` | Downloads audio from YouTube URL |
+| `playSong(file, index)` | Plays a song and sets playback context |
+
+---
+
+#### **Playback Context System**
+
+The app uses a **playback context** to keep playback and navigation separate:
+
+```typescript
+const [playbackContext, setPlaybackContext] = useState<{
+  type: 'all' | 'playlist' | 'artist' | 'album'
+  name: string
+  songs: MusicFile[]
+}>({ type: 'all', name: 'All Songs', songs: sortedMusicFiles })
+```
+
+**Why?**
+- User can browse "All Songs" while a playlist is playing
+- Next/Previous stays within the original context
+- Display shows "Playing from: Playlist Name"
+
+**Context Flow**:
+```
+User clicks song in playlist
+    ↓
+playSong() sets playbackContext to playlist
+    ↓
+useAudioPlayer uses playbackContext.songs
+    ↓
+Next/Previous stays in playlist
+    ↓
+User can navigate to "All Songs" view
+    (but playback continues in playlist)
+```
+
+---
+
+#### **View Filtering**
+
+The `filteredMusicFiles` is computed based on `selectedView`:
+
+```typescript
+const filteredMusicFiles = useMemo(() => {
+  let base = sortedMusicFiles
+
+  if (selectedView.startsWith('artist:')) {
+    base = base.filter(f => f.metadata?.artist === artist)
+  } else if (selectedView.startsWith('album:')) {
+    base = base.filter(f => f.metadata?.album === album)
+  } else if (selectedView.startsWith('playlist:') && activePlaylist) {
+    base = activePlaylist.songs
+  }
+
+  // Apply search filter
+  if (searchTerm) {
+    base = base.filter(f => /* matches title, artist, or album */)
+  }
+
+  return base
+}, [sortedMusicFiles, selectedView, searchTerm, activePlaylist])
+```
+
+---
+
+#### **Keyboard Shortcuts**
+
+| Key | Action |
+|-----|--------|
+| `Space` | Play/Pause (when not typing) |
+| `ArrowRight` | Next song |
+| `ArrowLeft` | Previous song |
+| `ArrowUp` | Volume up (+10%) |
+| `ArrowDown` | Volume down (-10%) |
+| `M` | Toggle mute |
+| `S` | Toggle shuffle |
+| `R` | Cycle repeat mode |
+| `Escape` | Close settings |
+
+---
+
+#### **Component Structure**
+
+```jsx
+<App>
+  <TitleBar />
+  
+  <div className="main-content">
+    <Sidebar
+      selectedView={selectedView}
+      onViewChange={setSelectedView}
+      musicFiles={sortedMusicFiles}
+      playlists={playlists}
+      ...
+    />
+    
+    <main className="content-area">
+      <header>
+        <DownloadButton onDownload={handleDownload} ... />
+        <input type="search" />
+        <button onClick={() => setShowSettings(true)}>⚙️</button>
+      </header>
+      
+      <SongList
+        songs={filteredMusicFiles}
+        onSongClick={playSong}
+        playingIndex={playingIndex}
+        ...
+      />
+    </main>
+  </div>
+  
+  <PlaybackBar
+    currentSong={currentSong}
+    isPlaying={isPlaying}
+    onPlayPause={togglePlayPause}
+    ...
+  />
+  
+  <Settings isOpen={showSettings} ... />
+  <CreatePlaylistModal isOpen={showCreatePlaylistModal} ... />
+  <BatchScanProgress isVisible={batchProgress.isScanning} ... />
+  <NotificationToast message={toastMessage} ... />
+  <DownloadNotification title={downloadTitle} ... />
+</App>
+```
+
+---
+
+### 📁 `index.css`
+
+**Purpose**: Global styles and CSS reset.
+
+**Contents**:
+- CSS reset (box-sizing, margins)
+- Root element styling
+- Font stack definition
+- Scrollbar styling
+- Selection colors
+- OverlayScrollbars customization
+
+**Key Styles**:
+```css
+:root {
+  font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
+  background-color: #1a1a1a;
+  color: #ffffff;
+}
+
+#root {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+```
+
+---
+
+### 📁 `App.css`
+
+**Purpose**: Main component styles for the entire application.
+
+**Sections** (organized by component):
+| Section | Purpose |
+|---------|---------|
+| Layout | App container, sidebar, content area |
+| TitleBar | Window controls |
+| Sidebar | Navigation, artists, albums lists |
+| SongList | Song rows, sorting headers |
+| PlaybackBar | Player controls, seek bar, visualizer |
+| Settings | Settings panel |
+| Modals | Create playlist, context menus |
+| Notifications | Toast messages, download progress |
+| Scrollbars | Custom scrollbar styling |
+
+**Key CSS Variables/Colors**:
+- Background: `#1a1a1a` (dark)
+- Sidebar: `#1e1e24`
+- Accent: `#667eea` (purple-blue gradient)
+- Hover states: `rgba(255, 255, 255, 0.05)`
+
+**Responsive Design**:
+- Fixed sidebar width (240px)
+- Flexible content area
+- Fixed playback bar (80px)
+- Custom scrollbars with `overlay-scrollbars`
+
+---
+

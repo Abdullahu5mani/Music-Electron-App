@@ -121,6 +121,7 @@ export function SongList({
     }
 
     setGeneratingFingerprint(file.path)
+    onShowNotification?.(`Identifying "${file.name}"...`, 'info')
     console.log('=== Generating Fingerprint ===')
     console.log('File:', file.name)
     console.log('Path:', file.path)
@@ -300,33 +301,7 @@ export function SongList({
   /**
    * Get the display icon/button for a song based on its scan status
    */
-  const getScanStatusDisplay = (file: MusicFile) => {
-    const status = scanStatuses[file.path]
-    const isGenerating = generatingFingerprint === file.path
 
-    if (isGenerating) {
-      return (
-        <span className="scan-status-icon scanning" title="Scanning...">
-          ⏳
-        </span>
-      )
-    }
-
-    switch (status) {
-      case 'scanned-tagged':
-        return (
-          <span className="scan-status-icon tagged" title="Scanned and tagged">
-            ✅
-          </span>
-        )
-      // Hide buttons for other states (unscanned, no-match, etc) as they are now in context menu
-      case 'scanned-no-match':
-      case 'file-changed':
-      case 'unscanned':
-      default:
-        return null
-    }
-  }
 
   if (songs.length === 0) {
     return (
@@ -390,7 +365,6 @@ export function SongList({
                   <div className="song-title">
                     {file.metadata?.title || file.name.replace(/\.[^/.]+$/, '')}
                   </div>
-                  {getScanStatusDisplay(file)}
                 </div>
                 <div className="song-artist">
                   {file.metadata?.artist || 'Unknown Artist'}

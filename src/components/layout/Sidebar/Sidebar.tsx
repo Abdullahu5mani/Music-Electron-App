@@ -93,7 +93,7 @@ export function Sidebar({
   return (
     <div className="sidebar">
       {/* Unified Playlists section - includes All Songs + user playlists */}
-      <div className={`sidebar-section ${playlistsCollapsed ? 'collapsed' : 'expanded'}`}>
+      <div className={`sidebar-section playlists-section ${playlistsCollapsed ? 'collapsed' : 'expanded'}`}>
         <div
           className="sidebar-title collapsible"
           onClick={() => setPlaylistsCollapsed(!playlistsCollapsed)}
