@@ -319,37 +319,12 @@ export function SongList({
             ✅
           </span>
         )
+      // Hide buttons for other states (unscanned, no-match, etc) as they are now in context menu
       case 'scanned-no-match':
-        return (
-          <button
-            className="fingerprint-button no-match"
-            onClick={(e) => handleGenerateFingerprint(e, file)}
-            title="Scanned but no match found. Click to retry."
-          >
-            ⚠️
-          </button>
-        )
       case 'file-changed':
-        return (
-          <button
-            className="fingerprint-button file-changed"
-            onClick={(e) => handleGenerateFingerprint(e, file)}
-            title="File changed since last scan. Click to rescan."
-          >
-            🔄
-          </button>
-        )
       case 'unscanned':
       default:
-        return (
-          <button
-            className="fingerprint-button"
-            onClick={(e) => handleGenerateFingerprint(e, file)}
-            title="Click to scan and identify this song"
-          >
-            🔍
-          </button>
-        )
+        return null
     }
   }
 
@@ -456,6 +431,21 @@ export function SongList({
             // Add divider before playlist options
             if (playlists.length > 0 || onCreatePlaylistWithSongs) {
               items.push({ label: '', icon: '', onClick: () => { }, divider: true })
+            }
+
+            // Add Identify Song option
+            const currentStatus = scanStatuses[currentSong.path]
+            const isScanningSong = generatingFingerprint === currentSong.path
+
+            if (!isScanningSong && currentStatus !== 'scanned-tagged') {
+              items.push({
+                label: currentStatus === 'scanned-no-match' ? 'Retry Identification' : 'Identify Song',
+                icon: '🔍',
+                onClick: () => {
+                  // Mock event for handleGenerateFingerprint
+                  handleGenerateFingerprint({ stopPropagation: () => { } } as any, currentSong)
+                }
+              })
             }
 
             // Add to existing playlists
