@@ -137,7 +137,8 @@ Here's every important file and what it exports:
 │  └── PlaybackBar/PlaybackBar.tsx → Player controls at bottom                │
 │                                                                             │
 │  src/components/library/                                                    │
-│  └── SongList/SongList.tsx   → List of songs with right-click menu          │
+│  ├── SongList/SongList.tsx   → List of songs with right-click menu          │
+│  └── BatchScanProgress/      → Floating progress card for batch scans       │
 │                                                                             │
 │  src/components/playlists/                                                  │
 │  ├── PlaylistList.tsx        → List of playlists in sidebar                 │
@@ -780,19 +781,87 @@ Boots the application with this startup flow:
 | **`fpcalcManager.ts`** | Manages fpcalc (Chromaprint) binary for audio fingerprinting. Auto-downloads platform-specific binary on first use. Runs fingerprinting in subprocess to avoid memory limits. |
 | **`metadataCache.ts`** | SQLite cache keyed by file hash (path + size + mtime) to track scan status and avoid reprocessing unchanged files. |
 | **`playlistDatabase.ts`** | SQLite database for playlist storage. Manages playlist CRUD operations, song ordering, and playlist-song relationships with foreign key constraints. |
+| **`fileWatcher.ts`** | Monitors the music folder for real-time file changes. Uses Node.js `fs.watch` with recursive option. Debounces rapid changes and notifies renderer via IPC events. |
+
+### File System Watcher
+
+The application includes automatic file system watching, so the music library updates in real-time when files are added, removed, or modified.
+
+**Architecture:**
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                      FILE SYSTEM WATCHER FLOW                        │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                      │
+│  ┌───────────────┐    fs.watch()    ┌─────────────────────────────┐ │
+│  │  Music Folder │ ───────────────> │  fileWatcher.ts (Main)      │ │
+│  │  (Recursive)  │   file events    │  - Debounces changes (500ms)│ │
+│  └───────────────┘                  │  - Filters audio files only │ │
+│                                     │  - Categorizes: add/remove  │ │
+│                                     └──────────────┬──────────────┘ │
+│                                                    │                 │
+│                                     IPC: 'file-watcher-event'       │
+│                                                    │                 │
+│                                                    ▼                 │
+│  ┌─────────────────────────────────────────────────────────────────┐│
+│  │  useMusicLibrary.ts (Renderer)                                  ││
+│  │  - Listens for file watcher events                              ││
+│  │  - 'removed': Filters files from state                          ││
+│  │  - 'added'/'changed': Reads metadata, updates/adds to state     ││
+│  └─────────────────────────────────────────────────────────────────┘│
+│                                                                      │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+**Event Types:**
+
+| Event | Description | Frontend Handling |
+|-------|-------------|-------------------|
+| `added` | New audio file detected | Read metadata, add to library |
+| `removed` | File deleted | Remove from library state |
+| `changed` | File modified | Re-read metadata, update in place |
+
+**IPC Channels:**
+
+| Channel | Direction | Purpose |
+|---------|-----------|---------|
+| `file-watcher-start` | Renderer → Main | Start watching a folder |
+| `file-watcher-stop` | Renderer → Main | Stop watching |
+| `file-watcher-status` | Renderer → Main | Get current watch status |
+| `file-watcher-event` | Main → Renderer | File change notification |
+
+**Key Features:**
+
+- **Recursive Watching**: Monitors all subdirectories within the music folder
+- **Debouncing**: Batches rapid file operations (500ms delay) to prevent excessive updates
+- **Audio File Filtering**: Only processes supported audio extensions
+- **Auto-Restart**: Watcher automatically restarts on errors
+- **Lifecycle Management**: Starts on folder selection, stops on app close or folder change
+
+**Supported Platforms:**
+
+| Platform | Recursive Option | Notes |
+|----------|-----------------|-------|
+| Windows | ✅ Full support | Native `fs.watch` recursive |
+| macOS | ✅ Full support | Native `fs.watch` recursive |
+| Linux | ⚠️ Partial | Recursive may not work on all systems |
+
 
 ### Window Configuration
 
 ```typescript
 win = new BrowserWindow({
-  width: 800, height: 700,
-  minWidth: 450, minHeight: 600,
+  width: 820, height: 720,
+  minWidth: 820, minHeight: 720,
   frame: false,                   // Remove default window frame
   titleBarStyle: 'hidden',        // macOS-specific
   backgroundColor: '#1a1a1a',
   webPreferences: {
     preload: path.join(__dirname, 'preload.mjs'),
     webSecurity: false,           // Allow file:// protocol
+    allowRunningInsecureContent: true,
+    devTools: true,
   },
 })
 ```
@@ -1037,7 +1106,7 @@ The orchestrator that combines all hooks and components.
 |-----------|---------|
 | **`TitleBar.tsx`** | Custom draggable title bar for frameless window; listens for window state changes to toggle maximize/restore icon |
 | **`Sidebar.tsx`** | Collapsible artist/album/playlist sections with search functionality; shows album art thumbnails; integrates PlaylistList component; filters library with active selection |
-| **`SongList.tsx`** | Displays songs with metadata, duration, album art, scan status indicators; handles play selection and per-song scan actions; includes context menu with "Add to Playlist" options; auto-scrolls to current track |
+| **`SongList.tsx`** | Displays songs with metadata, album art; handles play selection; includes context menu with "Identify Song" and "Add to Playlist" options; auto-scrolls to current track; uses toast notifications for scan feedback |
 | **`PlaybackBar.tsx`** | Shows current track info/art with dynamic glow border, playback controls, seek bar with audio visualizer, and volume slider |
 | **`AudioVisualizer.tsx`** | Canvas-based audio spectrum analyzer with "bars" (mirrored spectrum) and "wave" (liquid waveform) modes; extracts audio data from Howler.js |
 | **`DownloadButton.tsx`** | Accepts YouTube URL, triggers download IPC, disables during active download |
@@ -1185,15 +1254,17 @@ Manages playlist state and CRUD operations in the renderer process.
 └─────────────────────────────────────────────────────────────┘
 ```
 
-### Utilities
+### Utilities & Services
 
-| Utility | Purpose |
-|---------|---------|
-| **`pathResolver.ts`** | Normalizes OS paths to `file:///` URLs for Howler/Electron playback |
-| **`sortMusicFiles.ts`** | Pure sorting helpers for title, artist, track, date added |
-| **`fingerprintGenerator.ts`** | IPC wrapper for Main Process fpcalc fingerprinting with circuit breaker |
-| **`acoustidClient.ts`** | Calls AcoustID API with rate limiting |
-| **`musicbrainzClient.ts`** | Queries MusicBrainz, scores releases, generates cover-art URL fallbacks |
+| File | Folder | Purpose |
+|------|--------|---------|
+| **`pathResolver.ts`** | `utils/` | Normalizes OS paths to `file:///` URLs for Howler/Electron playback |
+| **`sortMusicFiles.ts`** | `utils/` | Pure sorting helpers for title, artist, track, date added |
+| **`colorExtractor.ts`** | `utils/` | Extracts dominant colors from album art for dynamic UI theming |
+| **`rateLimiter.ts`** | `utils/` | API delay utilities to respect rate limits |
+| **`fingerprint.ts`** | `services/` | IPC wrapper for Main Process fpcalc fingerprinting with circuit breaker |
+| **`acoustid.ts`** | `services/` | Calls AcoustID API via IPC |
+| **`musicbrainz.ts`** | `services/` | Queries MusicBrainz, scores releases, generates cover-art URL fallbacks |
 
 ### Toast Notification System
 
@@ -3404,7 +3475,7 @@ Redesigned sliders with gradient fills, glow effects, and smooth animations.
 - **Library UX:** Search bar added; no multi-select for bulk actions yet.
 - **Downloads:** No download queue/history; single-link flow with fixed delay.
 - **Cover art:** Downloaded art cleaned immediately after embedding; backup cleanup at 30 days.
-- **Incremental updates:** No file-system watch; rescans are manual.
+- **File System Watching:** ✅ Implemented! Auto-detects new/changed/removed files (Linux recursive watching may be limited).
 - **Keyboard shortcuts:** Basic playback controls implemented; no mute toggle or seek shortcuts yet.
 - **Testing/observability:** No automated tests; limited structured logging.
 - **ARM64 Support:** fpcalc not available for Windows ARM64 or Linux ARM64 platforms.
@@ -3514,21 +3585,22 @@ app.whenReady()
 | `onBinaryDownloadProgress(callback)` | Listens for yt-dlp download progress |
 | `onDownloadTitle(callback)` | Receives video title |
 | **API Calls** | |
-| `lookupFingerprint(fingerprint, duration)` | Queries AcoustID for song match |
-| `fetchCoverArt(mbid)` | Gets album art from MusicBrainz |
+| `lookupAcoustid(fingerprint, duration)` | Queries AcoustID for song match |
+| `lookupMusicBrainz(mbid)` | Gets recording data from MusicBrainz |
 | `downloadImage(url, filePath)` | Downloads an image to disk |
+| `downloadImageWithFallback(urls, filePath)` | Downloads image with fallback URLs |
 | **Fingerprinting** | |
-| `ensureFpcalc()` | Downloads fpcalc if needed |
+| `fingerprintEnsureReady()` | Downloads fpcalc if needed |
 | `generateFingerprint(filePath)` | Generates audio fingerprint |
-| `generateFingerprintsParallel(filePaths)` | Batch fingerprinting |
-| `getFingerprintPoolInfo()` | Gets worker pool status |
-| `onFingerprintProgress(callback)` | Listens for batch progress |
+| `generateFingerprintsBatch(filePaths)` | Batch fingerprinting |
+| `fingerprintGetPoolInfo()` | Gets worker pool status |
+| `onFingerprintBatchProgress(callback)` | Listens for batch progress |
 | **Cache** | |
-| `getFileScanStatus(filePath)` | Checks if file was scanned |
-| `markFileAsScanned(...)` | Records scan result in database |
-| `getBatchScanStatuses(filePaths)` | Batch status check |
-| `getUnscannedFiles(filePaths)` | Filters to unscanned files |
-| `getScanStatistics()` | Gets scan counts |
+| `cacheGetFileStatus(filePath)` | Checks if file was scanned |
+| `cacheMarkFileScanned(...)` | Records scan result in database |
+| `cacheGetBatchStatus(filePaths)` | Batch status check |
+| `cacheGetUnscannedFiles(filePaths)` | Filters to unscanned files |
+| `cacheGetStatistics()` | Gets scan counts |
 | **Playlists** | |
 | `playlistGetAll()` | Gets all playlists |
 | `playlistCreate(name, description)` | Creates a new playlist |

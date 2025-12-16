@@ -151,12 +151,17 @@ export interface ElectronAPI {
   playlistGetAll: () => Promise<{ success: boolean; playlists: Playlist[]; error?: string }>
   playlistGetById: (playlistId: number) => Promise<{ success: boolean; playlist: Playlist | null; error?: string }>
   playlistGetSongs: (playlistId: number) => Promise<{ success: boolean; songPaths: string[]; error?: string }>
-  playlistAddSongs: (playlistId: number, filePaths: string[]) => Promise<{ success: boolean; error?: string }>
+  playlistAddSongs: (playlistId: number, filePaths: string[]) => Promise<{ success: boolean; added?: number; alreadyInPlaylist?: number; error?: string }>
   playlistRemoveSong: (playlistId: number, filePath: string) => Promise<{ success: boolean; error?: string }>
   playlistReorderSongs: (playlistId: number, newOrder: Array<{ filePath: string; position: number }>) => Promise<{ success: boolean; error?: string }>
   playlistIsSongIn: (playlistId: number, filePath: string) => Promise<{ success: boolean; isIn: boolean; error?: string }>
   playlistGetContainingSong: (filePath: string) => Promise<{ success: boolean; playlists: Playlist[]; error?: string }>
   playlistCleanupMissing: () => Promise<{ success: boolean; removedCount: number; error?: string }>
+  // File watcher operations
+  fileWatcherStart: (folderPath: string) => Promise<{ success: boolean; error?: string }>
+  fileWatcherStop: () => Promise<{ success: boolean }>
+  fileWatcherStatus: () => Promise<{ isWatching: boolean; watchPath: string | null }>
+  onFileWatcherEvent: (callback: (event: { type: 'added' | 'removed' | 'changed'; files: string[] }) => void) => () => void
 }
 
 declare global {

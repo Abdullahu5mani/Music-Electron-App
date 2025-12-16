@@ -136,12 +136,17 @@ export interface ElectronAPI {
   playlistGetAll: () => Promise<{ success: boolean; playlists: any[]; error?: string }>
   playlistGetById: (playlistId: number) => Promise<{ success: boolean; playlist: any | null; error?: string }>
   playlistGetSongs: (playlistId: number) => Promise<{ success: boolean; songPaths: string[]; error?: string }>
-  playlistAddSongs: (playlistId: number, filePaths: string[]) => Promise<{ success: boolean; error?: string }>
+  playlistAddSongs: (playlistId: number, filePaths: string[]) => Promise<{ success: boolean; added?: number; alreadyInPlaylist?: number; error?: string }>
   playlistRemoveSong: (playlistId: number, filePath: string) => Promise<{ success: boolean; error?: string }>
   playlistReorderSongs: (playlistId: number, newOrder: Array<{ filePath: string; position: number }>) => Promise<{ success: boolean; error?: string }>
   playlistIsSongIn: (playlistId: number, filePath: string) => Promise<{ success: boolean; isIn: boolean; error?: string }>
   playlistGetContainingSong: (filePath: string) => Promise<{ success: boolean; playlists: any[]; error?: string }>
   playlistCleanupMissing: () => Promise<{ success: boolean; removedCount: number; error?: string }>
+  // File watcher operations
+  fileWatcherStart: (folderPath: string) => Promise<{ success: boolean; error?: string }>
+  fileWatcherStop: () => Promise<{ success: boolean }>
+  fileWatcherStatus: () => Promise<{ isWatching: boolean; watchPath: string | null }>
+  onFileWatcherEvent: (callback: (event: { type: 'added' | 'removed' | 'changed'; files: string[] }) => void) => () => void
 }
 
 // Expose a typed API to the Renderer process
@@ -361,6 +366,24 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   playlistCleanupMissing: () =>
     ipcRenderer.invoke('playlist-cleanup-missing'),
+
+  // File watcher operations
+  fileWatcherStart: (folderPath: string) =>
+    ipcRenderer.invoke('file-watcher-start', folderPath),
+
+  fileWatcherStop: () =>
+    ipcRenderer.invoke('file-watcher-stop'),
+
+  fileWatcherStatus: () =>
+    ipcRenderer.invoke('file-watcher-status'),
+
+  onFileWatcherEvent: (callback: (event: { type: 'added' | 'removed' | 'changed'; files: string[] }) => void) => {
+    const handler = (_event: any, data: any) => callback(data)
+    ipcRenderer.on('file-watcher-event', handler)
+    return () => {
+      ipcRenderer.removeListener('file-watcher-event', handler)
+    }
+  },
 } as ElectronAPI)
 
 // Keep the old ipcRenderer for backward compatibility if needed

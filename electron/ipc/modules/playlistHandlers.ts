@@ -111,11 +111,15 @@ export function registerPlaylistHandlers(): void {
     // Add songs to a playlist
     ipcMain.handle('playlist-add-songs', async (_event, playlistId: number, filePaths: string[]) => {
         try {
-            const success = addSongsToPlaylist(playlistId, filePaths)
-            return { success }
+            const result = addSongsToPlaylist(playlistId, filePaths)
+            return {
+                success: true,
+                added: result.added,
+                alreadyInPlaylist: result.alreadyInPlaylist
+            }
         } catch (error) {
             console.error('Error adding songs to playlist:', error)
-            return { success: false, error: String(error) }
+            return { success: false, added: 0, alreadyInPlaylist: 0, error: String(error) }
         }
     })
 

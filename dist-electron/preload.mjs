@@ -1,1 +1,145 @@
-"use strict";const n=require("electron");n.contextBridge.exposeInMainWorld("electronAPI",{scanMusicFolder:e=>n.ipcRenderer.invoke("scan-music-folder",e),selectMusicFolder:()=>n.ipcRenderer.invoke("select-music-folder"),readSingleFileMetadata:e=>n.ipcRenderer.invoke("read-single-file-metadata",e),getSettings:()=>n.ipcRenderer.invoke("get-settings"),saveSettings:e=>n.ipcRenderer.invoke("save-settings",e),selectDownloadFolder:()=>n.ipcRenderer.invoke("select-download-folder"),getBinaryStatuses:()=>n.ipcRenderer.invoke("get-binary-statuses"),getPlatformInfo:()=>n.ipcRenderer.invoke("get-platform-info"),readFileBuffer:e=>n.ipcRenderer.invoke("read-file-buffer",e),onTrayPlayPause:e=>{const r=()=>e();return n.ipcRenderer.on("tray-play-pause",r),()=>{n.ipcRenderer.removeListener("tray-play-pause",r)}},sendPlaybackState:e=>{n.ipcRenderer.send("playback-state-changed",e)},sendWindowVisibility:e=>{n.ipcRenderer.send("window-visibility-changed",e)},minimizeWindow:()=>{n.ipcRenderer.send("window-minimize")},maximizeWindow:()=>{n.ipcRenderer.send("window-maximize")},closeWindow:()=>{n.ipcRenderer.send("window-close")},onWindowStateChanged:e=>{const r=(i,t)=>e(t);return n.ipcRenderer.on("window-state-changed",r),()=>{n.ipcRenderer.removeListener("window-state-changed",r)}},downloadYouTube:(e,r)=>n.ipcRenderer.invoke("download-youtube",e,r),onDownloadProgress:e=>{const r=(i,t)=>e(t);return n.ipcRenderer.on("download-progress",r),()=>{n.ipcRenderer.removeListener("download-progress",r)}},onBinaryDownloadProgress:e=>{const r=(i,t)=>e(t);return n.ipcRenderer.on("binary-download-progress",r),()=>{n.ipcRenderer.removeListener("binary-download-progress",r)}},onDownloadTitle:e=>{const r=(i,t)=>e(t);return n.ipcRenderer.on("download-title",r),()=>{n.ipcRenderer.removeListener("download-title",r)}},downloadImage:(e,r)=>n.ipcRenderer.invoke("download-image",e,r),downloadImageWithFallback:(e,r)=>n.ipcRenderer.invoke("download-image-with-fallback",e,r),writeCoverArt:(e,r)=>n.ipcRenderer.invoke("write-cover-art",e,r),writeMetadata:(e,r)=>n.ipcRenderer.invoke("write-metadata",e,r),lookupAcoustid:(e,r)=>n.ipcRenderer.invoke("lookup-acoustid",e,r),lookupMusicBrainz:e=>n.ipcRenderer.invoke("lookup-musicbrainz",e),cacheGetFileStatus:e=>n.ipcRenderer.invoke("cache-get-file-status",e),cacheMarkFileScanned:(e,r,i)=>n.ipcRenderer.invoke("cache-mark-file-scanned",e,r,i),cacheGetBatchStatus:e=>n.ipcRenderer.invoke("cache-get-batch-status",e),cacheGetUnscannedFiles:e=>n.ipcRenderer.invoke("cache-get-unscanned-files",e),cacheGetStatistics:()=>n.ipcRenderer.invoke("cache-get-statistics"),cacheGetEntry:e=>n.ipcRenderer.invoke("cache-get-entry",e),cacheCleanupOrphaned:()=>n.ipcRenderer.invoke("cache-cleanup-orphaned"),cacheClear:()=>n.ipcRenderer.invoke("cache-clear"),generateFingerprint:e=>n.ipcRenderer.invoke("generate-fingerprint",e),fingerprintCheckReady:()=>n.ipcRenderer.invoke("fingerprint-check-ready"),fingerprintEnsureReady:()=>n.ipcRenderer.invoke("fingerprint-ensure-ready"),generateFingerprintsBatch:e=>n.ipcRenderer.invoke("generate-fingerprints-batch",e),fingerprintGetPoolInfo:()=>n.ipcRenderer.invoke("fingerprint-get-pool-info"),onFingerprintBatchProgress:e=>{const r=(i,t)=>e(t);return n.ipcRenderer.on("fingerprint-batch-progress",r),()=>n.ipcRenderer.removeListener("fingerprint-batch-progress",r)},playlistCreate:(e,r)=>n.ipcRenderer.invoke("playlist-create",e,r),playlistDelete:e=>n.ipcRenderer.invoke("playlist-delete",e),playlistRename:(e,r)=>n.ipcRenderer.invoke("playlist-rename",e,r),playlistUpdateDescription:(e,r)=>n.ipcRenderer.invoke("playlist-update-description",e,r),playlistUpdateCover:(e,r)=>n.ipcRenderer.invoke("playlist-update-cover",e,r),playlistGetAll:()=>n.ipcRenderer.invoke("playlist-get-all"),playlistGetById:e=>n.ipcRenderer.invoke("playlist-get-by-id",e),playlistGetSongs:e=>n.ipcRenderer.invoke("playlist-get-songs",e),playlistAddSongs:(e,r)=>n.ipcRenderer.invoke("playlist-add-songs",e,r),playlistRemoveSong:(e,r)=>n.ipcRenderer.invoke("playlist-remove-song",e,r),playlistReorderSongs:(e,r)=>n.ipcRenderer.invoke("playlist-reorder-songs",e,r),playlistIsSongIn:(e,r)=>n.ipcRenderer.invoke("playlist-is-song-in",e,r),playlistGetContainingSong:e=>n.ipcRenderer.invoke("playlist-get-containing-song",e),playlistCleanupMissing:()=>n.ipcRenderer.invoke("playlist-cleanup-missing")});n.contextBridge.exposeInMainWorld("ipcRenderer",{on(...e){const[r,i]=e;return n.ipcRenderer.on(r,(t,...o)=>i(t,...o))},off(...e){const[r,...i]=e;return n.ipcRenderer.off(r,...i)},send(...e){const[r,...i]=e;return n.ipcRenderer.send(r,...i)},invoke(...e){const[r,...i]=e;return n.ipcRenderer.invoke(r,...i)}});
+"use strict";
+const electron = require("electron");
+electron.contextBridge.exposeInMainWorld("electronAPI", {
+  scanMusicFolder: (folderPath) => electron.ipcRenderer.invoke("scan-music-folder", folderPath),
+  selectMusicFolder: () => electron.ipcRenderer.invoke("select-music-folder"),
+  readSingleFileMetadata: (filePath) => electron.ipcRenderer.invoke("read-single-file-metadata", filePath),
+  // Settings methods
+  getSettings: () => electron.ipcRenderer.invoke("get-settings"),
+  saveSettings: (settings) => electron.ipcRenderer.invoke("save-settings", settings),
+  selectDownloadFolder: () => electron.ipcRenderer.invoke("select-download-folder"),
+  getBinaryStatuses: () => electron.ipcRenderer.invoke("get-binary-statuses"),
+  getPlatformInfo: () => electron.ipcRenderer.invoke("get-platform-info"),
+  readFileBuffer: (filePath) => electron.ipcRenderer.invoke("read-file-buffer", filePath),
+  // Listen for tray play/pause commands
+  onTrayPlayPause: (callback) => {
+    const handler = () => callback();
+    electron.ipcRenderer.on("tray-play-pause", handler);
+    return () => {
+      electron.ipcRenderer.removeListener("tray-play-pause", handler);
+    };
+  },
+  // Send playback state to main process
+  sendPlaybackState: (isPlaying) => {
+    electron.ipcRenderer.send("playback-state-changed", isPlaying);
+  },
+  // Send window visibility state to main process
+  sendWindowVisibility: (visible) => {
+    electron.ipcRenderer.send("window-visibility-changed", visible);
+  },
+  // Window control methods
+  minimizeWindow: () => {
+    electron.ipcRenderer.send("window-minimize");
+  },
+  maximizeWindow: () => {
+    electron.ipcRenderer.send("window-maximize");
+  },
+  closeWindow: () => {
+    electron.ipcRenderer.send("window-close");
+  },
+  // Listen for window state changes
+  onWindowStateChanged: (callback) => {
+    const handler = (_event, maximized) => callback(maximized);
+    electron.ipcRenderer.on("window-state-changed", handler);
+    return () => {
+      electron.ipcRenderer.removeListener("window-state-changed", handler);
+    };
+  },
+  // YouTube download method
+  downloadYouTube: (url, outputPath) => electron.ipcRenderer.invoke("download-youtube", url, outputPath),
+  // Listen for download progress updates
+  onDownloadProgress: (callback) => {
+    const handler = (_event, progress) => callback(progress);
+    electron.ipcRenderer.on("download-progress", handler);
+    return () => {
+      electron.ipcRenderer.removeListener("download-progress", handler);
+    };
+  },
+  // Listen for binary download progress updates
+  onBinaryDownloadProgress: (callback) => {
+    const handler = (_event, progress) => callback(progress);
+    electron.ipcRenderer.on("binary-download-progress", handler);
+    return () => {
+      electron.ipcRenderer.removeListener("binary-download-progress", handler);
+    };
+  },
+  // Listen for download title updates
+  onDownloadTitle: (callback) => {
+    const handler = (_event, title) => callback(title);
+    electron.ipcRenderer.on("download-title", handler);
+    return () => {
+      electron.ipcRenderer.removeListener("download-title", handler);
+    };
+  },
+  downloadImage: (url, filePath) => electron.ipcRenderer.invoke("download-image", url, filePath),
+  downloadImageWithFallback: (urls, filePath) => electron.ipcRenderer.invoke("download-image-with-fallback", urls, filePath),
+  writeCoverArt: (filePath, imagePath) => electron.ipcRenderer.invoke("write-cover-art", filePath, imagePath),
+  writeMetadata: (filePath, metadata) => electron.ipcRenderer.invoke("write-metadata", filePath, metadata),
+  lookupAcoustid: (fingerprint, duration) => electron.ipcRenderer.invoke("lookup-acoustid", fingerprint, duration),
+  lookupMusicBrainz: (mbid) => electron.ipcRenderer.invoke("lookup-musicbrainz", mbid),
+  // Metadata cache operations
+  cacheGetFileStatus: (filePath) => electron.ipcRenderer.invoke("cache-get-file-status", filePath),
+  cacheMarkFileScanned: (filePath, mbid, hasMetadata) => electron.ipcRenderer.invoke("cache-mark-file-scanned", filePath, mbid, hasMetadata),
+  cacheGetBatchStatus: (filePaths) => electron.ipcRenderer.invoke("cache-get-batch-status", filePaths),
+  cacheGetUnscannedFiles: (filePaths) => electron.ipcRenderer.invoke("cache-get-unscanned-files", filePaths),
+  cacheGetStatistics: () => electron.ipcRenderer.invoke("cache-get-statistics"),
+  cacheGetEntry: (filePath) => electron.ipcRenderer.invoke("cache-get-entry", filePath),
+  cacheCleanupOrphaned: () => electron.ipcRenderer.invoke("cache-cleanup-orphaned"),
+  cacheClear: () => electron.ipcRenderer.invoke("cache-clear"),
+  // Fingerprint generation (Main Process - fpcalc binary)
+  generateFingerprint: (filePath) => electron.ipcRenderer.invoke("generate-fingerprint", filePath),
+  fingerprintCheckReady: () => electron.ipcRenderer.invoke("fingerprint-check-ready"),
+  fingerprintEnsureReady: () => electron.ipcRenderer.invoke("fingerprint-ensure-ready"),
+  // Parallel batch fingerprinting
+  generateFingerprintsBatch: (filePaths) => electron.ipcRenderer.invoke("generate-fingerprints-batch", filePaths),
+  fingerprintGetPoolInfo: () => electron.ipcRenderer.invoke("fingerprint-get-pool-info"),
+  onFingerprintBatchProgress: (callback) => {
+    const handler = (_event, progress) => callback(progress);
+    electron.ipcRenderer.on("fingerprint-batch-progress", handler);
+    return () => electron.ipcRenderer.removeListener("fingerprint-batch-progress", handler);
+  },
+  // Playlist operations
+  playlistCreate: (name, description) => electron.ipcRenderer.invoke("playlist-create", name, description),
+  playlistDelete: (playlistId) => electron.ipcRenderer.invoke("playlist-delete", playlistId),
+  playlistRename: (playlistId, newName) => electron.ipcRenderer.invoke("playlist-rename", playlistId, newName),
+  playlistUpdateDescription: (playlistId, description) => electron.ipcRenderer.invoke("playlist-update-description", playlistId, description),
+  playlistUpdateCover: (playlistId, coverArtPath) => electron.ipcRenderer.invoke("playlist-update-cover", playlistId, coverArtPath),
+  playlistGetAll: () => electron.ipcRenderer.invoke("playlist-get-all"),
+  playlistGetById: (playlistId) => electron.ipcRenderer.invoke("playlist-get-by-id", playlistId),
+  playlistGetSongs: (playlistId) => electron.ipcRenderer.invoke("playlist-get-songs", playlistId),
+  playlistAddSongs: (playlistId, filePaths) => electron.ipcRenderer.invoke("playlist-add-songs", playlistId, filePaths),
+  playlistRemoveSong: (playlistId, filePath) => electron.ipcRenderer.invoke("playlist-remove-song", playlistId, filePath),
+  playlistReorderSongs: (playlistId, newOrder) => electron.ipcRenderer.invoke("playlist-reorder-songs", playlistId, newOrder),
+  playlistIsSongIn: (playlistId, filePath) => electron.ipcRenderer.invoke("playlist-is-song-in", playlistId, filePath),
+  playlistGetContainingSong: (filePath) => electron.ipcRenderer.invoke("playlist-get-containing-song", filePath),
+  playlistCleanupMissing: () => electron.ipcRenderer.invoke("playlist-cleanup-missing"),
+  // File watcher operations
+  fileWatcherStart: (folderPath) => electron.ipcRenderer.invoke("file-watcher-start", folderPath),
+  fileWatcherStop: () => electron.ipcRenderer.invoke("file-watcher-stop"),
+  fileWatcherStatus: () => electron.ipcRenderer.invoke("file-watcher-status"),
+  onFileWatcherEvent: (callback) => {
+    const handler = (_event, data) => callback(data);
+    electron.ipcRenderer.on("file-watcher-event", handler);
+    return () => {
+      electron.ipcRenderer.removeListener("file-watcher-event", handler);
+    };
+  }
+});
+electron.contextBridge.exposeInMainWorld("ipcRenderer", {
+  on(...args) {
+    const [channel, listener] = args;
+    return electron.ipcRenderer.on(channel, (event, ...args2) => listener(event, ...args2));
+  },
+  off(...args) {
+    const [channel, ...omit] = args;
+    return electron.ipcRenderer.off(channel, ...omit);
+  },
+  send(...args) {
+    const [channel, ...omit] = args;
+    return electron.ipcRenderer.send(channel, ...omit);
+  },
+  invoke(...args) {
+    const [channel, ...omit] = args;
+    return electron.ipcRenderer.invoke(channel, ...omit);
+  }
+});

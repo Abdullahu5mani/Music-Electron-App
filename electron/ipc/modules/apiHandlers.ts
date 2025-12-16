@@ -70,13 +70,23 @@ export function registerApiHandlers() {
 
       if (data.results && data.results.length > 0) {
         const bestMatch = data.results[0]
+
+        // Minimum confidence threshold (0.7 = 70% match)
+        const MIN_SCORE_THRESHOLD = 0.7
+        if (!bestMatch.score || bestMatch.score < MIN_SCORE_THRESHOLD) {
+          console.log(`AcoustID match rejected: score ${bestMatch.score?.toFixed(2) || 'N/A'} < ${MIN_SCORE_THRESHOLD}`)
+          return null
+        }
+
         if (bestMatch.recordings && bestMatch.recordings.length > 0) {
           const recording = bestMatch.recordings[0]
           const result = {
             mbid: recording.id,
             title: recording.title,
-            artist: recording.artists?.[0]?.name
+            artist: recording.artists?.[0]?.name,
+            score: bestMatch.score  // Include score in result for logging
           }
+          console.log(`AcoustID match accepted: score ${bestMatch.score.toFixed(2)}`)
           return result
         }
       }

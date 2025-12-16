@@ -5,6 +5,7 @@ import { registerSystemHandlers } from './modules/systemHandlers'
 import { registerCacheHandlers } from './modules/cacheHandlers'
 import { registerFingerprintHandlers } from './modules/fingerprintHandlers'
 import { registerPlaylistHandlers } from './modules/playlistHandlers'
+import { registerWatchHandlers } from './modules/watchHandlers'
 
 /**
  * Registers all IPC handlers for communication between main and renderer processes
@@ -17,6 +18,7 @@ import { registerPlaylistHandlers } from './modules/playlistHandlers'
  * - cacheHandlers: Metadata cache operations (SQLite)
  * - fingerprintHandlers: Audio fingerprint generation using fpcalc
  * - playlistHandlers: Playlist creation, editing, and management
+ * - watchHandlers: File system watching for automatic library updates
  */
 export function registerIpcHandlers() {
   registerMusicHandlers()
@@ -26,4 +28,5 @@ export function registerIpcHandlers() {
   registerCacheHandlers()
   registerFingerprintHandlers()
   registerPlaylistHandlers()
+  registerWatchHandlers()
 }

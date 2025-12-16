@@ -76,7 +76,7 @@ export function useSongScanner(options: UseSongScannerOptions = {}) {
       if (!acoustidResult) {
         await window.electronAPI.cacheMarkFileScanned(file.path, null, false)
         onStatusUpdate?.(file.path, 'scanned-no-match')
-        onShowNotification?.(`No match found for "${file.name.replace(/\.[^/.]+$/, '')}"`, 'info')
+        onShowNotification?.(`No match found for "${file.name.replace(/\.[^/.]+$/, '')}"`, 'error')
         return { success: false, status: 'scanned-no-match', error: 'No AcoustID match' }
       }
 
@@ -88,7 +88,7 @@ export function useSongScanner(options: UseSongScannerOptions = {}) {
       if (!mbData) {
         await window.electronAPI.cacheMarkFileScanned(file.path, acoustidResult.mbid, false)
         onStatusUpdate?.(file.path, 'scanned-no-match')
-        onShowNotification?.(`No metadata found for "${file.name.replace(/\.[^/.]+$/, '')}"`, 'info')
+        onShowNotification?.(`No metadata found for "${file.name.replace(/\.[^/.]+$/, '')}"`, 'error')
         return { success: false, status: 'scanned-no-match', error: 'No MusicBrainz data' }
       }
 
@@ -192,7 +192,7 @@ export function useSongScanner(options: UseSongScannerOptions = {}) {
       if (!acoustidResult) {
         await window.electronAPI.cacheMarkFileScanned(file.path, null, false)
         onStatusUpdate?.(file.path, 'scanned-no-match')
-        onShowNotification?.(`No match found for "${file.name.replace(/\.[^/.]+$/, '')}"`, 'info')
+        onShowNotification?.(`No match found for "${file.name.replace(/\.[^/.]+$/, '')}"`, 'error')
         return { success: false, status: 'scanned-no-match', error: 'No AcoustID match' }
       }
 
@@ -204,7 +204,7 @@ export function useSongScanner(options: UseSongScannerOptions = {}) {
       if (!mbData) {
         await window.electronAPI.cacheMarkFileScanned(file.path, acoustidResult.mbid, false)
         onStatusUpdate?.(file.path, 'scanned-no-match')
-        onShowNotification?.(`No metadata found for "${file.name.replace(/\.[^/.]+$/, '')}"`, 'info')
+        onShowNotification?.(`No metadata found for "${file.name.replace(/\.[^/.]+$/, '')}"`, 'error')
         return { success: false, status: 'scanned-no-match', error: 'No MusicBrainz data' }
       }
 

@@ -158,23 +158,47 @@ export function usePlaylists({
             const result = await window.electronAPI.playlistAddSongs(playlistId, filePaths)
 
             if (result.success) {
-                // Update song count in local state
-                setPlaylists(prev => prev.map(p =>
-                    p.id === playlistId
-                        ? { ...p, songCount: p.songCount + filePaths.length, updatedAt: Date.now() }
-                        : p
-                ))
+                const added = result.added ?? 0
+                const alreadyIn = result.alreadyInPlaylist ?? 0
 
-                // If this is the active playlist, reload it
-                if (activePlaylist?.id === playlistId) {
-                    await loadPlaylist(playlistId)
+                // Update song count in local state (only count newly added songs)
+                if (added > 0) {
+                    setPlaylists(prev => prev.map(p =>
+                        p.id === playlistId
+                            ? { ...p, songCount: p.songCount + added, updatedAt: Date.now() }
+                            : p
+                    ))
+
+                    // If this is the active playlist, reload it
+                    if (activePlaylist?.id === playlistId) {
+                        await loadPlaylist(playlistId)
+                    }
                 }
 
-                const songText = filePaths.length === 1 ? 'song' : 'songs'
-                onShowNotification?.(
-                    `Added ${filePaths.length} ${songText} to "${playlist?.name || 'playlist'}"`,
-                    'success'
-                )
+                // Show appropriate notification based on what happened
+                if (added === 0 && alreadyIn > 0) {
+                    // All songs were already in the playlist
+                    const songText = alreadyIn === 1 ? 'Song' : 'Songs'
+                    onShowNotification?.(
+                        `${songText} already in playlist`,
+                        'warning'
+                    )
+                } else if (added > 0 && alreadyIn > 0) {
+                    // Some were added, some were duplicates
+                    const addedText = added === 1 ? 'song' : 'songs'
+                    const skipText = alreadyIn === 1 ? 'was' : 'were'
+                    onShowNotification?.(
+                        `Added ${added} ${addedText} to "${playlist?.name || 'playlist'}" (${alreadyIn} ${skipText} already there)`,
+                        'success'
+                    )
+                } else {
+                    // All songs were newly added
+                    const songText = added === 1 ? 'song' : 'songs'
+                    onShowNotification?.(
+                        `Added ${added} ${songText} to "${playlist?.name || 'playlist'}"`,
+                        'success'
+                    )
+                }
                 return true
             } else {
                 onShowNotification?.(`Failed to add songs: ${result.error}`, 'error')

@@ -306,11 +306,34 @@ export function getPlaylistSongPaths(playlistId: number): string[] {
 
 /**
  * Add songs to a playlist
+ * Returns: { added: number, alreadyInPlaylist: number }
  */
-export function addSongsToPlaylist(playlistId: number, filePaths: string[]): boolean {
+export function addSongsToPlaylist(playlistId: number, filePaths: string[]): { added: number, alreadyInPlaylist: number } {
     const database = initializePlaylistDatabase()
 
     try {
+        // Check which songs are already in the playlist
+        const checkStmt = database.prepare(`
+      SELECT filePath FROM playlist_songs WHERE playlistId = ? AND filePath = ?
+    `)
+
+        const existingSongs: string[] = []
+        const newSongs: string[] = []
+
+        for (const filePath of filePaths) {
+            const existing = checkStmt.get(playlistId, filePath)
+            if (existing) {
+                existingSongs.push(filePath)
+            } else {
+                newSongs.push(filePath)
+            }
+        }
+
+        // If there are no new songs to add, return early
+        if (newSongs.length === 0) {
+            return { added: 0, alreadyInPlaylist: existingSongs.length }
+        }
+
         // Get current max position
         const maxPosRow = database.prepare(`
       SELECT MAX(position) as maxPos FROM playlist_songs WHERE playlistId = ?
@@ -320,7 +343,7 @@ export function addSongsToPlaylist(playlistId: number, filePaths: string[]): boo
         const now = Date.now()
 
         const insertStmt = database.prepare(`
-      INSERT OR IGNORE INTO playlist_songs (playlistId, filePath, position, addedAt)
+      INSERT INTO playlist_songs (playlistId, filePath, position, addedAt)
       VALUES (?, ?, ?, ?)
     `)
 
@@ -330,15 +353,15 @@ export function addSongsToPlaylist(playlistId: number, filePaths: string[]): boo
             }
         })
 
-        insertMany(filePaths)
+        insertMany(newSongs)
 
         // Update playlist's updatedAt timestamp
         database.prepare('UPDATE playlists SET updatedAt = ? WHERE id = ?').run(now, playlistId)
 
-        return true
+        return { added: newSongs.length, alreadyInPlaylist: existingSongs.length }
     } catch (error) {
         console.error('Error adding songs to playlist:', error)
-        return false
+        return { added: 0, alreadyInPlaylist: 0 }
     }
 }
 

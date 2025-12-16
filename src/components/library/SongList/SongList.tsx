@@ -278,14 +278,14 @@ export function SongList({
           console.log('MusicBrainz lookup returned no data')
           await window.electronAPI.cacheMarkFileScanned(file.path, acoustidResult.mbid, false)
           setScanStatuses(prev => ({ ...prev, [file.path]: 'scanned-no-match' }))
-          onShowNotification?.(`No metadata found for "${file.name}"`, 'info')
+          onShowNotification?.(`No metadata found for "${file.name}"`, 'error')
         }
       } else {
         console.log('No match found for this fingerprint')
         // Mark as scanned but no match
         await window.electronAPI.cacheMarkFileScanned(file.path, null, false)
         setScanStatuses(prev => ({ ...prev, [file.path]: 'scanned-no-match' }))
-        onShowNotification?.(`No match found for "${file.name}"`, 'info')
+        onShowNotification?.(`No match found for "${file.name}"`, 'error')
       }
     } catch (error) {
       console.error('Error generating fingerprint:', error)

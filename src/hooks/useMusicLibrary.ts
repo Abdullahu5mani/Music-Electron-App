@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo, useEffect, useCallback, useRef } from 'react'
 import type { MusicFile } from '../../electron/musicScanner'
 import { sortMusicFiles, type SortOption } from '../utils/sortMusicFiles'
 
@@ -16,10 +16,12 @@ interface UseMusicLibraryReturn {
   handleSelectFolder: () => Promise<void>
   scanFolder: (folderPath: string) => Promise<void>
   updateSingleFile: (filePath: string) => Promise<MusicFile | null>
+  isWatching: boolean
 }
 
 /**
  * Custom hook for managing music library
+ * Includes automatic file system watching for real-time updates
  */
 export function useMusicLibrary(): UseMusicLibraryReturn {
   const [musicFiles, setMusicFiles] = useState<MusicFileWithDate[]>([])
@@ -27,11 +29,99 @@ export function useMusicLibrary(): UseMusicLibraryReturn {
   const [error, setError] = useState<string | null>(null)
   const [selectedFolder, setSelectedFolder] = useState<string | null>(null)
   const [sortBy, setSortBy] = useState<SortOption>('title')
+  const [isWatching, setIsWatching] = useState(false)
+
+  // Track the current folder for the file watcher event handler
+  const selectedFolderRef = useRef<string | null>(null)
+  selectedFolderRef.current = selectedFolder
 
   // Sort music files based on selected sort option
   const sortedMusicFiles = useMemo(() => {
     return sortMusicFiles(musicFiles, sortBy)
   }, [musicFiles, sortBy])
+
+  /**
+   * Handle file watcher events
+   */
+  const handleFileWatcherEvent = useCallback(async (event: { type: 'added' | 'removed' | 'changed'; files: string[] }) => {
+    console.log(`[FileWatcher Event] ${event.type}: ${event.files.length} files`)
+
+    if (event.type === 'removed') {
+      // Remove files from the library
+      setMusicFiles(prevFiles =>
+        prevFiles.filter(file => !event.files.includes(file.path))
+      )
+    } else if (event.type === 'changed' || event.type === 'added') {
+      // For changed/added files, read their metadata and update/add to library
+      for (const filePath of event.files) {
+        try {
+          const fileData = await window.electronAPI.readSingleFileMetadata(filePath)
+          if (fileData) {
+            setMusicFiles(prevFiles => {
+              const existingIndex = prevFiles.findIndex(f => f.path === filePath)
+              if (existingIndex >= 0) {
+                // Update existing file
+                const updated = [...prevFiles]
+                updated[existingIndex] = {
+                  ...fileData,
+                  dateAdded: prevFiles[existingIndex].dateAdded ?? Date.now()
+                }
+                return updated
+              } else {
+                // Add new file
+                return [...prevFiles, { ...fileData, dateAdded: Date.now() }]
+              }
+            })
+          }
+        } catch (err) {
+          console.error(`Failed to read metadata for ${filePath}:`, err)
+        }
+      }
+    }
+  }, [])
+
+  /**
+   * Start watching the selected folder
+   */
+  const startWatching = useCallback(async (folderPath: string) => {
+    try {
+      const result = await window.electronAPI.fileWatcherStart(folderPath)
+      if (result.success) {
+        setIsWatching(true)
+        console.log('[useMusicLibrary] File watcher started for:', folderPath)
+      } else {
+        console.error('[useMusicLibrary] Failed to start file watcher:', result.error)
+      }
+    } catch (err) {
+      console.error('[useMusicLibrary] Error starting file watcher:', err)
+    }
+  }, [])
+
+  /**
+   * Stop watching
+   */
+  const stopWatching = useCallback(async () => {
+    try {
+      await window.electronAPI.fileWatcherStop()
+      setIsWatching(false)
+      console.log('[useMusicLibrary] File watcher stopped')
+    } catch (err) {
+      console.error('[useMusicLibrary] Error stopping file watcher:', err)
+    }
+  }, [])
+
+  // Set up file watcher event listener
+  useEffect(() => {
+    const cleanup = window.electronAPI.onFileWatcherEvent(handleFileWatcherEvent)
+    return cleanup
+  }, [handleFileWatcherEvent])
+
+  // Stop watching on unmount
+  useEffect(() => {
+    return () => {
+      stopWatching()
+    }
+  }, [stopWatching])
 
   // Load saved music folder on mount
   useEffect(() => {
@@ -41,6 +131,8 @@ export function useMusicLibrary(): UseMusicLibraryReturn {
         if (settings?.musicFolderPath && !selectedFolder) {
           setSelectedFolder(settings.musicFolderPath)
           await scanFolder(settings.musicFolderPath)
+          // Start watching after initial scan
+          await startWatching(settings.musicFolderPath)
         }
       } catch (error) {
         console.error('Failed to load saved music folder:', error)
@@ -53,11 +145,19 @@ export function useMusicLibrary(): UseMusicLibraryReturn {
     try {
       setLoading(true)
       setError(null)
+
+      // Stop existing watcher
+      if (isWatching) {
+        await stopWatching()
+      }
+
       const folderPath = await window.electronAPI.selectMusicFolder()
 
       if (folderPath) {
         setSelectedFolder(folderPath)
         await scanFolder(folderPath)
+        // Start watching the new folder
+        await startWatching(folderPath)
       }
     } catch (err) {
       setError('Failed to select folder')
@@ -129,6 +229,6 @@ export function useMusicLibrary(): UseMusicLibraryReturn {
     handleSelectFolder,
     scanFolder,
     updateSingleFile,
+    isWatching,
   }
 }
-

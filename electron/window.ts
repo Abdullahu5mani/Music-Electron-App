@@ -36,7 +36,7 @@ export function createWindow(): BrowserWindow {
     frame: false,         // Remove default frame
     titleBarStyle: 'hidden', // Hide title bar (macOS)
     backgroundColor: '#1a1a1a', // Match app background
-    icon: path.join(process.env.VITE_PUBLIC, 'electron-vite.svg'),
+    icon: path.join(process.env.APP_ROOT, 'src/assets/trayIcon.svg'),
     webPreferences: {
       preload: path.join(__dirname, 'preload.mjs'),
       webSecurity: false, // Allow loading local files via file:// protocol for audio playback
