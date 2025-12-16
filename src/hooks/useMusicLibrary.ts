@@ -130,7 +130,7 @@ export function useMusicLibrary(): UseMusicLibraryReturn {
         const settings = await window.electronAPI?.getSettings()
         if (settings?.musicFolderPath && !selectedFolder) {
           setSelectedFolder(settings.musicFolderPath)
-          await scanFolder(settings.musicFolderPath)
+          await scanFolder(settings.musicFolderPath, settings.scanSubfolders)
           // Start watching after initial scan
           await startWatching(settings.musicFolderPath)
         }
@@ -155,7 +155,9 @@ export function useMusicLibrary(): UseMusicLibraryReturn {
 
       if (folderPath) {
         setSelectedFolder(folderPath)
-        await scanFolder(folderPath)
+        // Get settings to determine if we should scan subfolders
+        const settings = await window.electronAPI.getSettings()
+        await scanFolder(folderPath, settings.scanSubfolders)
         // Start watching the new folder
         await startWatching(folderPath)
       }
@@ -167,11 +169,11 @@ export function useMusicLibrary(): UseMusicLibraryReturn {
     }
   }
 
-  const scanFolder = async (folderPath: string) => {
+  const scanFolder = async (folderPath: string, scanSubfolders: boolean = true) => {
     try {
       setLoading(true)
       setError(null)
-      const files = await window.electronAPI.scanMusicFolder(folderPath)
+      const files = await window.electronAPI.scanMusicFolder(folderPath, { scanSubfolders })
 
       // Yield to main thread to let UI update before processing large array
       // This prevents the "frozen" feeling after scan completes

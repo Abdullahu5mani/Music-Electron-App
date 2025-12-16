@@ -7,6 +7,7 @@ const CONFIG_FILE = 'app-config.json'
 export interface AppSettings {
   musicFolderPath: string | null
   downloadFolderPath: string | null
+  scanSubfolders: boolean
 }
 
 /**
@@ -28,6 +29,7 @@ export function getStoredSettings(): AppSettings {
       return {
         musicFolderPath: config.musicFolderPath || null,
         downloadFolderPath: config.downloadFolderPath || null,
+        scanSubfolders: config.scanSubfolders !== false, // Default to true
       }
     }
   } catch (error) {
@@ -36,6 +38,7 @@ export function getStoredSettings(): AppSettings {
   return {
     musicFolderPath: null,
     downloadFolderPath: null,
+    scanSubfolders: true, // Default to true
   }
 }
 
@@ -48,6 +51,7 @@ export function saveSettings(settings: AppSettings): void {
     const config = {
       musicFolderPath: settings.musicFolderPath,
       downloadFolderPath: settings.downloadFolderPath,
+      scanSubfolders: settings.scanSubfolders,
     }
     fs.writeFileSync(configPath, JSON.stringify(config, null, 2), 'utf-8')
   } catch (error) {

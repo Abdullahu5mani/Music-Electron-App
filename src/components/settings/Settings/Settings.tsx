@@ -29,6 +29,7 @@ export function Settings({
   const [settings, setSettings] = useState<AppSettings>({
     musicFolderPath: null,
     downloadFolderPath: null,
+    scanSubfolders: true,
   })
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -36,6 +37,8 @@ export function Settings({
   const [binaryStatuses, setBinaryStatuses] = useState<BinaryStatus[]>([])
   const [loadingBinaries, setLoadingBinaries] = useState(false)
   const [platformInfo, setPlatformInfo] = useState<PlatformInfo | null>(null)
+  const [installingBinary, setInstallingBinary] = useState<string | null>(null)
+  const [installProgress, setInstallProgress] = useState<{ message: string; percentage: number } | null>(null)
 
   // Load settings when modal opens
   useEffect(() => {
@@ -45,6 +48,22 @@ export function Settings({
       loadPlatformInfo()
     }
   }, [isOpen])
+
+  // Listen for binary install progress
+  useEffect(() => {
+    const cleanup = window.electronAPI?.onBinaryInstallProgress((progress) => {
+      setInstallProgress({ message: progress.message, percentage: progress.percentage })
+      if (progress.status === 'installed' || progress.status === 'error') {
+        // Refresh binary statuses after install completes
+        setTimeout(() => {
+          setInstallingBinary(null)
+          setInstallProgress(null)
+          loadBinaryStatuses()
+        }, 1500)
+      }
+    })
+    return cleanup
+  }, [])
 
   const loadSettings = async () => {
     try {
@@ -129,6 +148,23 @@ export function Settings({
     }
   }
 
+  const handleInstallBinary = async (binaryName: string) => {
+    setInstallingBinary(binaryName)
+    setInstallProgress({ message: 'Starting installation...', percentage: 0 })
+
+    try {
+      if (binaryName === 'yt-dlp') {
+        await window.electronAPI?.installYtdlp()
+      } else if (binaryName.includes('fpcalc') || binaryName.includes('Chromaprint')) {
+        await window.electronAPI?.installFpcalc()
+      }
+    } catch (err) {
+      console.error('Error installing binary:', err)
+      setInstallingBinary(null)
+      setInstallProgress(null)
+    }
+  }
+
   if (!isOpen) return null
 
   return (
@@ -192,6 +228,26 @@ export function Settings({
                     className="settings-select-button"
                   >
                     Browse
+                  </button>
+                </div>
+              </div>
+
+              {/* Scan Subfolders Toggle */}
+              <div className="settings-section">
+                <div className="settings-toggle-row">
+                  <div className="settings-toggle-info">
+                    <label className="settings-label">Scan Subfolders</label>
+                    <p className="settings-description">
+                      Include songs from subfolders when scanning your music folder
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    className={`settings-toggle ${settings.scanSubfolders ? 'active' : ''}`}
+                    onClick={() => setSettings(prev => ({ ...prev, scanSubfolders: !prev.scanSubfolders }))}
+                    aria-pressed={settings.scanSubfolders}
+                  >
+                    <span className="settings-toggle-slider" />
                   </button>
                 </div>
               </div>
@@ -325,6 +381,32 @@ export function Settings({
                             </>
                           ) : (
                             <span className="binary-status missing">Missing</span>
+                          )}
+                        </div>
+                        <div className="binary-actions">
+                          {installingBinary === binary.name ? (
+                            <div className="binary-installing">
+                              <span className="binary-install-message">
+                                {installProgress?.message || 'Installing...'}
+                              </span>
+                              {installProgress?.percentage !== undefined && (
+                                <div className="binary-progress-bar">
+                                  <div
+                                    className="binary-progress-fill"
+                                    style={{ width: `${installProgress.percentage}%` }}
+                                  />
+                                </div>
+                              )}
+                            </div>
+                          ) : (
+                            <button
+                              type="button"
+                              className={`binary-install-button ${binary.installed ? 'update' : 'install'}`}
+                              onClick={() => handleInstallBinary(binary.name)}
+                              disabled={installingBinary !== null}
+                            >
+                              {binary.installed && binary.needsUpdate ? 'Update' : binary.installed ? 'Reinstall' : 'Install'}
+                            </button>
                           )}
                         </div>
                       </div>

@@ -56,7 +56,7 @@ export interface AudioMetadata {
  */
 export function registerMusicHandlers() {
   // Handle music folder scanning - uses PARALLEL metadata parsing
-  ipcMain.handle('scan-music-folder', async (event, folderPath: string) => {
+  ipcMain.handle('scan-music-folder', async (event, folderPath: string, options?: { scanSubfolders?: boolean }) => {
     try {
       const scanner = getParallelScanner()
 
@@ -68,8 +68,9 @@ export function registerMusicHandlers() {
         })
       }
 
-      // Use parallel scanner instead of sequential
-      return await scanner.scanDirectory(folderPath)
+      // Use parallel scanner with scanSubfolders option (default: true)
+      const scanSubfolders = options?.scanSubfolders !== false
+      return await scanner.scanDirectory(folderPath, scanSubfolders)
     } catch (error) {
       console.error('Error scanning folder:', error)
       throw error

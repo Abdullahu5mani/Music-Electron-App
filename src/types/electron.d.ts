@@ -9,6 +9,7 @@ export interface BinaryDownloadProgress {
 export interface AppSettings {
   musicFolderPath: string | null
   downloadFolderPath: string | null
+  scanSubfolders: boolean
 }
 
 export interface BinaryStatus {
@@ -73,13 +74,16 @@ export interface PlaylistWithSongs extends Playlist {
 }
 
 export interface ElectronAPI {
-  scanMusicFolder: (folderPath: string) => Promise<MusicFile[]>
+  scanMusicFolder: (folderPath: string, options?: { scanSubfolders?: boolean }) => Promise<MusicFile[]>
   selectMusicFolder: () => Promise<string | null>
   readSingleFileMetadata: (filePath: string) => Promise<MusicFile | null>
   getSettings: () => Promise<AppSettings>
   saveSettings: (settings: AppSettings) => Promise<{ success: boolean; error?: string }>
   selectDownloadFolder: () => Promise<string | null>
   getBinaryStatuses: () => Promise<BinaryStatus[]>
+  installYtdlp: () => Promise<{ success: boolean; error?: string }>
+  installFpcalc: () => Promise<{ success: boolean; error?: string }>
+  onBinaryInstallProgress: (callback: (progress: { binary: string; status: string; message: string; percentage: number }) => void) => () => void
   getPlatformInfo: () => Promise<PlatformInfo>
   readFileBuffer: (filePath: string) => Promise<number[]>
   onTrayPlayPause: (callback: () => void) => () => void

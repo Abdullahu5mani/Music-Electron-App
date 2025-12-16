@@ -4,6 +4,7 @@ import https from 'https'
 import { app } from 'electron'
 import { execFile } from 'child_process'
 import { promisify } from 'util'
+import { getFpcalcPath, isFpcalcInstalled } from './fpcalcManager'
 
 const execFileAsync = promisify(execFile)
 
@@ -75,6 +76,24 @@ async function getInstalledVersion(binaryPath: string): Promise<string | null> {
 }
 
 /**
+ * Gets the installed version of fpcalc binary
+ */
+async function getFpcalcVersion(binaryPath: string): Promise<string | null> {
+  try {
+    if (!fs.existsSync(binaryPath)) {
+      return null
+    }
+    const { stdout } = await execFileAsync(binaryPath, ['-version'], { timeout: 5000 })
+    // fpcalc outputs: "fpcalc version 1.5.1"
+    const match = stdout.match(/fpcalc version (\S+)/)
+    return match ? match[1] : stdout.trim() || null
+  } catch (error: any) {
+    console.error(`Failed to get fpcalc version:`, error?.message || error)
+    return null
+  }
+}
+
+/**
  * Gets the latest version from GitHub releases (for yt-dlp)
  */
 async function getLatestVersionFromGitHub(): Promise<string | null> {
@@ -135,6 +154,32 @@ export async function getYtDlpStatus(): Promise<BinaryStatus> {
 }
 
 /**
+ * Gets the status of fpcalc binary
+ */
+export async function getFpcalcStatus(): Promise<BinaryStatus> {
+  const binaryPath = getFpcalcPath()
+  const installed = await isFpcalcInstalled()
+
+  let version: string | null = null
+  if (installed) {
+    version = await getFpcalcVersion(binaryPath)
+  }
+
+  // fpcalc version is fixed at what we download (1.5.1)
+  // We don't have an easy way to check for updates
+  const latestVersion = '1.5.1'
+
+  return {
+    name: 'fpcalc (Chromaprint)',
+    installed,
+    version,
+    path: installed ? binaryPath : null,
+    latestVersion,
+    needsUpdate: false, // We don't auto-update fpcalc
+  }
+}
+
+/**
  * Gets status for all managed binaries
  */
 export async function getAllBinaryStatuses(): Promise<BinaryStatus[]> {
@@ -142,6 +187,9 @@ export async function getAllBinaryStatuses(): Promise<BinaryStatus[]> {
 
   // Add yt-dlp status
   statuses.push(await getYtDlpStatus())
+
+  // Add fpcalc status
+  statuses.push(await getFpcalcStatus())
 
   return statuses
 }

@@ -74,11 +74,12 @@ export class ParallelMetadataScanner {
     /**
      * Discover all music files in a directory (fast filesystem walk)
      * Returns only file paths without parsing metadata
+     * @param scanSubfolders - If false, only scan the top-level directory
      */
-    async discoverFiles(directoryPath: string): Promise<Array<{ filePath: string; fileName: string; extension: string }>> {
+    async discoverFiles(directoryPath: string, scanSubfolders: boolean = true): Promise<Array<{ filePath: string; fileName: string; extension: string }>> {
         const files: Array<{ filePath: string; fileName: string; extension: string }> = []
 
-        const scanDir = async (dirPath: string): Promise<void> => {
+        const scanDir = async (dirPath: string, _isTopLevel: boolean): Promise<void> => {
             try {
                 const entries = await fs.promises.readdir(dirPath, { withFileTypes: true })
 
@@ -87,7 +88,10 @@ export class ParallelMetadataScanner {
 
                     try {
                         if (entry.isDirectory()) {
-                            await scanDir(fullPath)
+                            // Only recurse into subdirectories if scanSubfolders is true
+                            if (scanSubfolders) {
+                                await scanDir(fullPath, false)
+                            }
                         } else if (entry.isFile()) {
                             const ext = path.extname(entry.name).toLowerCase()
                             if (MUSIC_EXTENSIONS.includes(ext)) {
@@ -107,7 +111,7 @@ export class ParallelMetadataScanner {
             }
         }
 
-        await scanDir(directoryPath)
+        await scanDir(directoryPath, true)
         return files
     }
 
@@ -258,8 +262,9 @@ export class ParallelMetadataScanner {
     /**
      * Full scan: discover files + parse metadata in parallel
      * If a scan is already in progress, returns the existing promise
+     * @param scanSubfolders - If false, only scan top-level directory
      */
-    async scanDirectory(directoryPath: string): Promise<MusicFile[]> {
+    async scanDirectory(directoryPath: string, scanSubfolders: boolean = true): Promise<MusicFile[]> {
         // If already scanning, return the existing promise to avoid race conditions
         if (this.isScanning && this.currentScanPromise) {
             console.log('[MetadataScanner] Scan already in progress, waiting for existing scan...')
@@ -269,7 +274,7 @@ export class ParallelMetadataScanner {
         this.isScanning = true
 
         // Create the scan promise
-        this.currentScanPromise = this.performScan(directoryPath)
+        this.currentScanPromise = this.performScan(directoryPath, scanSubfolders)
 
         try {
             const result = await this.currentScanPromise
@@ -283,13 +288,13 @@ export class ParallelMetadataScanner {
     /**
      * Internal scan implementation
      */
-    private async performScan(directoryPath: string): Promise<MusicFile[]> {
-        console.log(`[MetadataScanner] Starting full scan of: ${directoryPath}`)
+    private async performScan(directoryPath: string, scanSubfolders: boolean = true): Promise<MusicFile[]> {
+        console.log(`[MetadataScanner] Starting full scan of: ${directoryPath} (subfolders: ${scanSubfolders})`)
 
         // Phase 1: Quick file discovery
         console.log('[MetadataScanner] Phase 1: Discovering files...')
         const discoveryStart = Date.now()
-        const files = await this.discoverFiles(directoryPath)
+        const files = await this.discoverFiles(directoryPath, scanSubfolders)
         console.log(`[MetadataScanner] Found ${files.length} music files in ${Date.now() - discoveryStart}ms`)
 
         if (files.length === 0) {

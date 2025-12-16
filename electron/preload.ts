@@ -10,6 +10,7 @@ export interface BinaryDownloadProgress {
 export interface AppSettings {
   musicFolderPath: string | null
   downloadFolderPath: string | null
+  scanSubfolders: boolean
 }
 
 export interface BinaryStatus {
@@ -58,13 +59,16 @@ export interface CacheScanStatistics {
 }
 
 export interface ElectronAPI {
-  scanMusicFolder: (folderPath: string) => Promise<MusicFile[]>
+  scanMusicFolder: (folderPath: string, options?: { scanSubfolders?: boolean }) => Promise<MusicFile[]>
   selectMusicFolder: () => Promise<string | null>
   readSingleFileMetadata: (filePath: string) => Promise<MusicFile | null>
   getSettings: () => Promise<AppSettings>
   saveSettings: (settings: AppSettings) => Promise<{ success: boolean; error?: string }>
   selectDownloadFolder: () => Promise<string | null>
   getBinaryStatuses: () => Promise<BinaryStatus[]>
+  installYtdlp: () => Promise<{ success: boolean; error?: string }>
+  installFpcalc: () => Promise<{ success: boolean; error?: string }>
+  onBinaryInstallProgress: (callback: (progress: { binary: string; status: string; message: string; percentage: number }) => void) => () => void
   getPlatformInfo: () => Promise<PlatformInfo>
   readFileBuffer: (filePath: string) => Promise<number[]>
   onTrayPlayPause: (callback: () => void) => () => void
@@ -151,8 +155,8 @@ export interface ElectronAPI {
 
 // Expose a typed API to the Renderer process
 contextBridge.exposeInMainWorld('electronAPI', {
-  scanMusicFolder: (folderPath: string) =>
-    ipcRenderer.invoke('scan-music-folder', folderPath),
+  scanMusicFolder: (folderPath: string, options?: { scanSubfolders?: boolean }) =>
+    ipcRenderer.invoke('scan-music-folder', folderPath, options),
 
   selectMusicFolder: () =>
     ipcRenderer.invoke('select-music-folder'),
@@ -172,6 +176,20 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   getBinaryStatuses: () =>
     ipcRenderer.invoke('get-binary-statuses'),
+
+  installYtdlp: () =>
+    ipcRenderer.invoke('install-ytdlp'),
+
+  installFpcalc: () =>
+    ipcRenderer.invoke('install-fpcalc'),
+
+  onBinaryInstallProgress: (callback: (progress: { binary: string; status: string; message: string; percentage: number }) => void) => {
+    const handler = (_event: any, progress: any) => callback(progress)
+    ipcRenderer.on('binary-install-progress', handler)
+    return () => {
+      ipcRenderer.removeListener('binary-install-progress', handler)
+    }
+  },
 
   getPlatformInfo: () =>
     ipcRenderer.invoke('get-platform-info'),

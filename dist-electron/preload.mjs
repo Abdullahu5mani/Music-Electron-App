@@ -1,7 +1,7 @@
 "use strict";
 const electron = require("electron");
 electron.contextBridge.exposeInMainWorld("electronAPI", {
-  scanMusicFolder: (folderPath) => electron.ipcRenderer.invoke("scan-music-folder", folderPath),
+  scanMusicFolder: (folderPath, options) => electron.ipcRenderer.invoke("scan-music-folder", folderPath, options),
   selectMusicFolder: () => electron.ipcRenderer.invoke("select-music-folder"),
   readSingleFileMetadata: (filePath) => electron.ipcRenderer.invoke("read-single-file-metadata", filePath),
   // Settings methods
@@ -9,6 +9,15 @@ electron.contextBridge.exposeInMainWorld("electronAPI", {
   saveSettings: (settings) => electron.ipcRenderer.invoke("save-settings", settings),
   selectDownloadFolder: () => electron.ipcRenderer.invoke("select-download-folder"),
   getBinaryStatuses: () => electron.ipcRenderer.invoke("get-binary-statuses"),
+  installYtdlp: () => electron.ipcRenderer.invoke("install-ytdlp"),
+  installFpcalc: () => electron.ipcRenderer.invoke("install-fpcalc"),
+  onBinaryInstallProgress: (callback) => {
+    const handler = (_event, progress) => callback(progress);
+    electron.ipcRenderer.on("binary-install-progress", handler);
+    return () => {
+      electron.ipcRenderer.removeListener("binary-install-progress", handler);
+    };
+  },
   getPlatformInfo: () => electron.ipcRenderer.invoke("get-platform-info"),
   readFileBuffer: (filePath) => electron.ipcRenderer.invoke("read-file-buffer", filePath),
   // Listen for tray play/pause commands
