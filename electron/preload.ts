@@ -183,6 +183,18 @@ contextBridge.exposeInMainWorld('electronAPI', {
   installFpcalc: () =>
     ipcRenderer.invoke('install-fpcalc'),
 
+  installWhisper: () =>
+    ipcRenderer.invoke('install-whisper'),
+
+  getWhisperModels: () =>
+    ipcRenderer.invoke('get-whisper-models'),
+
+  getSelectedWhisperModel: () =>
+    ipcRenderer.invoke('get-selected-whisper-model'),
+
+  setWhisperModel: (modelId: string) =>
+    ipcRenderer.invoke('set-whisper-model', modelId),
+
   onBinaryInstallProgress: (callback: (progress: { binary: string; status: string; message: string; percentage: number }) => void) => {
     const handler = (_event: any, progress: any) => callback(progress)
     ipcRenderer.on('binary-install-progress', handler)
@@ -400,6 +412,17 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.on('file-watcher-event', handler)
     return () => {
       ipcRenderer.removeListener('file-watcher-event', handler)
+    }
+  },
+
+  processLyrics: (filePath: string) =>
+    ipcRenderer.invoke('process-lyrics', filePath),
+
+  onLyricsProgress: (callback: (progress: { step: string; percentage: number }) => void) => {
+    const handler = (_event: any, progress: any) => callback(progress)
+    ipcRenderer.on('lyrics-progress', handler)
+    return () => {
+      ipcRenderer.removeListener('lyrics-progress', handler)
     }
   },
 } as ElectronAPI)

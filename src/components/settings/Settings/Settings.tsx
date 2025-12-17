@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import type { AppSettings, BinaryStatus, PlatformInfo } from '../../../types/electron.d'
+import type { AppSettings, BinaryStatus, PlatformInfo, WhisperModel } from '../../../types/electron.d'
 import type { VisualizerMode } from '../../common/AudioVisualizer/AudioVisualizer'
 import './Settings.css'
 
@@ -39,6 +39,8 @@ export function Settings({
   const [platformInfo, setPlatformInfo] = useState<PlatformInfo | null>(null)
   const [installingBinary, setInstallingBinary] = useState<string | null>(null)
   const [installProgress, setInstallProgress] = useState<{ message: string; percentage: number } | null>(null)
+  const [whisperModels, setWhisperModels] = useState<WhisperModel[]>([])
+  const [selectedWhisperModel, setSelectedWhisperModel] = useState<WhisperModel | null>(null)
 
   // Load settings when modal opens
   useEffect(() => {
@@ -46,6 +48,7 @@ export function Settings({
       loadSettings()
       loadBinaryStatuses()
       loadPlatformInfo()
+      loadWhisperModels()
     }
   }, [isOpen])
 
@@ -105,6 +108,33 @@ export function Settings({
     }
   }
 
+  const loadWhisperModels = async () => {
+    try {
+      const models = await window.electronAPI?.getWhisperModels()
+      const selected = await window.electronAPI?.getSelectedWhisperModel()
+      if (models) {
+        setWhisperModels(models)
+      }
+      if (selected) {
+        setSelectedWhisperModel(selected)
+      }
+    } catch (err) {
+      console.error('Error loading whisper models:', err)
+    }
+  }
+
+  const handleWhisperModelChange = async (modelId: string) => {
+    try {
+      await window.electronAPI?.setWhisperModel(modelId)
+      const selected = await window.electronAPI?.getSelectedWhisperModel()
+      if (selected) {
+        setSelectedWhisperModel(selected)
+      }
+    } catch (err) {
+      console.error('Error setting whisper model:', err)
+    }
+  }
+
   const handleSelectMusicFolder = async () => {
     try {
       const folderPath = await window.electronAPI?.selectMusicFolder()
@@ -157,6 +187,8 @@ export function Settings({
         await window.electronAPI?.installYtdlp()
       } else if (binaryName.includes('fpcalc') || binaryName.includes('Chromaprint')) {
         await window.electronAPI?.installFpcalc()
+      } else if (binaryName.includes('whisper') || binaryName.includes('Transcription')) {
+        await window.electronAPI?.installWhisper()
       }
     } catch (err) {
       console.error('Error installing binary:', err)
@@ -411,6 +443,31 @@ export function Settings({
                         </div>
                       </div>
                     ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Whisper Model Selection */}
+              <div className="settings-section">
+                <label className="settings-label">Whisper AI Model</label>
+                <p className="settings-description">
+                  Choose transcription model. Larger models are more accurate but slower.
+                </p>
+                <select
+                  className="settings-select"
+                  value={selectedWhisperModel?.id || 'small.en'}
+                  onChange={(e) => handleWhisperModelChange(e.target.value)}
+                >
+                  {whisperModels.map((model) => (
+                    <option key={model.id} value={model.id}>
+                      {model.name} ({model.size}) - {model.description}
+                    </option>
+                  ))}
+                </select>
+                {selectedWhisperModel && (
+                  <div className="whisper-model-info">
+                    <span className="model-size">📦 {selectedWhisperModel.size}</span>
+                    <span className="model-desc">💡 {selectedWhisperModel.description}</span>
                   </div>
                 )}
               </div>

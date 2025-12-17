@@ -13,15 +13,17 @@
 7. [Main Process](#main-process)
 8. [Renderer Process](#renderer-process)
 9. [IPC Communication](#ipc-communication)
-10. [Playlist System](#playlist-system)
-11. [Core Flows](#core-flows)
-12. [External API Integration](#external-api-integration)
-13. [Security Architecture](#security-architecture)
-14. [Cross-Platform Strategy](#cross-platform-strategy)
-15. [Key Design Patterns](#key-design-patterns)
-16. [Visual Enhancements](#visual-enhancements)
-17. [Known Limitations & Future Work](#known-limitations--future-work)
-18. [Running the App](#running-the-app)
+10. [External Binary System](#external-binary-system)
+11. [AI Lyrics Generation](#ai-lyrics-generation)
+12. [Playlist System](#playlist-system)
+13. [Core Flows](#core-flows)
+14. [External API Integration](#external-api-integration)
+15. [Security Architecture](#security-architecture)
+16. [Cross-Platform Strategy](#cross-platform-strategy)
+17. [Key Design Patterns](#key-design-patterns)
+18. [Visual Enhancements](#visual-enhancements)
+19. [Known Limitations & Future Work](#known-limitations--future-work)
+20. [Running the App](#running-the-app)
 
 ---
 
@@ -86,11 +88,28 @@ Here's every important file and what it exports:
 │  electron/ipc/modules/                                                      │
 │  ├── musicHandlers.ts    → scanning folders, reading files                  │
 │  ├── playlistHandlers.ts → create/delete/update playlists                   │
-│  ├── youtubeHandlers.ts  → download from YouTube                            │
+│  ├── youtubeHandlers.ts  → download from YouTube, binary installs           │
 │  ├── apiHandlers.ts      → call external APIs (AcoustID, MusicBrainz)       │
 │  ├── systemHandlers.ts   → window controls (minimize, close)                │
 │  ├── cacheHandlers.ts    → metadata database operations                     │
-│  └── fingerprintHandlers.ts → audio fingerprinting (fpcalc)                 │
+│  ├── fingerprintHandlers.ts → audio fingerprinting (fpcalc)                 │
+│  ├── lyricsHandlers.ts   → vocal isolation + AI transcription               │
+│  └── watchHandlers.ts    → file system watching                             │
+│                                                                             │
+│  ──────────────────── BINARY MANAGERS ─────────────────────                 │
+│                                                                             │
+│  electron/binaryManager.ts                                                  │
+│  ├── exports: getAllBinaryStatuses(), getBinaryPath()                       │
+│  └── does: Checks installation status of yt-dlp, fpcalc, whisper            │
+│                                                                             │
+│  electron/fpcalcManager.ts                                                  │
+│  ├── exports: downloadFpcalc(), getFpcalcPath(), generateFingerprint()      │
+│  └── does: Downloads Chromaprint fpcalc binary, generates audio fingerprints│
+│                                                                             │
+│  electron/whisperManager.ts                                                 │
+│  ├── exports: downloadWhisper(), getWhisperPath(), WHISPER_MODELS           │
+│  ├── exports: getSelectedModel(), setSelectedModelId()                      │
+│  └── does: Downloads whisper.cpp binary + AI models for transcription       │
 │                                                                             │
 └─────────────────────────────────────────────────────────────────────────────┘
 
@@ -143,6 +162,9 @@ Here's every important file and what it exports:
 │  src/components/playlists/                                                  │
 │  ├── PlaylistList.tsx        → List of playlists in sidebar                 │
 │  └── CreatePlaylistModal.tsx → Modal dialog to create playlist              │
+│                                                                             │
+│  src/components/lyrics/                                                     │
+│  └── LyricsPanel/LyricsPanel.tsx → Slide-in panel for AI lyrics generation  │
 │                                                                             │
 │  src/components/common/                                                     │
 │  ├── AudioVisualizer/        → Animated bars that react to music            │

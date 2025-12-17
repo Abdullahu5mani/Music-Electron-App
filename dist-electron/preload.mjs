@@ -11,6 +11,10 @@ electron.contextBridge.exposeInMainWorld("electronAPI", {
   getBinaryStatuses: () => electron.ipcRenderer.invoke("get-binary-statuses"),
   installYtdlp: () => electron.ipcRenderer.invoke("install-ytdlp"),
   installFpcalc: () => electron.ipcRenderer.invoke("install-fpcalc"),
+  installWhisper: () => electron.ipcRenderer.invoke("install-whisper"),
+  getWhisperModels: () => electron.ipcRenderer.invoke("get-whisper-models"),
+  getSelectedWhisperModel: () => electron.ipcRenderer.invoke("get-selected-whisper-model"),
+  setWhisperModel: (modelId) => electron.ipcRenderer.invoke("set-whisper-model", modelId),
   onBinaryInstallProgress: (callback) => {
     const handler = (_event, progress) => callback(progress);
     electron.ipcRenderer.on("binary-install-progress", handler);
@@ -131,6 +135,14 @@ electron.contextBridge.exposeInMainWorld("electronAPI", {
     electron.ipcRenderer.on("file-watcher-event", handler);
     return () => {
       electron.ipcRenderer.removeListener("file-watcher-event", handler);
+    };
+  },
+  processLyrics: (filePath) => electron.ipcRenderer.invoke("process-lyrics", filePath),
+  onLyricsProgress: (callback) => {
+    const handler = (_event, progress) => callback(progress);
+    electron.ipcRenderer.on("lyrics-progress", handler);
+    return () => {
+      electron.ipcRenderer.removeListener("lyrics-progress", handler);
     };
   }
 });

@@ -20,6 +20,8 @@ import { DownloadNotification } from './components/download/DownloadNotification
 import { NotificationToast } from './components/common/NotificationToast/NotificationToast'
 // Playlist components
 import { CreatePlaylistModal } from './components/playlists'
+// Lyrics components
+import { LyricsPanel } from './components/lyrics'
 // Types
 import type { ScanStatusType } from './types/electron.d'
 import type { VisualizerMode } from './components/common/AudioVisualizer/AudioVisualizer'
@@ -178,6 +180,13 @@ function App() {
   const [showSettings, setShowSettings] = useState(false)
   const [downloadFolder, setDownloadFolder] = useState<string | null>(null)
 
+  // Lyrics panel state
+  const [showLyricsPanel, setShowLyricsPanel] = useState(false)
+  const [lyricsText, setLyricsText] = useState<string | null>(null)
+  const [lyricsProgress, setLyricsProgress] = useState<{ step: string; percentage: number } | null>(null)
+  const [lyricsSongName, setLyricsSongName] = useState('')
+  const [isProcessingLyrics, setIsProcessingLyrics] = useState(false)
+
   // Listen for download progress updates
   useEffect(() => {
     if (window.electronAPI?.onDownloadProgress) {
@@ -208,6 +217,17 @@ function App() {
       })
       return cleanup
     }
+  }, [])
+
+  // Listen for lyrics progress updates
+  useEffect(() => {
+    const cleanup = window.electronAPI?.onLyricsProgress((progress) => {
+      setLyricsProgress(progress)
+      if (progress.percentage === 100) {
+        setIsProcessingLyrics(false)
+      }
+    })
+    return cleanup
   }, [])
 
   // Load scan statuses when music files change
@@ -365,6 +385,30 @@ function App() {
     }
   }
 
+  // Handle lyrics processing
+  const handleProcessLyrics = useCallback(async (filePath: string, songName: string) => {
+    // Open the panel and start processing
+    setShowLyricsPanel(true)
+    setLyricsSongName(songName)
+    setLyricsText(null)
+    setIsProcessingLyrics(true)
+    setLyricsProgress({ step: 'Starting...', percentage: 0 })
+
+    try {
+      const result = await window.electronAPI.processLyrics(filePath)
+      if (result.success && result.lyrics) {
+        setLyricsText(result.lyrics)
+      } else {
+        showToastNotification(`Failed: ${result.message}`, 'error')
+      }
+    } catch (err) {
+      console.error('Lyrics processing error:', err)
+      showToastNotification('Failed to process lyrics', 'error')
+    } finally {
+      setIsProcessingLyrics(false)
+    }
+  }, [showToastNotification])
+
   return (
     <div className="app-container">
       <TitleBar />
@@ -460,6 +504,7 @@ function App() {
                   setPendingSongsForPlaylist(filePaths)
                   setShowCreatePlaylistModal(true)
                 }}
+                onProcessLyrics={handleProcessLyrics}
               />
             </OverlayScrollbarsComponent>
           </div>
@@ -518,6 +563,15 @@ function App() {
         currentSongName={batchProgress.currentSongName}
         apiPhase={batchProgress.apiPhase}
         onCancel={cancelBatchScan}
+      />
+
+      <LyricsPanel
+        isOpen={showLyricsPanel}
+        onClose={() => setShowLyricsPanel(false)}
+        songName={lyricsSongName}
+        lyrics={lyricsText}
+        progress={lyricsProgress}
+        isProcessing={isProcessingLyrics}
       />
 
       <CreatePlaylistModal

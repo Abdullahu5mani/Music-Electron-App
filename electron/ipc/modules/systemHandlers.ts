@@ -1,6 +1,6 @@
 import { ipcMain, BrowserWindow, dialog } from 'electron'
 import { updatePlaybackState, updateWindowVisibility } from '../../tray'
-import { getStoredSettings, saveSettings as saveStoredSettings } from '../../settings'
+import { getStoredSettings, saveSettings as saveStoredSettings, AppSettings } from '../../settings'
 
 /**
  * Registers IPC handlers for system operations
@@ -65,12 +65,13 @@ export function registerSystemHandlers() {
       return {
         musicFolderPath: null,
         downloadFolderPath: null,
+        scanSubfolders: true,
       }
     }
   })
 
   // Handle save settings
-  ipcMain.handle('save-settings', async (_event, settings: { musicFolderPath: string | null; downloadFolderPath: string | null }) => {
+  ipcMain.handle('save-settings', async (_event, settings: AppSettings) => {
     try {
       saveStoredSettings(settings)
       return { success: true }

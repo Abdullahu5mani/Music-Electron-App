@@ -21,6 +21,8 @@ interface SongListProps {
   playlists?: Playlist[]
   onAddToPlaylist?: (playlistId: number, filePaths: string[]) => Promise<boolean>
   onCreatePlaylistWithSongs?: (filePaths: string[]) => void
+  // Lyrics props
+  onProcessLyrics?: (filePath: string, songName: string) => void
 }
 
 /**
@@ -38,7 +40,8 @@ export function SongList({
   onPlayPause,
   playlists = [],
   onAddToPlaylist,
-  onCreatePlaylistWithSongs
+  onCreatePlaylistWithSongs,
+  onProcessLyrics
 }: SongListProps) {
   const [generatingFingerprint, setGeneratingFingerprint] = useState<string | null>(null)
   const [scanStatuses, setScanStatuses] = useState<Record<string, ScanStatusType>>({})
@@ -448,6 +451,18 @@ export function SongList({
                 label: 'Create playlist with song',
                 icon: '➕',
                 onClick: () => onCreatePlaylistWithSongs([currentSong.path])
+              })
+            }
+
+            // Add Lyrics option
+            if (onProcessLyrics) {
+              items.push({
+                label: 'Lyrics',
+                icon: '🎤',
+                onClick: () => {
+                  const songName = currentSong.metadata?.title || currentSong.name
+                  onProcessLyrics(currentSong.path, songName)
+                }
               })
             }
 

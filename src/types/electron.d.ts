@@ -26,6 +26,15 @@ export interface PlatformInfo {
   arch: string
 }
 
+export interface WhisperModel {
+  id: string
+  name: string
+  filename: string
+  size: string
+  sizeBytes: number
+  description: string
+}
+
 export interface AudioMetadata {
   title?: string
   artist?: string
@@ -83,6 +92,10 @@ export interface ElectronAPI {
   getBinaryStatuses: () => Promise<BinaryStatus[]>
   installYtdlp: () => Promise<{ success: boolean; error?: string }>
   installFpcalc: () => Promise<{ success: boolean; error?: string }>
+  installWhisper: () => Promise<{ success: boolean; error?: string }>
+  getWhisperModels: () => Promise<WhisperModel[]>
+  getSelectedWhisperModel: () => Promise<WhisperModel>
+  setWhisperModel: (modelId: string) => Promise<{ success: boolean }>
   onBinaryInstallProgress: (callback: (progress: { binary: string; status: string; message: string; percentage: number }) => void) => () => void
   getPlatformInfo: () => Promise<PlatformInfo>
   readFileBuffer: (filePath: string) => Promise<number[]>
@@ -166,6 +179,8 @@ export interface ElectronAPI {
   fileWatcherStop: () => Promise<{ success: boolean }>
   fileWatcherStatus: () => Promise<{ isWatching: boolean; watchPath: string | null }>
   onFileWatcherEvent: (callback: (event: { type: 'added' | 'removed' | 'changed'; files: string[] }) => void) => () => void
+  processLyrics: (filePath: string) => Promise<{ success: boolean; message: string; lyrics?: string }>
+  onLyricsProgress: (callback: (progress: { step: string; percentage: number }) => void) => () => void
 }
 
 declare global {

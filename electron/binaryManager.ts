@@ -5,6 +5,7 @@ import { app } from 'electron'
 import { execFile } from 'child_process'
 import { promisify } from 'util'
 import { getFpcalcPath, isFpcalcInstalled } from './fpcalcManager'
+import { getWhisperPath, getWhisperModelPath, isWhisperInstalled, getWhisperVersion } from './whisperManager'
 
 const execFileAsync = promisify(execFile)
 
@@ -180,6 +181,35 @@ export async function getFpcalcStatus(): Promise<BinaryStatus> {
 }
 
 /**
+ * Gets the status of whisper.cpp binary
+ */
+export async function getWhisperStatus(): Promise<BinaryStatus> {
+  const binaryPath = getWhisperPath()
+  const modelPath = getWhisperModelPath()
+  const installed = await isWhisperInstalled()
+
+  let version: string | null = null
+  if (installed) {
+    version = await getWhisperVersion()
+  }
+
+  // Check if both binary and model exist
+  const hasModel = fs.existsSync(modelPath)
+
+  // Whisper version we download
+  const latestVersion = '1.8.2'
+
+  return {
+    name: 'whisper.cpp (Transcription)',
+    installed: installed && hasModel,
+    version,
+    path: installed ? binaryPath : null,
+    latestVersion,
+    needsUpdate: false, // We don't auto-update whisper
+  }
+}
+
+/**
  * Gets status for all managed binaries
  */
 export async function getAllBinaryStatuses(): Promise<BinaryStatus[]> {
@@ -190,6 +220,9 @@ export async function getAllBinaryStatuses(): Promise<BinaryStatus[]> {
 
   // Add fpcalc status
   statuses.push(await getFpcalcStatus())
+
+  // Add whisper status
+  statuses.push(await getWhisperStatus())
 
   return statuses
 }

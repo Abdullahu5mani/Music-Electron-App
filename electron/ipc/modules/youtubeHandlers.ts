@@ -2,6 +2,7 @@ import { ipcMain, BrowserWindow } from 'electron'
 import { downloadYouTubeAudio } from '../../youtubeDownloader'
 import { getAllBinaryStatuses } from '../../binaryManager'
 import { downloadFpcalc } from '../../fpcalcManager'
+import { downloadWhisper, WHISPER_MODELS, getSelectedModel, setSelectedModelId } from '../../whisperManager'
 import path from 'path'
 import fs from 'fs'
 import https from 'https'
@@ -232,5 +233,57 @@ export function registerYoutubeHandlers() {
       return { success: false, error: error instanceof Error ? error.message : 'Unknown error' }
     }
   })
-}
 
+  // Handle whisper installation
+  ipcMain.handle('install-whisper', async (event) => {
+    const window = BrowserWindow.fromWebContents(event.sender)
+
+    try {
+      const result = await downloadWhisper((message, percentage) => {
+        window?.webContents.send('binary-install-progress', {
+          binary: 'whisper',
+          status: 'downloading',
+          message,
+          percentage: percentage || 0
+        })
+      })
+
+      if (result) {
+        window?.webContents.send('binary-install-progress', {
+          binary: 'whisper',
+          status: 'installed',
+          message: 'whisper.cpp installed successfully!',
+          percentage: 100
+        })
+        return { success: true }
+      } else {
+        throw new Error('Installation failed')
+      }
+    } catch (error) {
+      console.error('Error installing whisper:', error)
+      window?.webContents.send('binary-install-progress', {
+        binary: 'whisper',
+        status: 'error',
+        message: `Installation failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        percentage: 0
+      })
+      return { success: false, error: error instanceof Error ? error.message : 'Unknown error' }
+    }
+  })
+
+  // Get available whisper models
+  ipcMain.handle('get-whisper-models', () => {
+    return WHISPER_MODELS
+  })
+
+  // Get currently selected whisper model
+  ipcMain.handle('get-selected-whisper-model', () => {
+    return getSelectedModel()
+  })
+
+  // Set whisper model
+  ipcMain.handle('set-whisper-model', (_, modelId: string) => {
+    setSelectedModelId(modelId)
+    return { success: true }
+  })
+}
