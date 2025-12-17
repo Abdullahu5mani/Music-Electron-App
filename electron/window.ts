@@ -28,13 +28,18 @@ let win: BrowserWindow | null = null
  * Creates the main application window
  */
 export function createWindow(): BrowserWindow {
+  const isMac = process.platform === 'darwin'
+
   win = new BrowserWindow({
     width: 820,           // Default width
     height: 720,          // Default height
     minWidth: 820,        // Minimum width
     minHeight: 720,       // Minimum height
-    frame: false,         // Remove default frame
-    titleBarStyle: 'hidden', // Hide title bar (macOS)
+    frame: false,         // Remove default frame for custom titlebar
+    // macOS-specific: use hiddenInset to show traffic lights with custom titlebar
+    titleBarStyle: isMac ? 'hiddenInset' : 'hidden',
+    // Position traffic lights on macOS (moved down to avoid overlap with custom titlebar)
+    trafficLightPosition: isMac ? { x: 15, y: 12 } : undefined,
     backgroundColor: '#1a1a1a', // Match app background
     icon: path.join(process.env.APP_ROOT, 'src/assets/trayIcon.svg'),
     webPreferences: {

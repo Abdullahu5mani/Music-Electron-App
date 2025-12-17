@@ -143,21 +143,33 @@ function findSystemWhisper(): string | null {
     }
 
     // Common paths for Homebrew and system packages
+    // The binary name varies: whisper-cpp, whisper, main
     const possiblePaths = [
-        '/opt/homebrew/bin/whisper-cpp',      // Homebrew on Apple Silicon
-        '/usr/local/bin/whisper-cpp',          // Homebrew on Intel Mac
-        '/usr/bin/whisper-cpp',                // System package
-        '/opt/homebrew/bin/whisper',           // Alternative name
-        '/usr/local/bin/whisper',              // Alternative name
-        '/usr/bin/whisper',                    // Alternative name
+        // Homebrew on Apple Silicon
+        '/opt/homebrew/bin/whisper-cpp',
+        '/opt/homebrew/bin/whisper',
+        '/opt/homebrew/bin/main',
+        // Homebrew on Intel Mac
+        '/usr/local/bin/whisper-cpp',
+        '/usr/local/bin/whisper',
+        '/usr/local/bin/main',
+        // System packages (Linux)
+        '/usr/bin/whisper-cpp',
+        '/usr/bin/whisper',
+        // Common build output locations
+        '/usr/local/whisper.cpp/main',
     ]
+
+    console.log('[WhisperManager] Searching for system whisper in paths:', possiblePaths)
 
     for (const binPath of possiblePaths) {
         if (fs.existsSync(binPath)) {
+            console.log('[WhisperManager] Found system whisper at:', binPath)
             return binPath
         }
     }
 
+    console.log('[WhisperManager] No system whisper found')
     return null
 }
 
@@ -190,22 +202,48 @@ export function getWhisperModelPath(): string {
 
 /**
  * Check if whisper binary is installed and working
+ * For macOS/Linux: checks system whisper + model
+ * For Windows: checks downloaded whisper + model
  */
 export async function isWhisperInstalled(): Promise<boolean> {
     const binaryPath = getWhisperPath()
     const modelPath = getWhisperModelPath()
 
-    if (!fs.existsSync(binaryPath) || !fs.existsSync(modelPath)) {
+    console.log('[WhisperManager] Checking installation...')
+    console.log('[WhisperManager] Binary path:', binaryPath)
+    console.log('[WhisperManager] Model path:', modelPath)
+    console.log('[WhisperManager] Binary exists:', fs.existsSync(binaryPath))
+    console.log('[WhisperManager] Model exists:', fs.existsSync(modelPath))
+
+    // Model must always exist
+    if (!fs.existsSync(modelPath)) {
+        console.log('[WhisperManager] Model not found')
+        return false
+    }
+
+    // For macOS/Linux with system whisper, we may not have a local binary
+    const systemWhisper = findSystemWhisper()
+    if (systemWhisper) {
+        console.log('[WhisperManager] Using system whisper:', systemWhisper)
+        // System whisper found + model exists = installed
+        return true
+    }
+
+    // For Windows or fallback: check the downloaded binary
+    if (!fs.existsSync(binaryPath)) {
+        console.log('[WhisperManager] Binary not found')
         return false
     }
 
     try {
-        // whisper.cpp main shows help when run with --help
+        // whisper.cpp shows help when run with --help
         await execFileAsync(binaryPath, ['--help'], { timeout: 5000 })
+        console.log('[WhisperManager] Binary executable verified')
         return true
     } catch (error) {
         // --help may return non-zero exit code, but that's okay
-        // Check if the binary at least runs
+        // As long as it ran (didn't throw ENOENT), binary is working
+        console.log('[WhisperManager] Binary check returned error (may be OK):', error)
         return fs.existsSync(binaryPath) && fs.existsSync(modelPath)
     }
 }
