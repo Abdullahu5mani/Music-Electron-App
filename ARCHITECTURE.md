@@ -395,6 +395,8 @@ This is an **Electron + React + TypeScript** desktop music player application. I
 | **Metadata** | music-metadata | Extract ID3 tags & album art |
 | **YouTube** | yt-dlp-wrap | Download audio from YouTube |
 | **Audio Fingerprinting** | fpcalc (Chromaprint CLI) | Generate audio fingerprints (Main Process) |
+| **Audio Processing** | FFmpeg | Vocal isolation, format conversion |
+| **AI Transcription** | Whisper.cpp | Speech-to-text for lyrics |
 | **Tag Writing** | taglib-wasm | Write cover art to files |
 | **Database** | better-sqlite3 | SQLite metadata cache |
 | **Sliders** | rc-slider | Seek bar & volume control |
@@ -489,11 +491,13 @@ Music-Electron-App/
 │   ├── parallelMetadataScanner.ts # Parallel scanning with worker pool
 │   ├── youtubeDownloader.ts     # YouTube download with yt-dlp
 │   ├── settings.ts              # Settings persistence (JSON)
-│   ├── binaryManager.ts         # Binary status checking (yt-dlp)
+│   ├── binaryManager.ts         # Binary status checking (all binaries)
 │   ├── fpcalcManager.ts         # fpcalc binary download & fingerprinting
+│   ├── whisperManager.ts        # Whisper.cpp binary & model management
 │   ├── fingerprintWorkerPool.ts # Worker pool for fingerprint processing
 │   ├── metadataCache.ts         # SQLite database for scan tracking
 │   ├── playlistDatabase.ts      # SQLite database for playlist storage
+│   ├── fileWatcher.ts           # Real-time file system monitoring
 │   ├── electron-env.d.ts        # Electron environment types
 │   ├── __tests__/               # Electron unit tests
 │   └── ipc/
@@ -501,11 +505,13 @@ Music-Electron-App/
 │       └── modules/             # Modular IPC handlers
 │           ├── musicHandlers.ts     # Folder scanning, cover art writing
 │           ├── apiHandlers.ts       # AcoustID, MusicBrainz, image download
-│           ├── youtubeHandlers.ts   # YouTube download, binary status
+│           ├── youtubeHandlers.ts   # YouTube download, binary installs
 │           ├── systemHandlers.ts    # Window controls, settings, platform
 │           ├── cacheHandlers.ts     # Metadata cache operations
 │           ├── fingerprintHandlers.ts # Audio fingerprinting (fpcalc)
 │           ├── playlistHandlers.ts  # Playlist CRUD operations
+│           ├── lyricsHandlers.ts    # Vocal isolation + AI transcription
+│           ├── watchHandlers.ts     # File watcher IPC handlers
 │           └── __tests__/           # IPC handler tests
 │
 ├── src/                         # Renderer Process (React)
@@ -562,6 +568,12 @@ Music-Electron-App/
 │   │   │   └── Settings/
 │   │   │       ├── Settings.tsx
 │   │   │       └── Settings.css
+│   │   │
+│   │   ├── lyrics/              # AI lyrics generation feature
+│   │   │   └── LyricsPanel/
+│   │   │       ├── LyricsPanel.tsx  # Slide-in panel component
+│   │   │       ├── LyricsPanel.css  # Panel styles
+│   │   │       └── index.ts         # Re-exports
 │   │   │
 │   │   └── download/            # YouTube download feature
 │   │       ├── DownloadButton/
@@ -1069,19 +1081,291 @@ Stores user settings in a JSON file.
 - macOS: `~/Library/Application Support/music-sync-app/app-config.json`
 - Linux: `~/.config/music-sync-app/app-config.json`
 
-### Binary Manager
+---
 
-Manages external binaries (yt-dlp) with automatic download and error recovery.
+## External Binary System
 
-**Error Handling:**
+The app relies on external binaries for specialized audio processing. These are automatically downloaded and managed.
+
+### Binary Overview
+
+| Binary | Purpose | Source | Size |
+|--------|---------|--------|------|
+| **yt-dlp** | YouTube audio download | GitHub Releases | ~10 MB |
+| **fpcalc** | Audio fingerprinting | Chromaprint | ~2 MB |
+| **FFmpeg** | Audio processing, vocal isolation | Bundled/System | ~90 MB |
+| **whisper-cli** | AI speech-to-text transcription | whisper.cpp | ~1-3 MB |
+| **Whisper Models** | AI model weights | HuggingFace | 75 MB - 1.6 GB |
+
+### Binary Storage Locations
+
+All binaries are stored in the user's app data directory:
+
+```
+Windows: %APPDATA%/music-sync-app/
+├── yt-dlp.exe
+├── binaries/
+│   └── fpcalc.exe
+└── whisper-binary/
+    ├── whisper-cli.exe
+    ├── ggml.dll           (supporting library)
+    ├── ggml-base.dll      (supporting library)
+    └── ggml-small.en.bin  (AI model)
+```
+
+### Architecture Diagram
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                          BINARY MANAGEMENT SYSTEM                           │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  ┌───────────────────────────────────────────────────────────────────────┐  │
+│  │                         binaryManager.ts                               │  │
+│  │  • Aggregates status of all binaries                                  │  │
+│  │  • Provides getAllBinaryStatuses() for Settings UI                    │  │
+│  │  • Checks installation, version, and update availability              │  │
+│  └───────────────────────────────────────────────────────────────────────┘  │
+│         │                    │                    │                         │
+│         ▼                    ▼                    ▼                         │
+│  ┌─────────────┐      ┌─────────────┐      ┌─────────────────┐             │
+│  │ yt-dlp      │      │ fpcalc      │      │ whisper.cpp     │             │
+│  │ (built-in)  │      │ Manager     │      │ Manager         │             │
+│  │             │      │             │      │                 │             │
+│  │ Downloads   │      │ Downloads   │      │ Downloads CLI + │             │
+│  │ from GitHub │      │ Chromaprint │      │ AI model files  │             │
+│  │ Releases    │      │ binaries    │      │ from HuggingFace│             │
+│  └─────────────┘      └─────────────┘      └─────────────────┘             │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+### fpcalcManager.ts
+
+Manages the Chromaprint fingerprinting binary.
+
+**Key Functions:**
+
+| Function | Description |
+|----------|-------------|
+| `getFpcalcPath()` | Returns platform-specific path to fpcalc binary |
+| `downloadFpcalc(onProgress)` | Downloads and extracts fpcalc for current platform |
+| `generateFingerprint(audioPath)` | Runs fpcalc to generate audio fingerprint |
+
+**Fingerprint Generation Flow:**
+
+```
+Audio File → fpcalc binary → JSON output → { duration, fingerprint }
+                                                      ↓
+                                           AcoustID API lookup
+```
+
+### whisperManager.ts
+
+Manages the Whisper.cpp AI transcription system.
+
+**Key Functions:**
+
+| Function | Description |
+|----------|-------------|
+| `getWhisperPath()` | Returns path to whisper-cli executable |
+| `getWhisperModelPath()` | Returns path to selected AI model file |
+| `downloadWhisper(onProgress)` | Downloads CLI binary + selected model |
+| `isWhisperInstalled()` | Checks if binary and model are present |
+| `WHISPER_MODELS` | Array of available model configurations |
+| `getSelectedModel()` | Returns currently selected model config |
+| `setSelectedModelId(id)` | Persists user's model choice |
+
+**Available Whisper Models:**
+
+| Model ID | Name | Size | Accuracy | Speed |
+|----------|------|------|----------|-------|
+| `tiny.en` | Tiny (English) | 75 MB | ⭐ | ⭐⭐⭐⭐⭐ |
+| `base.en` | Base (English) | 142 MB | ⭐⭐ | ⭐⭐⭐⭐ |
+| `small.en` | Small (English) | 466 MB | ⭐⭐⭐ | ⭐⭐⭐ |
+| `medium.en` | Medium (English) | 1.5 GB | ⭐⭐⭐⭐ | ⭐⭐ |
+| `large` | Large (Multilingual) | 1.6 GB | ⭐⭐⭐⭐⭐ | ⭐ |
+
+**Model Selection Persistence:**
+
+User's model choice is saved to `whisper-settings.json` in the app data directory.
+
+### Binary Installation Flow
+
+```
+┌──────────────────────────────────────────────────────────────────────────────┐
+│  User clicks "Install" in Settings → Binary Manager                         │
+├──────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│  [FRONTEND] Settings.tsx                                                     │
+│       │                                                                      │
+│       ▼ handleInstallBinary('whisper.cpp (Transcription)')                   │
+│       ▼ window.electronAPI.installWhisper()                                  │
+│                                                                              │
+│  [PRELOAD] preload.ts                                                        │
+│       │                                                                      │
+│       ▼ ipcRenderer.invoke('install-whisper')                                │
+│                                                                              │
+│  [BACKEND] youtubeHandlers.ts                                                │
+│       │                                                                      │
+│       ▼ downloadWhisper(progressCallback)                                    │
+│                                                                              │
+│  [BACKEND] whisperManager.ts                                                 │
+│       │                                                                      │
+│       ├──► Step 1: Check platform (win32-x64, darwin-arm64, etc.)            │
+│       │                                                                      │
+│       ├──► Step 2: Download whisper-bin-x64.zip from GitHub                  │
+│       │           → Extract ALL files (exe + dlls) to whisper-binary/        │
+│       │                                                                      │
+│       ├──► Step 3: Download selected model from HuggingFace                  │
+│       │           → ggml-small.en.bin (466 MB default)                       │
+│       │                                                                      │
+│       └──► Step 4: Verify installation, send 'installed' status              │
+│                                                                              │
+│  [FRONTEND] Settings.tsx                                                     │
+│       │                                                                      │
+│       ▼ onBinaryInstallProgress listener updates UI                          │
+│       ▼ Progress bar shows download percentage                               │
+│       ▼ Status badge changes from "MISSING" to "INSTALLED"                   │
+│                                                                              │
+└──────────────────────────────────────────────────────────────────────────────┘
+```
+
+### Error Handling
 
 | Error Code | Meaning | Action |
 |------------|---------|--------|
 | `EFTYPE` | File exists but wrong format/corrupted | Auto-delete, show as "Missing" |
 | `EACCES` | Permission denied | Auto-delete, show as "Missing" |
 | `ENOENT` | File not found | Show as "Missing" |
+| `STATUS_DLL_NOT_FOUND` | Missing DLL dependencies | Re-download with all files |
 
-Binary is considered "installed" only if the file exists AND can execute successfully. Corrupted binaries are automatically deleted and marked as "Missing".
+Binary is considered "installed" only if:
+1. The executable file exists
+2. The file can execute successfully (not corrupted)
+3. Required dependencies (DLLs) are present
+
+---
+
+## AI Lyrics Generation
+
+The app includes AI-powered lyrics transcription using Whisper.cpp.
+
+### How It Works
+
+```
+┌──────────────────────────────────────────────────────────────────────────────┐
+│                        LYRICS GENERATION PIPELINE                            │
+├──────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│  ┌─────────────┐     ┌─────────────────┐     ┌────────────────┐             │
+│  │  Audio File │────►│  FFmpeg (DSP)   │────►│  Whisper AI    │             │
+│  │  (.mp3)     │     │  Vocal Isolate  │     │  Transcription │             │
+│  └─────────────┘     └─────────────────┘     └────────────────┘             │
+│                              │                        │                      │
+│                              ▼                        ▼                      │
+│                       ┌─────────────┐          ┌─────────────┐              │
+│                       │  WAV file   │          │   Lyrics    │              │
+│                       │  (16kHz)    │          │   Text      │              │
+│                       └─────────────┘          └─────────────┘              │
+│                                                       │                      │
+│                                                       ▼                      │
+│                                                ┌─────────────┐              │
+│                                                │ LyricsPanel │              │
+│                                                │   (UI)      │              │
+│                                                └─────────────┘              │
+│                                                                              │
+└──────────────────────────────────────────────────────────────────────────────┘
+```
+
+### Step 1: Vocal Isolation (FFmpeg)
+
+FFmpeg applies a DSP filter chain to enhance vocals:
+
+```
+Audio Filter Chain:
+├── pan=1c|c0=0.5*c0+0.5*c1   → Extract center channel (where vocals typically are)
+├── highpass=f=100              → Remove sub-bass rumble
+├── lowpass=f=8000              → Remove harsh highs  
+├── afftdn=nf=-20:nt=w          → FFT denoise (reduce background music)
+├── acompressor                  → Compress dynamics
+└── dynaudnorm                   → Normalize output levels
+
+Output: 16kHz mono WAV (optimal for Whisper)
+```
+
+### Step 2: AI Transcription (Whisper)
+
+Whisper.cpp processes the isolated vocal audio:
+
+```bash
+whisper-cli.exe \
+  -m ggml-small.en.bin \      # AI model
+  -f vocals.wav \              # Input audio
+  -l en \                      # Language hint
+  --no-timestamps \            # Plain text output
+  --prompt "This is a song. Transcribe the sung lyrics."
+```
+
+### lyricsHandlers.ts
+
+Orchestrates the complete lyrics generation pipeline.
+
+**Key Functions:**
+
+| Function | Description |
+|----------|-------------|
+| `process-lyrics` IPC | Main handler for lyrics generation request |
+| `sendProgress()` | Emits progress events to frontend |
+
+**Progress Events:**
+
+| Step | Percentage | Message |
+|------|------------|---------|
+| Start | 0% | "Starting..." |
+| FFmpeg | 20% | "Isolating vocals..." |
+| Whisper | 50% | "Transcribing with AI..." |
+| Complete | 100% | "Complete!" |
+
+### LyricsPanel Component
+
+A slide-in panel that displays lyrics generation progress and results.
+
+**Features:**
+
+- **Smooth animation**: Slides in from right (0.35s ease)
+- **Progress display**: Visual stages with checkmarks
+- **Lyrics display**: Scrollable text area
+- **Disclaimer**: "AI-generated lyrics may not be 100% accurate"
+
+**Component Location:** `src/components/lyrics/LyricsPanel/`
+
+### IPC Channels
+
+| Channel | Direction | Purpose |
+|---------|-----------|---------|
+| `process-lyrics` | Renderer → Main | Start lyrics generation |
+| `lyrics-progress` | Main → Renderer | Progress updates |
+| `get-whisper-models` | Renderer → Main | Get available models |
+| `get-selected-whisper-model` | Renderer → Main | Get current model |
+| `set-whisper-model` | Renderer → Main | Change model selection |
+
+### Limitations
+
+| Limitation | Reason |
+|------------|--------|
+| **Not 100% accurate** | AI transcription isn't perfect, especially with music |
+| **English only** | Most models are English-optimized |
+| **Vocal isolation is basic** | DSP can't fully separate vocals from music |
+| **Large model downloads** | Better models require 500MB+ downloads |
+| **CPU-intensive** | Transcription takes 30s-2min depending on model |
+
+### Future Improvements
+
+- [ ] GPU acceleration (CUDA support)
+- [ ] ML-based vocal isolation (Demucs/Spleeter)
+- [ ] Cached lyrics (don't re-transcribe same song)
+- [ ] Edit/save transcribed lyrics to file metadata
 
 ---
 

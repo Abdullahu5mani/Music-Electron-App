@@ -23,7 +23,6 @@
   "dependencies": {
     "@babel/runtime": "^7.28.4",
     "@unimusic/chromaprint": "^0.1.4",
-    "@voxextractlabs/vox-demucs": "^2.0.0",
     "adm-zip": "^0.5.16",
     "axios": "^1.13.2",
     "better-sqlite3": "^12.5.0",
