@@ -19,14 +19,22 @@ const execFileAsync = promisify(execFile)
 // Whisper.cpp release version (from ggml-org/whisper.cpp)
 const WHISPER_VERSION = '1.8.2'
 
-// Download URLs for whisper.cpp binaries (repo moved from ggerganov to ggml-org)
+// Download URLs for whisper.cpp binaries
+// Note: Only Windows has pre-built downloads. macOS/Linux use system-installed whisper
 const BINARY_URLS: Record<string, string> = {
     'win32-x64': `https://github.com/ggml-org/whisper.cpp/releases/download/v${WHISPER_VERSION}/whisper-bin-x64.zip`,
     'win32-ia32': `https://github.com/ggml-org/whisper.cpp/releases/download/v${WHISPER_VERSION}/whisper-bin-Win32.zip`,
-    // Mac/Linux users should build from source for optimal performance
-    'darwin-x64': '', // Build from source
-    'darwin-arm64': '', // Build from source  
-    'linux-x64': '', // Build from source
+    // macOS/Linux: Use system-installed whisper-cpp (via Homebrew or apt)
+    'darwin-x64': 'system',
+    'darwin-arm64': 'system',
+    'linux-x64': 'system',
+}
+
+// Platform-specific install instructions
+export const WHISPER_INSTALL_INSTRUCTIONS: Record<string, string> = {
+    'darwin': 'Install via Homebrew: brew install whisper-cpp',
+    'linux': 'Install via package manager:\n  Ubuntu/Debian: sudo apt install whisper.cpp\n  Or build from source: https://github.com/ggml-org/whisper.cpp',
+    'win32': 'Click "Install" to download automatically',
 }
 
 // Available whisper models with sizes and descriptions
@@ -125,11 +133,48 @@ function getWhisperDir(): string {
 }
 
 /**
+ * Check for system-installed whisper binary (macOS/Linux)
+ */
+function findSystemWhisper(): string | null {
+    const platform = process.platform
+
+    if (platform === 'win32') {
+        return null // Windows uses downloaded binary
+    }
+
+    // Common paths for Homebrew and system packages
+    const possiblePaths = [
+        '/opt/homebrew/bin/whisper-cpp',      // Homebrew on Apple Silicon
+        '/usr/local/bin/whisper-cpp',          // Homebrew on Intel Mac
+        '/usr/bin/whisper-cpp',                // System package
+        '/opt/homebrew/bin/whisper',           // Alternative name
+        '/usr/local/bin/whisper',              // Alternative name
+        '/usr/bin/whisper',                    // Alternative name
+    ]
+
+    for (const binPath of possiblePaths) {
+        if (fs.existsSync(binPath)) {
+            return binPath
+        }
+    }
+
+    return null
+}
+
+/**
  * Gets the whisper binary path (whisper-cli executable)
+ * On Windows: uses downloaded binary
+ * On macOS/Linux: uses system-installed whisper (Homebrew, apt, etc.)
  */
 export function getWhisperPath(): string {
+    // First check for system-installed whisper (macOS/Linux)
+    const systemWhisper = findSystemWhisper()
+    if (systemWhisper) {
+        return systemWhisper
+    }
+
+    // Fall back to downloaded binary (Windows or manually installed)
     const binaryDir = getWhisperDir()
-    // main.exe is deprecated, use whisper-cli.exe
     const binaryName = process.platform === 'win32' ? 'whisper-cli.exe' : 'whisper-cli'
     return path.join(binaryDir, binaryName)
 }
@@ -238,76 +283,82 @@ async function downloadFile(url: string, destPath: string, onProgress?: (message
 
 /**
  * Download and install whisper.cpp binary and model
+ * Windows: Downloads binary + model
+ * macOS/Linux: Uses system whisper, only downloads model
  */
 export async function downloadWhisper(
     onProgress?: (message: string, percentage?: number) => void
 ): Promise<boolean> {
     const platformKey = `${process.platform}-${process.arch}`
     const downloadUrl = BINARY_URLS[platformKey]
-
-    // Check platform support
-    if (process.platform !== 'win32') {
-        console.error(`Whisper.cpp auto-download not supported on ${platformKey}. Please build from source.`)
-        onProgress?.(`Please build whisper.cpp from source for ${process.platform}`, 0)
-        return false
-    }
-
-    if (!downloadUrl) {
-        console.error(`No whisper.cpp download available for platform: ${platformKey}`)
-        onProgress?.(`No whisper.cpp available for ${platformKey}`, 0)
-        return false
-    }
+    const platform = process.platform
 
     const binaryDir = getWhisperDir()
     const modelPath = getWhisperModelPath()
+    const model = getSelectedModel()
 
-    // Create directory if it doesn't exist
+    // Create directory if it doesn't exist (for model storage)
     if (!fs.existsSync(binaryDir)) {
         fs.mkdirSync(binaryDir, { recursive: true })
     }
 
     try {
-        // Step 1: Download binary
-        onProgress?.('[Whisper] Downloading binary...', 10)
-        console.log('[WhisperManager] Downloading binary from:', downloadUrl)
+        // For macOS/Linux: Check for system-installed whisper
+        if (platform === 'darwin' || platform === 'linux') {
+            const systemWhisper = findSystemWhisper()
 
-        const tempZipFile = path.join(binaryDir, 'whisper-download.zip')
-        await downloadFile(downloadUrl, tempZipFile, (msg, pct) => {
-            onProgress?.(`[Whisper] Binary: ${msg}`, 10 + (pct || 0) * 0.3)
-        })
+            if (!systemWhisper) {
+                const instructions = WHISPER_INSTALL_INSTRUCTIONS[platform] || 'Please install whisper.cpp manually'
+                console.log('[WhisperManager] System whisper not found. Instructions:', instructions)
+                onProgress?.(`[Whisper] ${instructions}`, 0)
 
-        // Step 2: Extract all files (we need DLLs too, not just the exe)
-        onProgress?.('[Whisper] Extracting files...', 40)
-        console.log('[WhisperManager] Extracting all files...')
-
-        const zip = new AdmZip(tempZipFile)
-        const entries = zip.getEntries()
-
-        // Extract all files from the zip to the binary directory
-        for (const entry of entries) {
-            if (!entry.isDirectory) {
-                const fileName = path.basename(entry.entryName)
-                const destPath = path.join(binaryDir, fileName)
-                fs.writeFileSync(destPath, entry.getData())
-                console.log('[WhisperManager] Extracted:', fileName)
+                // Still continue to download the model if whisper will be installed later
+                console.log('[WhisperManager] Will download model for when whisper is installed...')
+            } else {
+                console.log('[WhisperManager] Found system whisper at:', systemWhisper)
+                onProgress?.('[Whisper] Using system-installed whisper', 30)
             }
-        }
 
-        // Clean up zip
-        fs.unlinkSync(tempZipFile)
-
-        // Make executables runnable on Unix
-        if (process.platform !== 'win32') {
-            const files = fs.readdirSync(binaryDir)
-            for (const file of files) {
-                const filePath = path.join(binaryDir, file)
-                if (!file.includes('.') || file.endsWith('.bin')) continue // skip non-executables
-                fs.chmodSync(filePath, 0o755)
+            // For macOS/Linux, skip binary download - just download model
+            onProgress?.(`[Whisper] Downloading ${model.name} model (${model.size})...`, 40)
+        } else {
+            // Windows: Download binary
+            if (!downloadUrl || downloadUrl === 'system') {
+                console.error(`No whisper.cpp download available for platform: ${platformKey}`)
+                onProgress?.(`No whisper.cpp available for ${platformKey}`, 0)
+                return false
             }
+
+            onProgress?.('[Whisper] Downloading binary...', 10)
+            console.log('[WhisperManager] Downloading binary from:', downloadUrl)
+
+            const tempZipFile = path.join(binaryDir, 'whisper-download.zip')
+            await downloadFile(downloadUrl, tempZipFile, (msg, pct) => {
+                onProgress?.(`[Whisper] Binary: ${msg}`, 10 + (pct || 0) * 0.3)
+            })
+
+            // Extract all files (we need DLLs too, not just the exe)
+            onProgress?.('[Whisper] Extracting files...', 40)
+            console.log('[WhisperManager] Extracting all files...')
+
+            const zip = new AdmZip(tempZipFile)
+            const entries = zip.getEntries()
+
+            // Extract all files from the zip to the binary directory
+            for (const entry of entries) {
+                if (!entry.isDirectory) {
+                    const fileName = path.basename(entry.entryName)
+                    const destPath = path.join(binaryDir, fileName)
+                    fs.writeFileSync(destPath, entry.getData())
+                    console.log('[WhisperManager] Extracted:', fileName)
+                }
+            }
+
+            // Clean up zip
+            fs.unlinkSync(tempZipFile)
         }
 
         // Step 3: Download model (if not already present)
-        const model = getSelectedModel()
         const modelUrl = getModelUrl(model.filename)
 
         if (!fs.existsSync(modelPath)) {
