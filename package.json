@@ -68,5 +68,35 @@
     "vite-plugin-electron-renderer": "^0.14.5",
     "vitest": "^4.0.15"
   },
+  "build": {
+    "appId": "com.abdullahu5mani.musicsync",
+    "productName": "Music Sync App",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "dist-electron/**/*",
+      "dist/**/*",
+      "package.json"
+    ],
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "Abdullahu5mani",
+        "repo": "Music-Electron-App"
+      }
+    ],
+    "win": {
+      "target": "nsis"
+    },
+    "mac": {
+      "target": "dmg",
+      "identity": null
+    },
+    "linux": {
+      "target": "AppImage",
+      "category": "Audio"
+    }
+  },
   "main": "dist-electron/main.js"
 }
