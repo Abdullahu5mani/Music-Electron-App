@@ -54,6 +54,13 @@ export function SongList({
   const positionCache = useRef<Map<string, DOMRect>>(new Map())
   const pendingFlip = useRef<string | null>(null)
 
+  // Store old metadata during animation (shows old data while moving, then reveals new)
+  const [oldMetadataCache, setOldMetadataCache] = useState<Map<string, {
+    title?: string
+    artist?: string
+    albumArt?: string
+  }>>(new Map())
+
   const [contextMenu, setContextMenu] = useState<{
     x: number
     y: number
@@ -308,30 +315,61 @@ export function SongList({
             // Update just this file's metadata in-place (no full library refresh)
             if (onUpdateSingleFile) {
               console.log('Updating single file metadata in-place...')
+              const filePath = file.path
 
-              // FLIP Animation Step 1: Capture position BEFORE update
-              const element = songRefs.current.get(file.path)
+              // Step 1: Cache OLD metadata to display during animation
+              setOldMetadataCache(prev => {
+                const next = new Map(prev)
+                next.set(filePath, {
+                  title: file.metadata?.title || file.name.replace(/\.[^/.]+$/, ''),
+                  artist: file.metadata?.artist || 'Unknown Artist',
+                  albumArt: file.metadata?.albumArt
+                })
+                return next
+              })
+
+              // Step 2: Capture position BEFORE update for FLIP animation
+              const element = songRefs.current.get(filePath)
               if (element) {
-                positionCache.current.set(file.path, element.getBoundingClientRect())
-                pendingFlip.current = file.path
+                positionCache.current.set(filePath, element.getBoundingClientRect())
+                pendingFlip.current = filePath
               }
 
-              await onUpdateSingleFile(file.path)
+              // Step 3: Update the file (this triggers re-render with new sorted position)
+              await onUpdateSingleFile(filePath)
 
-              // Trigger glow animation AFTER FLIP animation completes (700ms delay)
-              // This ensures: item moves to new position → THEN glow plays
-              const filePath = file.path
+              // Step 4: After FLIP animation (700ms), scroll to follow and reveal new data
               setTimeout(() => {
-                setRecentlyUpdated(prev => new Set(prev).add(filePath))
+                // Scroll to the item so user can see it
+                const updatedElement = songRefs.current.get(filePath)
+                if (updatedElement) {
+                  updatedElement.scrollIntoView({
+                    behavior: 'smooth',
+                    block: 'center'
+                  })
+                }
 
-                // Clear the glow animation after it completes (1.5s after starting)
+                // Step 5: Wait for scroll to COMPLETE, then reveal new data
                 setTimeout(() => {
-                  setRecentlyUpdated(prev => {
-                    const next = new Set(prev)
+                  // Clear the cached old metadata to reveal new data
+                  setOldMetadataCache(prev => {
+                    const next = new Map(prev)
                     next.delete(filePath)
                     return next
                   })
-                }, 1500)
+
+                  // Start the glow animation
+                  setRecentlyUpdated(prev => new Set(prev).add(filePath))
+
+                  // Clear the glow animation after it completes
+                  setTimeout(() => {
+                    setRecentlyUpdated(prev => {
+                      const next = new Set(prev)
+                      next.delete(filePath)
+                      return next
+                    })
+                  }, 1500)
+                }, 2000)  // Wait for scroll to COMPLETE (2 seconds)
               }, 700)  // Wait for FLIP animation to finish
             }
           } else {
@@ -418,29 +456,50 @@ export function SongList({
             }}
           >
             <div className="song-content">
-              {file.metadata?.albumArt ? (
-                <div className="album-art-container">
-                  <img
-                    src={file.metadata.albumArt}
-                    alt={`${file.metadata.album || file.name} cover`}
-                    className="album-art"
-                  />
-                </div>
-              ) : (
-                <div className="album-art-container no-art">
-                  <span>🎵</span>
-                </div>
-              )}
-              <div className="song-info">
-                <div className="song-title-row">
-                  <div className="song-title">
-                    {file.metadata?.title || file.name.replace(/\.[^/.]+$/, '')}
-                  </div>
-                </div>
-                <div className="song-artist">
-                  {file.metadata?.artist || 'Unknown Artist'}
-                </div>
-              </div>
+              {(() => {
+                // Use cached old metadata during animation, or current metadata
+                // Check if cache HAS this file (not just if values exist) - so old art stays old
+                const hasCachedMeta = oldMetadataCache.has(file.path)
+                const cachedMeta = oldMetadataCache.get(file.path)
+
+                const displayTitle = hasCachedMeta
+                  ? (cachedMeta?.title || file.name.replace(/\.[^/.]+$/, ''))
+                  : (file.metadata?.title || file.name.replace(/\.[^/.]+$/, ''))
+                const displayArtist = hasCachedMeta
+                  ? (cachedMeta?.artist || 'Unknown Artist')
+                  : (file.metadata?.artist || 'Unknown Artist')
+                const displayArt = hasCachedMeta
+                  ? cachedMeta?.albumArt  // Use cached art (even if undefined)
+                  : file.metadata?.albumArt
+
+                return (
+                  <>
+                    {displayArt ? (
+                      <div className="album-art-container">
+                        <img
+                          src={displayArt}
+                          alt={`${file.metadata?.album || file.name} cover`}
+                          className="album-art"
+                        />
+                      </div>
+                    ) : (
+                      <div className="album-art-container no-art">
+                        <span>🎵</span>
+                      </div>
+                    )}
+                    <div className="song-info">
+                      <div className="song-title-row">
+                        <div className="song-title">
+                          {displayTitle}
+                        </div>
+                      </div>
+                      <div className="song-artist">
+                        {displayArtist}
+                      </div>
+                    </div>
+                  </>
+                )
+              })()}
             </div>
           </li>
         ))}
