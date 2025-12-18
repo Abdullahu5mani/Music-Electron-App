@@ -171,6 +171,13 @@ Here's every important file and what it exports:
 │  ├── ContextMenu/            → Right-click popup menu                       │
 │  └── NotificationToast/      → Pop-up notifications                         │
 │                                                                             │
+│  src/components/settings/                                                   │
+│  └── Settings/Settings.tsx   → Settings modal (folders, binaries, config)   │
+│                                                                             │
+│  src/components/download/                                                   │
+│  ├── DownloadButton/         → YouTube URL input and download trigger       │
+│  └── DownloadNotification/   → Download progress toast                      │
+│                                                                             │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -310,6 +317,7 @@ Here's a cheat sheet of what each file exports and who uses it:
 | **src/hooks/useAudioPlayer.ts** | `useAudioPlayer()` hook | App.tsx |
 | **src/hooks/useMusicLibrary.ts** | `useMusicLibrary()` hook | App.tsx |
 | **src/hooks/usePlaylists.ts** | `usePlaylists()` hook | App.tsx |
+| **src/hooks/useSongScanner.ts** | `useSongScanner()` hook | App.tsx |
 | **src/components/layout/Sidebar/Sidebar.tsx** | `Sidebar` component | App.tsx |
 | **src/components/layout/PlaybackBar/PlaybackBar.tsx** | `PlaybackBar` component | App.tsx |
 | **src/components/library/SongList/SongList.tsx** | `SongList` component | App.tsx |
@@ -570,10 +578,11 @@ Music-Electron-App/
 │   │   │       └── Settings.css
 │   │   │
 │   │   ├── lyrics/              # AI lyrics generation feature
-│   │   │   └── LyricsPanel/
-│   │   │       ├── LyricsPanel.tsx  # Slide-in panel component
-│   │   │       ├── LyricsPanel.css  # Panel styles
-│   │   │       └── index.ts         # Re-exports
+│   │   │   ├── LyricsPanel/
+│   │   │   │   ├── LyricsPanel.tsx  # Slide-in panel component
+│   │   │   │   ├── LyricsPanel.css  # Panel styles
+│   │   │   │   └── index.ts         # Re-exports
+│   │   │   └── index.ts             # Re-exports from feature folder
 │   │   │
 │   │   └── download/            # YouTube download feature
 │   │       ├── DownloadButton/
@@ -607,7 +616,9 @@ Music-Electron-App/
 ├── electron-builder.json5       # Packaging configuration
 ├── package.json                 # Dependencies and scripts
 ├── tsconfig.json                # TypeScript configuration
-├── ARCHITECTURE.md              # This documentation file
+├── README.md                    # Project overview and quick start
+├── ARCHITECTURE.md              # This detailed documentation file
+├── TESTING.md                   # Testing guide and coverage goals
 └── index.html                   # Entry HTML file
 ```
 
@@ -646,17 +657,23 @@ The `src/` folder follows a **feature-based organization** pattern rather than a
 │  │                                                                       │
 │  ├── types/            # TypeScript definitions                         │
 │  │   ├── electron.d.ts # IPC API types (ElectronAPI interface)         │
+│  │   ├── playlist.ts   # Playlist-specific type definitions            │
 │  │   └── vite-env.d.ts # Vite environment types                        │
 │  │                                                                       │
-│  ├── assets/           # Static assets (images, SVGs, fonts)           │
-│  │   ├── trayIcon.svg                                                   │
-│  │   ├── playButton.svg                                                 │
-│  │   └── ...           # UI icons and graphics                          │
+│  ├── assets/           # Static assets (SVGs for UI)                   │
+│  │   ├── trayIcon.svg         # System tray icon                       │
+│  │   ├── playButton.svg       # Play control                           │
+│  │   ├── pauseButton.svg      # Pause control                          │
+│  │   ├── forwardButton.svg    # Skip forward                           │
+│  │   ├── backwardButton.svg   # Skip backward                          │
+│  │   └── volumeControl.svg    # Volume slider icon                     │
 │  │                                                                       │
 │  ├── components/       # React UI Components (feature-based)           │
 │  │   │                                                                   │
 │  │   ├── common/       # Shared, reusable UI primitives                │
-│  │   │   └── NotificationToast/   # Toast notifications                │
+│  │   │   ├── AudioVisualizer/    # Canvas spectrum analyzer            │
+│  │   │   ├── ContextMenu/        # Right-click context menu            │
+│  │   │   └── NotificationToast/  # Toast notifications                 │
 │  │   │                                                                   │
 │  │   ├── layout/       # App structure/shell components                │
 │  │   │   ├── TitleBar/           # Custom window title bar             │
@@ -666,6 +683,14 @@ The `src/` folder follows a **feature-based organization** pattern rather than a
 │  │   ├── library/      # Music library feature                         │
 │  │   │   ├── SongList/           # Song list display                   │
 │  │   │   └── BatchScanProgress/  # Batch scan progress UI              │
+│  │   │                                                                   │
+│  │   ├── playlists/    # Playlist feature (flat structure)             │
+│  │   │   ├── PlaylistList.tsx        # Sidebar playlist section        │
+│  │   │   ├── CreatePlaylistModal.tsx # Create playlist dialog          │
+│  │   │   └── index.ts                # Re-exports                      │
+│  │   │                                                                   │
+│  │   ├── lyrics/       # AI lyrics generation feature                  │
+│  │   │   └── LyricsPanel/        # Slide-in lyrics panel               │
 │  │   │                                                                   │
 │  │   ├── settings/     # Settings feature                              │
 │  │   │   └── Settings/           # Settings modal                      │
@@ -677,6 +702,7 @@ The `src/` folder follows a **feature-based organization** pattern rather than a
 │  ├── hooks/            # Custom React Hooks                             │
 │  │   ├── useAudioPlayer.ts    # Audio playback (Howler.js)             │
 │  │   ├── useMusicLibrary.ts   # Library state management               │
+│  │   ├── usePlaylists.ts      # Playlist CRUD operations               │
 │  │   └── useSongScanner.ts    # Batch scanning with rate limits        │
 │  │                                                                       │
 │  ├── services/         # API/IPC Communication Layer                    │
@@ -685,6 +711,7 @@ The `src/` folder follows a **feature-based organization** pattern rather than a
 │  │   └── fingerprint.ts   # Fingerprint generation via IPC             │
 │  │                                                                       │
 │  └── utils/            # Pure Utility Functions                         │
+│      ├── colorExtractor.ts   # Extract colors from album art           │
 │      ├── rateLimiter.ts      # API rate limiting logic                 │
 │      ├── sortMusicFiles.ts   # Sorting/filtering utilities             │
 │      └── pathResolver.ts     # File path to URL conversion             │
@@ -699,17 +726,19 @@ The `src/` folder follows a **feature-based organization** pattern rather than a
 | **`types/`** | TypeScript type definitions shared across the app | `ElectronAPI` interface, `ScanStatusType` enum |
 | **`assets/`** | Static files bundled by Vite | SVG icons, images, fonts |
 | **`components/`** | React UI components organized by feature | `SongList`, `PlaybackBar`, `Settings` |
-| **`hooks/`** | Custom React hooks for state/logic reuse | `useAudioPlayer`, `useSongScanner` |
+| **`hooks/`** | Custom React hooks for state/logic reuse | `useAudioPlayer`, `useMusicLibrary`, `usePlaylists`, `useSongScanner` |
 | **`services/`** | External communication (APIs, IPC) | AcoustID client, MusicBrainz client |
-| **`utils/`** | Pure functions with no side effects | Sorting, formatting, path conversion |
+| **`utils/`** | Pure functions with no side effects | Sorting, color extraction, formatting, path conversion |
 
 ### Components Subfolder Breakdown
 
 | Subfolder | Purpose | Contains |
 |-----------|---------|----------|
-| **`common/`** | Reusable UI primitives | `NotificationToast` - generic toast component |
+| **`common/`** | Reusable UI primitives | `AudioVisualizer` - canvas spectrum analyzer, `ContextMenu` - right-click menu, `NotificationToast` - generic toast |
 | **`layout/`** | App structure/shell | `TitleBar`, `Sidebar`, `PlaybackBar` |
 | **`library/`** | Music library feature | `SongList`, `BatchScanProgress` |
+| **`playlists/`** | Playlist feature | `PlaylistList`, `CreatePlaylistModal` |
+| **`lyrics/`** | AI lyrics generation | `LyricsPanel` - slide-in panel for transcription |
 | **`settings/`** | Settings feature | `Settings` modal |
 | **`download/`** | YouTube download feature | `DownloadButton`, `DownloadNotification` |
 

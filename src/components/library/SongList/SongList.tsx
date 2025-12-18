@@ -47,29 +47,36 @@ export function SongList({
   const [scanStatuses, setScanStatuses] = useState<Record<string, ScanStatusType>>({})
   const [loadingStatuses, setLoadingStatuses] = useState(false)
 
-  // Context menu state
+  // Track recently updated songs for smooth animation
+  const [recentlyUpdated, setRecentlyUpdated] = useState<Set<string>>(new Set())
+
+  // FLIP Animation: Store positions before update for smooth transitions
+  const positionCache = useRef<Map<string, DOMRect>>(new Map())
+  const pendingFlip = useRef<string | null>(null)
+
   const [contextMenu, setContextMenu] = useState<{
     x: number
     y: number
     songIndex: number
   } | null>(null)
 
-  // Refs for each song item to enable auto-scrolling
-  const songRefs = useRef<Map<number, HTMLLIElement>>(new Map())
+  // Refs for each song item (keyed by file path for stability)
+  const songRefs = useRef<Map<string, HTMLLIElement>>(new Map())
 
   // Callback to set ref for each song item
-  const setSongRef = useCallback((index: number, element: HTMLLIElement | null) => {
+  const setSongRef = useCallback((filePath: string, element: HTMLLIElement | null) => {
     if (element) {
-      songRefs.current.set(index, element)
+      songRefs.current.set(filePath, element)
     } else {
-      songRefs.current.delete(index)
+      songRefs.current.delete(filePath)
     }
   }, [])
 
   // Auto-scroll to the currently playing song when it changes
   useEffect(() => {
-    if (playingIndex !== null && playingIndex >= 0) {
-      const element = songRefs.current.get(playingIndex)
+    if (playingIndex !== null && playingIndex >= 0 && songs[playingIndex]) {
+      const filePath = songs[playingIndex].path
+      const element = songRefs.current.get(filePath)
       if (element) {
         element.scrollIntoView({
           behavior: 'smooth',
@@ -77,7 +84,44 @@ export function SongList({
         })
       }
     }
-  }, [playingIndex])
+  }, [playingIndex, songs])
+
+  // FLIP Animation: After songs list updates, animate items that moved
+  useEffect(() => {
+    const flipPath = pendingFlip.current
+    if (!flipPath) return
+
+    const element = songRefs.current.get(flipPath)
+    const oldRect = positionCache.current.get(flipPath)
+
+    if (element && oldRect) {
+      const newRect = element.getBoundingClientRect()
+      const deltaY = oldRect.top - newRect.top
+
+      if (Math.abs(deltaY) > 10) {
+        // Apply inverse transform to make it appear in old position
+        element.style.transform = `translateY(${deltaY}px)`
+        element.style.transition = 'none'
+
+        // Force reflow
+        element.offsetHeight
+
+        // Animate to new position
+        element.style.transition = 'transform 0.6s cubic-bezier(0.25, 0.46, 0.45, 0.94)'
+        element.style.transform = 'translateY(0)'
+
+        // Clean up after animation
+        setTimeout(() => {
+          element.style.transition = ''
+          element.style.transform = ''
+        }, 650)
+      }
+    }
+
+    // Clear the pending flip
+    pendingFlip.current = null
+    positionCache.current.clear()
+  }, [songs])
 
   // Load scan statuses for all songs when the list changes
   useEffect(() => {
@@ -264,7 +308,31 @@ export function SongList({
             // Update just this file's metadata in-place (no full library refresh)
             if (onUpdateSingleFile) {
               console.log('Updating single file metadata in-place...')
+
+              // FLIP Animation Step 1: Capture position BEFORE update
+              const element = songRefs.current.get(file.path)
+              if (element) {
+                positionCache.current.set(file.path, element.getBoundingClientRect())
+                pendingFlip.current = file.path
+              }
+
               await onUpdateSingleFile(file.path)
+
+              // Trigger glow animation AFTER FLIP animation completes (700ms delay)
+              // This ensures: item moves to new position → THEN glow plays
+              const filePath = file.path
+              setTimeout(() => {
+                setRecentlyUpdated(prev => new Set(prev).add(filePath))
+
+                // Clear the glow animation after it completes (1.5s after starting)
+                setTimeout(() => {
+                  setRecentlyUpdated(prev => {
+                    const next = new Set(prev)
+                    next.delete(filePath)
+                    return next
+                  })
+                }, 1500)
+              }, 700)  // Wait for FLIP animation to finish
             }
           } else {
             console.error('Failed to write metadata:', metadataResult.error)
@@ -340,9 +408,9 @@ export function SongList({
       <ul className="song-list">
         {songs.map((file, index) => (
           <li
-            key={index}
-            ref={(el) => setSongRef(index, el)}
-            className={`song-item ${playingIndex === index ? 'playing' : ''}`}
+            key={file.path}
+            ref={(el) => setSongRef(file.path, el)}
+            className={`song-item ${playingIndex === index ? 'playing' : ''} ${recentlyUpdated.has(file.path) ? 'metadata-updated' : ''}`}
             onClick={() => onSongClick(file, index)}
             onContextMenu={(e) => {
               e.preventDefault()

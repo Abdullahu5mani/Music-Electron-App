@@ -271,7 +271,12 @@
   border-radius: 8px;
   padding: 0.75rem 1rem;
   /* More horizontal padding */
-  transition: transform 0.2s, box-shadow 0.2s, background-color 0.2s;
+  transition:
+    transform 0.2s ease-out,
+    box-shadow 0.3s ease-out,
+    background-color 0.2s ease-out,
+    border-color 0.3s ease-out,
+    opacity 0.3s ease-out;
   cursor: pointer;
 }
 
@@ -291,6 +296,77 @@
 .song-item.playing {
   background-color: #2a2a2a;
   border-color: #646cff;
+}
+
+/* Metadata Update Animation */
+.song-item.metadata-updated {
+  animation: metadata-glow 1.5s ease-out;
+}
+
+@keyframes metadata-glow {
+  0% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(100, 255, 150, 0.7);
+    border-color: #333;
+  }
+
+  15% {
+    transform: scale(1.02);
+    box-shadow: 0 0 20px 5px rgba(100, 255, 150, 0.5);
+    border-color: rgba(100, 255, 150, 0.8);
+  }
+
+  30% {
+    transform: scale(1);
+    box-shadow: 0 0 15px 3px rgba(100, 255, 150, 0.4);
+    border-color: rgba(100, 255, 150, 0.6);
+  }
+
+  100% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(100, 255, 150, 0);
+    border-color: #333;
+  }
+}
+
+/* Album art shimmer effect for updated songs */
+.song-item.metadata-updated .album-art-container {
+  animation: art-reveal 0.8s ease-out;
+}
+
+@keyframes art-reveal {
+  0% {
+    opacity: 0.5;
+    transform: scale(0.9);
+  }
+
+  50% {
+    opacity: 1;
+    transform: scale(1.05);
+  }
+
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* Song info text animation for updates */
+.song-item.metadata-updated .song-title,
+.song-item.metadata-updated .song-artist {
+  animation: text-fade-in 0.6s ease-out;
+}
+
+@keyframes text-fade-in {
+  0% {
+    opacity: 0;
+    transform: translateX(-10px);
+  }
+
+  100% {
+    opacity: 1;
+    transform: translateX(0);
+  }
 }
 
 .song-content {
