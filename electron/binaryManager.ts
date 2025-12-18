@@ -166,9 +166,9 @@ export async function getFpcalcStatus(): Promise<BinaryStatus> {
     version = await getFpcalcVersion(binaryPath)
   }
 
-  // fpcalc version is fixed at what we download (1.5.1)
+  // fpcalc version is fixed at what we download (1.6.0)
   // We don't have an easy way to check for updates
-  const latestVersion = '1.5.1'
+  const latestVersion = '1.6.0'
 
   return {
     name: 'fpcalc (Chromaprint)',

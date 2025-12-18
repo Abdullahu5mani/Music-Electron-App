@@ -130,6 +130,7 @@ electron.contextBridge.exposeInMainWorld("electronAPI", {
   fileWatcherStart: (folderPath) => electron.ipcRenderer.invoke("file-watcher-start", folderPath),
   fileWatcherStop: () => electron.ipcRenderer.invoke("file-watcher-stop"),
   fileWatcherStatus: () => electron.ipcRenderer.invoke("file-watcher-status"),
+  fileWatcherIgnore: (filePath) => electron.ipcRenderer.invoke("file-watcher-ignore", filePath),
   onFileWatcherEvent: (callback) => {
     const handler = (_event, data) => callback(data);
     electron.ipcRenderer.on("file-watcher-event", handler);

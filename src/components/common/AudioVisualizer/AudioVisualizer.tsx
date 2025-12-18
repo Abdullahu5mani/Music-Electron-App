@@ -324,6 +324,8 @@ export function AudioVisualizer({
             ref={canvasRef}
             className="audio-visualizer"
             aria-hidden="true"
+            data-testid="audio-visualizer"
+            data-mode={mode}
         />
     )
 }

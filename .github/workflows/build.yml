@@ -46,6 +46,10 @@ jobs:
           npm config set fetch-retry-maxtimeout 120000
           npm install
 
+      - name: Run Tests
+        run: npm run test:run
+        continue-on-error: true  # Allow build to continue even if tests fail (remove this once all tests pass)
+
       - name: Build React (Vite)
         run: npm run build:web
 

@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react'
+import { createPortal } from 'react-dom'
 import './ContextMenu.css'
 
 export interface ContextMenuItem {
@@ -19,6 +20,7 @@ interface ContextMenuProps {
 /**
  * Custom styled context menu component
  * Appears at the specified x, y position and closes when clicking outside
+ * Uses a Portal to render at document.body to avoid z-index/overflow clipping issues
  */
 export function ContextMenu({ x, y, items, onClose }: ContextMenuProps) {
     const menuRef = useRef<HTMLDivElement>(null)
@@ -67,7 +69,8 @@ export function ContextMenu({ x, y, items, onClose }: ContextMenuProps) {
         }
     }, [x, y])
 
-    return (
+    // Render using Portal to ensure it's above all other elements
+    return createPortal(
         <div
             ref={menuRef}
             className="context-menu"
@@ -93,6 +96,7 @@ export function ContextMenu({ x, y, items, onClose }: ContextMenuProps) {
                     </button>
                 )
             ))}
-        </div>
+        </div>,
+        document.body
     )
 }

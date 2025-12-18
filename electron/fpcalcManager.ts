@@ -18,7 +18,7 @@ import * as tar from 'tar'
 const execFileAsync = promisify(execFile)
 
 // Chromaprint version to download
-const CHROMAPRINT_VERSION = '1.5.1'
+const CHROMAPRINT_VERSION = '1.6.0'
 
 // Download URLs for different platforms
 const DOWNLOAD_URLS: Record<string, string> = {
@@ -26,6 +26,7 @@ const DOWNLOAD_URLS: Record<string, string> = {
     'darwin-x64': `https://github.com/acoustid/chromaprint/releases/download/v${CHROMAPRINT_VERSION}/chromaprint-fpcalc-${CHROMAPRINT_VERSION}-macos-x86_64.tar.gz`,
     'darwin-arm64': `https://github.com/acoustid/chromaprint/releases/download/v${CHROMAPRINT_VERSION}/chromaprint-fpcalc-${CHROMAPRINT_VERSION}-macos-arm64.tar.gz`,
     'linux-x64': `https://github.com/acoustid/chromaprint/releases/download/v${CHROMAPRINT_VERSION}/chromaprint-fpcalc-${CHROMAPRINT_VERSION}-linux-x86_64.tar.gz`,
+    'linux-arm64': `https://github.com/acoustid/chromaprint/releases/download/v${CHROMAPRINT_VERSION}/chromaprint-fpcalc-${CHROMAPRINT_VERSION}-linux-arm64.tar.gz`,
 }
 
 /**

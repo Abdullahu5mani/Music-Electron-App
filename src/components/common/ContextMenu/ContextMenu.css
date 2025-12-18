@@ -1,6 +1,6 @@
 .context-menu {
     position: fixed;
-    z-index: 10000;
+    z-index: 99999;
     min-width: 160px;
     background: rgba(30, 30, 35, 0.98);
     backdrop-filter: blur(12px);

@@ -407,6 +407,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   fileWatcherStatus: () =>
     ipcRenderer.invoke('file-watcher-status'),
 
+  fileWatcherIgnore: (filePath: string) =>
+    ipcRenderer.invoke('file-watcher-ignore', filePath),
+
   onFileWatcherEvent: (callback: (event: { type: 'added' | 'removed' | 'changed'; files: string[] }) => void) => {
     const handler = (_event: any, data: any) => callback(data)
     ipcRenderer.on('file-watcher-event', handler)

@@ -7,7 +7,7 @@ import type { MusicFile } from '../../../electron/musicScanner'
 const mockElectronAPI = {
   scanMusicFolder: vi.fn(),
   readSingleFileMetadata: vi.fn(),
-  getSettings: vi.fn().mockResolvedValue({ musicFolderPath: null, downloadFolderPath: null }),
+  getSettings: vi.fn().mockResolvedValue({ musicFolderPath: null, downloadFolderPath: null, scanSubfolders: true }),
 }
 
 beforeEach(() => {
@@ -62,7 +62,7 @@ describe('useMusicLibrary', () => {
       await result.current.scanFolder('/test/path')
     })
 
-    expect(mockElectronAPI.scanMusicFolder).toHaveBeenCalledWith('/test/path')
+    expect(mockElectronAPI.scanMusicFolder).toHaveBeenCalledWith('/test/path', { scanSubfolders: true })
     // Files will have dateAdded added automatically, so check structure instead
     expect(result.current.musicFiles).toHaveLength(2)
     expect(result.current.musicFiles[0].path).toBe(mockFiles[0].path)

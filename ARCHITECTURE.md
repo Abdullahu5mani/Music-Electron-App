@@ -72,6 +72,18 @@ Here's every important file and what it exports:
 │  ├── exports: scanMusicFolder(), MusicFile type                             │
 │  └── does: Finds music files and reads their metadata (title, artist, art)  │
 │                                                                             │
+│  electron/parallelMetadataScanner.ts                                        │
+│  ├── exports: ParallelMetadataScanner class                                 │
+│  └── does: Multi-threaded metadata parsing for faster large library scans   │
+│                                                                             │
+│  electron/fileWatcher.ts                                                    │
+│  ├── exports: startWatching(), stopWatching()                               │
+│  └── does: Monitors music folder for additions/deletions in real-time       │
+│                                                                             │
+│  electron/metadataCache.ts                                                  │
+│  ├── exports: initializeDatabase(), getFileScanStatus()                     │
+│  └── does: SQLite cache to track which files are already scanned/tagged     │
+│                                                                             │
 │  electron/youtubeDownloader.ts                                              │
 │  ├── exports: downloadVideo()                                               │
 │  └── does: Downloads audio from YouTube using yt-dlp                        │
@@ -103,8 +115,12 @@ Here's every important file and what it exports:
 │  └── does: Checks installation status of yt-dlp, fpcalc, whisper            │
 │                                                                             │
 │  electron/fpcalcManager.ts                                                  │
-│  ├── exports: downloadFpcalc(), getFpcalcPath(), generateFingerprint()      │
+│  ├── exports: downloadFpcalc(), getFpcalcPath()                             │
 │  └── does: Downloads Chromaprint fpcalc binary, generates audio fingerprints│
+│                                                                             │
+│  electron/fingerprintWorkerPool.ts                                          │
+│  ├── exports: FingerprintWorkerPool class                                   │
+│  └── does: Manages parallel fpcalc processes (one per CPU core)             │
 │                                                                             │
 │  electron/whisperManager.ts                                                 │
 │  ├── exports: downloadWhisper(), getWhisperPath(), WHISPER_MODELS           │

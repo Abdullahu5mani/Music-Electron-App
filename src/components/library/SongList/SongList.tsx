@@ -79,8 +79,17 @@ export function SongList({
     }
   }, [])
 
-  // Auto-scroll to the currently playing song when it changes
+  // Track previous playing index to avoid scrolling when songs update
+  const prevPlayingIndexRef = useRef<number | null>(null)
+
+  // Auto-scroll to the currently playing song when playingIndex changes (not on songs update)
   useEffect(() => {
+    // Only scroll if playingIndex actually changed (not just songs array)
+    if (playingIndex === prevPlayingIndexRef.current) {
+      return
+    }
+    prevPlayingIndexRef.current = playingIndex
+
     if (playingIndex !== null && playingIndex >= 0 && songs[playingIndex]) {
       const filePath = songs[playingIndex].path
       const element = songRefs.current.get(filePath)
@@ -294,6 +303,10 @@ export function SongList({
 
           // Write all metadata to the file at once
           console.log('Writing metadata to file...')
+
+          // Tell file watcher to ignore this file (prevents triggering rescan)
+          await window.electronAPI.fileWatcherIgnore(file.path)
+
           const metadataResult = await window.electronAPI.writeMetadata(file.path, {
             title: title,
             artist: fullArtist || artist,

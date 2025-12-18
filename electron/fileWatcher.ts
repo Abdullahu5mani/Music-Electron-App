@@ -20,14 +20,20 @@ interface FileWatcherState {
     watchPath: string | null
     debounceTimer: NodeJS.Timeout | null
     pendingChanges: Set<string>
+    // Files to temporarily ignore (being updated by the app itself)
+    ignoredFiles: Set<string>
 }
 
 const state: FileWatcherState = {
     watcher: null,
     watchPath: null,
     debounceTimer: null,
-    pendingChanges: new Set()
+    pendingChanges: new Set(),
+    ignoredFiles: new Set()
 }
+
+// Duration to ignore a file after it's been marked for ignore (ms)
+const IGNORE_DURATION = 5000
 
 // Debounce delay in ms (wait for file operations to settle)
 const DEBOUNCE_DELAY = 500
@@ -105,6 +111,19 @@ function processPendingChanges() {
 }
 
 /**
+ * Temporarily ignore a file (prevents file watcher from triggering during app updates)
+ */
+export function ignoreFile(filePath: string): void {
+    state.ignoredFiles.add(filePath)
+    console.log(`[FileWatcher] Temporarily ignoring: ${path.basename(filePath)}`)
+
+    // Auto-remove from ignore list after duration
+    setTimeout(() => {
+        state.ignoredFiles.delete(filePath)
+    }, IGNORE_DURATION)
+}
+
+/**
  * Handle a file system event
  */
 function handleFsEvent(_eventType: string, filename: string | null) {
@@ -114,6 +133,12 @@ function handleFsEvent(_eventType: string, filename: string | null) {
 
     // Only process audio files
     if (!isAudioFile(fullPath)) return
+
+    // Skip files that are being updated by the app itself
+    if (state.ignoredFiles.has(fullPath)) {
+        console.log(`[FileWatcher] Skipping ignored file: ${path.basename(fullPath)}`)
+        return
+    }
 
     // Add to pending changes
     state.pendingChanges.add(fullPath)
