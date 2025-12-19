@@ -1,5 +1,12 @@
 import { useEffect, useRef } from 'react'
 import { OverlayScrollbarsComponent } from 'overlayscrollbars-react'
+import microphoneIcon from '../../../assets/icons/microphone.svg'
+import speakerIcon from '../../../assets/icons/speaker.svg'
+import robotIcon from '../../../assets/icons/robot.svg'
+import checkIcon from '../../../assets/icons/check.svg'
+import musicNoteIcon from '../../../assets/icons/music-note.svg'
+import warningIcon from '../../../assets/icons/warning.svg'
+import closeIcon from '../../../assets/icons/close.svg'
 import './LyricsPanel.css'
 
 interface LyricsPanelProps {
@@ -41,14 +48,13 @@ export function LyricsPanel({
                 className={`lyrics-panel ${isOpen ? 'open' : ''}`}
                 onClick={(e) => e.stopPropagation()}
             >
-                {/* Header */}
                 <div className="lyrics-panel-header">
                     <div className="lyrics-panel-title">
-                        <span className="lyrics-icon">🎤</span>
+                        <img src={microphoneIcon} alt="" className="lyrics-icon" />
                         <h2>Lyrics</h2>
                     </div>
                     <button className="lyrics-panel-close" onClick={onClose}>
-                        ×
+                        <img src={closeIcon} alt="Close" className="close-icon" />
                     </button>
                 </div>
 
@@ -72,11 +78,11 @@ export function LyricsPanel({
                             </div>
                             <div className="lyrics-processing-stages">
                                 <div className={`stage ${progress.percentage >= 20 ? 'active' : ''} ${progress.percentage >= 50 ? 'complete' : ''}`}>
-                                    <span className="stage-icon">{progress.percentage >= 50 ? '✓' : '🔊'}</span>
+                                    <img src={progress.percentage >= 50 ? checkIcon : speakerIcon} alt="" className="stage-icon" />
                                     <span>Isolating Vocals</span>
                                 </div>
                                 <div className={`stage ${progress.percentage >= 50 ? 'active' : ''} ${progress.percentage >= 100 ? 'complete' : ''}`}>
-                                    <span className="stage-icon">{progress.percentage >= 100 ? '✓' : '🤖'}</span>
+                                    <img src={progress.percentage >= 100 ? checkIcon : robotIcon} alt="" className="stage-icon" />
                                     <span>AI Transcription</span>
                                 </div>
                             </div>
@@ -98,7 +104,7 @@ export function LyricsPanel({
                         </OverlayScrollbarsComponent>
                     ) : (
                         <div className="lyrics-empty">
-                            <span className="lyrics-empty-icon">🎵</span>
+                            <img src={musicNoteIcon} alt="" className="lyrics-empty-icon" />
                             <p>Click "Lyrics" on a song to generate lyrics</p>
                         </div>
                     )}
@@ -106,7 +112,7 @@ export function LyricsPanel({
 
                 {/* Disclaimer */}
                 <div className="lyrics-disclaimer">
-                    <span className="disclaimer-icon">⚠️</span>
+                    <img src={warningIcon} alt="" className="disclaimer-icon" />
                     <span>AI-generated lyrics may not be 100% accurate</span>
                 </div>
             </div>

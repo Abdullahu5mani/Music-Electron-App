@@ -1,5 +1,9 @@
 import { useEffect, useState } from 'react'
 import trayIcon from '../../../assets/trayIcon.svg'
+import minimizeIcon from '../../../assets/icons/minimize.svg'
+import maximizeIcon from '../../../assets/icons/maximize.svg'
+import restoreIcon from '../../../assets/icons/restore.svg'
+import closeIcon from '../../../assets/icons/close.svg'
 import './TitleBar.css'
 
 export function TitleBar() {
@@ -46,21 +50,21 @@ export function TitleBar() {
             onClick={handleMinimize}
             aria-label="Minimize"
           >
-            <span>−</span>
+            <img src={minimizeIcon} alt="Minimize" className="control-icon" />
           </button>
           <button
             className="title-bar-button maximize-button"
             onClick={handleMaximize}
             aria-label={isMaximized ? 'Restore' : 'Maximize'}
           >
-            <span>{isMaximized ? '❐' : '□'}</span>
+            <img src={isMaximized ? restoreIcon : maximizeIcon} alt={isMaximized ? 'Restore' : 'Maximize'} className="control-icon" />
           </button>
           <button
             className="title-bar-button close-button"
             onClick={handleClose}
             aria-label="Close"
           >
-            <span>×</span>
+            <img src={closeIcon} alt="Close" className="control-icon" />
           </button>
         </div>
       </div>

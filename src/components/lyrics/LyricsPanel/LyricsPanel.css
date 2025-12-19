@@ -53,7 +53,9 @@
 }
 
 .lyrics-icon {
-    font-size: 1.4em;
+    width: 28px;
+    height: 28px;
+    filter: brightness(0) invert(0.8);
 }
 
 .lyrics-panel-title h2 {
@@ -81,7 +83,16 @@
 
 .lyrics-panel-close:hover {
     background: rgba(255, 255, 255, 0.12);
-    color: #fff;
+}
+
+.close-icon {
+    width: 16px;
+    height: 16px;
+    filter: brightness(0) invert(0.7);
+}
+
+.lyrics-panel-close:hover .close-icon {
+    filter: brightness(0) invert(1);
 }
 
 /* Song name */
@@ -184,7 +195,17 @@
 }
 
 .stage-icon {
-    font-size: 1.1em;
+    width: 18px;
+    height: 18px;
+    filter: brightness(0) invert(0.5);
+}
+
+.stage.active .stage-icon {
+    filter: invert(48%) sepia(35%) saturate(2222%) hue-rotate(210deg) brightness(101%) contrast(101%);
+}
+
+.stage.complete .stage-icon {
+    filter: invert(64%) sepia(44%) saturate(533%) hue-rotate(93deg) brightness(95%) contrast(90%);
 }
 
 /* Empty state */
@@ -200,8 +221,9 @@
 }
 
 .lyrics-empty-icon {
-    font-size: 3rem;
-    opacity: 0.4;
+    width: 48px;
+    height: 48px;
+    filter: brightness(0) invert(0.3);
 }
 
 .lyrics-empty p {
@@ -223,6 +245,8 @@
 }
 
 .disclaimer-icon {
-    font-size: 0.85em;
-    opacity: 0.7;
+    width: 14px;
+    height: 14px;
+    filter: brightness(0) invert(0.4);
+    flex-shrink: 0;
 }

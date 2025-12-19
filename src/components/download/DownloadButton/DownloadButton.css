@@ -29,6 +29,12 @@
   cursor: not-allowed;
 }
 
+.download-icon {
+  width: 16px;
+  height: 16px;
+  filter: invert(48%) sepia(35%) saturate(2222%) hue-rotate(210deg) brightness(101%) contrast(101%);
+}
+
 /* Modal */
 .download-modal {
   position: fixed;

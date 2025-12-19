@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import downloadIcon from '../../../assets/icons/download.svg'
 import './DownloadButton.css'
 
 interface DownloadButtonProps {
@@ -9,11 +10,11 @@ interface DownloadButtonProps {
   binaryProgress?: number
 }
 
-export function DownloadButton({ 
-  onDownload, 
-  isDownloading, 
+export function DownloadButton({
+  onDownload,
+  isDownloading,
   binaryStatus,
-  binaryProgress 
+  binaryProgress
 }: DownloadButtonProps) {
   const [isOpen, setIsOpen] = useState(false)
   const [url, setUrl] = useState('')
@@ -29,14 +30,14 @@ export function DownloadButton({
 
   return (
     <div className="download-button-container">
-      <button 
+      <button
         className="download-button"
         onClick={() => setIsOpen(!isOpen)}
         disabled={isDownloading}
       >
-        ⬇️ Download
+        <img src={downloadIcon} alt="" className="download-icon" /> Download
       </button>
-      
+
       {isOpen && (
         <div className="download-modal">
           <div className="download-modal-content">
@@ -52,14 +53,14 @@ export function DownloadButton({
                 disabled={isDownloading}
               />
               <div className="download-modal-actions">
-                <button 
-                  type="submit" 
+                <button
+                  type="submit"
                   className="download-submit"
                   disabled={isDownloading || !url.trim()}
                 >
                   {isDownloading ? 'Downloading...' : 'Download'}
                 </button>
-                <button 
+                <button
                   type="button"
                   onClick={() => {
                     setIsOpen(false)
@@ -72,7 +73,7 @@ export function DownloadButton({
                 </button>
               </div>
             </form>
-            
+
             {/* Binary download progress */}
             {binaryStatus && binaryStatus !== '' && (
               <div className="download-progress">
@@ -80,8 +81,8 @@ export function DownloadButton({
                 {binaryProgress !== undefined && (
                   <>
                     <div className="progress-bar">
-                      <div 
-                        className="progress-fill" 
+                      <div
+                        className="progress-fill"
                         style={{ width: `${binaryProgress}%` }}
                       />
                     </div>
@@ -90,8 +91,8 @@ export function DownloadButton({
                 )}
               </div>
             )}
-            
-            
+
+
             {/* Rate limiting notice */}
             {isDownloading && (
               <div className="rate-limit-notice">

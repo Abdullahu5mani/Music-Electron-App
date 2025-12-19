@@ -64,7 +64,19 @@
 }
 
 .playlist-icon-default {
-    font-size: 0.9rem;
+    width: 18px;
+    height: 18px;
+    filter: brightness(0) invert(0.6);
+}
+
+.delete-icon {
+    width: 14px;
+    height: 14px;
+    filter: brightness(0) invert(0.6);
+}
+
+.delete-playlist-btn:hover .delete-icon {
+    filter: invert(42%) sepia(88%) saturate(1755%) hue-rotate(331deg) brightness(99%) contrast(88%);
 }
 
 /* Playlist text info */
@@ -136,18 +148,15 @@
 }
 
 .create-icon {
-    width: 32px;
-    height: 32px;
+    width: 16px;
+    height: 16px;
+    padding: 8px;
     border-radius: 6px;
     background: rgba(255, 255, 255, 0.1);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 1.25rem;
-    font-weight: 300;
-    line-height: 1;
+    filter: brightness(0) invert(0.6);
 }
 
 .create-playlist-item:hover .create-icon {
     background: rgba(99, 102, 241, 0.3);
+    filter: brightness(0) invert(1);
 }

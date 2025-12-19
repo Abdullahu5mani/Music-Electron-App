@@ -36,8 +36,6 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  color: var(--text-secondary);
-  font-size: 0.9rem;
   background: transparent;
   border: none;
   transition: all 0.15s;
@@ -45,10 +43,23 @@
 
 .title-bar-button:hover {
   background: rgba(255, 255, 255, 0.08);
-  color: #fff;
+}
+
+.title-bar-button .control-icon {
+  width: 14px;
+  height: 14px;
+  filter: brightness(0) invert(0.6);
+  transition: filter 0.15s;
+}
+
+.title-bar-button:hover .control-icon {
+  filter: brightness(0) invert(1);
 }
 
 .close-button:hover {
   background: #e53935 !important;
-  color: #fff;
+}
+
+.close-button:hover .control-icon {
+  filter: brightness(0) invert(1);
 }

@@ -25,6 +25,8 @@ import { LyricsPanel } from './components/lyrics'
 // Types
 import type { ScanStatusType } from './types/electron.d'
 import type { VisualizerMode } from './components/common/AudioVisualizer/AudioVisualizer'
+// Icons
+import settingsIcon from './assets/icons/settings.svg'
 import './App.css'
 
 function App() {
@@ -457,7 +459,7 @@ function App() {
                 aria-label="Settings"
                 title="Settings"
               >
-                ⚙️
+                <img src={settingsIcon} alt="Settings" className="settings-icon" />
               </button>
               <DownloadButton
                 onDownload={handleDownload}

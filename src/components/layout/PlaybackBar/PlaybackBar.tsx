@@ -2,12 +2,15 @@ import { useState, useEffect } from 'react'
 import type { MusicFile } from '../../../../electron/musicScanner'
 import Slider from 'rc-slider'
 import 'rc-slider/assets/index.css'
-import playButtonIcon from '../../../assets/playButton.svg'
-import pauseButtonIcon from '../../../assets/pauseButton.svg'
-import backwardButtonIcon from '../../../assets/backwardButton.svg'
-import forwardButtonIcon from '../../../assets/forwardButton.svg'
-import volumeControlIcon from '../../../assets/volumeControl.svg'
+import playButtonIcon from '../../../assets/icons/play.svg'
+import pauseButtonIcon from '../../../assets/icons/pause.svg'
+import backwardButtonIcon from '../../../assets/icons/skip-back.svg'
+import forwardButtonIcon from '../../../assets/icons/skip-forward.svg'
+import volumeControlIcon from '../../../assets/icons/volume.svg'
 import trayIcon from '../../../assets/trayIcon.svg'
+import shuffleIcon from '../../../assets/icons/shuffle.svg'
+import repeatIcon from '../../../assets/icons/repeat.svg'
+import repeatOneIcon from '../../../assets/icons/repeat-one.svg'
 import { extractColorsFromImage, type ExtractedColors } from '../../../utils/colorExtractor'
 import { AudioVisualizer, type VisualizerMode } from '../../common/AudioVisualizer/AudioVisualizer'
 import type { Howl } from 'howler'
@@ -109,7 +112,7 @@ export function PlaybackBar({
     onSeek(newTime)
   }
 
-  const repeatIcon = repeatMode === 'one' ? '🔂' : repeatMode === 'all' ? '🔁' : '↻'
+  const currentRepeatIcon = repeatMode === 'one' ? repeatOneIcon : repeatIcon
   const repeatLabel = repeatMode === 'one' ? 'Repeat 1' : repeatMode === 'all' ? 'Repeat All' : 'Repeat Off'
 
   return (
@@ -208,7 +211,7 @@ export function PlaybackBar({
           aria-label="Toggle shuffle"
           title={shuffle ? 'Shuffle On' : 'Shuffle Off'}
         >
-          <span className="toggle-icon">🔀</span>
+          <img src={shuffleIcon} alt="Shuffle" className="toggle-icon" />
         </button>
         <button
           className={`control-button toggle-button ${repeatMode !== 'off' ? 'active' : ''}`}
@@ -219,7 +222,7 @@ export function PlaybackBar({
           aria-label={`Cycle repeat mode (${repeatLabel})`}
           title={repeatLabel}
         >
-          <span className="toggle-icon">{repeatIcon}</span>
+          <img src={currentRepeatIcon} alt="Repeat" className="toggle-icon" />
         </button>
         <button
           className="control-button prev-button"

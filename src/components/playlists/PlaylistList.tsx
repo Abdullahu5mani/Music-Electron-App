@@ -1,4 +1,7 @@
 import type { Playlist } from '../../types/electron.d'
+import folderIcon from '../../assets/icons/folder.svg'
+import trashIcon from '../../assets/icons/trash.svg'
+import plusIcon from '../../assets/icons/plus.svg'
 import './PlaylistList.css'
 
 interface PlaylistListProps {
@@ -34,7 +37,7 @@ export function PlaylistList({
                             {playlist.coverArtPath ? (
                                 <img src={playlist.coverArtPath} alt="" className="playlist-cover" />
                             ) : (
-                                <span className="playlist-icon-default">📁</span>
+                                <img src={folderIcon} alt="" className="playlist-icon-default" />
                             )}
                         </div>
                         <div className="playlist-info">
@@ -54,7 +57,7 @@ export function PlaylistList({
                                 }}
                                 title="Delete playlist"
                             >
-                                🗑️
+                                <img src={trashIcon} alt="Delete" className="delete-icon" />
                             </button>
                         )}
                     </div>
@@ -67,7 +70,7 @@ export function PlaylistList({
                 onClick={onCreateNew}
                 title="Create new playlist"
             >
-                <span className="create-icon">+</span>
+                <img src={plusIcon} alt="" className="create-icon" />
                 <span>Create Playlist</span>
             </button>
         </div>
