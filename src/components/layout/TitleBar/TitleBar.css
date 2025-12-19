@@ -1,93 +1,54 @@
+/* ====== TITLE BAR ====== */
 .title-bar {
-  height: 32px;
-  background: #94b3c8;
+  height: 40px;
+  background: transparent;
+  border-bottom: 1px solid var(--glass-border);
   display: flex;
+  justify-content: flex-end;
   align-items: center;
-  user-select: none;
   -webkit-app-region: drag;
-  box-shadow: 0 2px 8px rgba(148, 179, 200, 0.3);
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  width: 100%;
-  z-index: 10000;
+  flex-shrink: 0;
 }
 
 .title-bar-content {
-  width: 100%;
   display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 0 0.5rem;
+  justify-content: flex-end;
+  width: 100%;
   -webkit-app-region: drag;
 }
 
 .title-bar-title {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  color: white;
-  font-weight: 600;
-  font-size: 0.875rem;
-  -webkit-app-region: drag;
+  display: none;
 }
 
 .title-icon {
-  width: 18px;
-  height: 18px;
-  object-fit: contain;
-  flex-shrink: 0;
+  display: none;
 }
 
 .title-bar-controls {
   display: flex;
-  gap: 0;
   -webkit-app-region: no-drag;
 }
 
 .title-bar-button {
-  width: 32px;
-  height: 32px;
-  border: none;
-  background: transparent;
-  color: white;
-  cursor: pointer;
+  width: 46px;
+  height: 40px;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 1.25rem;
-  font-weight: 300;
-  transition: background-color 0.2s;
-  padding: 0;
-  margin: 0;
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+  background: transparent;
+  border: none;
+  transition: all 0.15s;
 }
 
 .title-bar-button:hover {
-  background-color: rgba(255, 255, 255, 0.1);
-}
-
-.title-bar-button:active {
-  background-color: rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
 }
 
 .close-button:hover {
-  background-color: rgba(255, 0, 0, 0.5);
+  background: #e53935 !important;
+  color: #fff;
 }
-
-.close-button:active {
-  background-color: rgba(255, 0, 0, 0.7);
-}
-
-/* Windows-specific styling */
-@media (prefers-color-scheme: dark) {
-  .title-bar {
-    height: 30px;
-  }
-  
-  .title-bar-button {
-    width: 30px;
-    height: 30px;
-  }
-}
-

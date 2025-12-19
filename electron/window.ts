@@ -40,7 +40,7 @@ export function createWindow(): BrowserWindow {
     titleBarStyle: isMac ? 'hiddenInset' : 'hidden',
     // Position traffic lights on macOS (moved down to avoid overlap with custom titlebar)
     trafficLightPosition: isMac ? { x: 15, y: 12 } : undefined,
-    backgroundColor: '#1a1a1a', // Match app background
+    backgroundColor: '#0d1117', // Unified dark theme
     icon: path.join(process.env.APP_ROOT, 'src/assets/trayIcon.svg'),
     webPreferences: {
       preload: path.join(__dirname, 'preload.mjs'),

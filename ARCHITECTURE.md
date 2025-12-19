@@ -6076,3 +6076,262 @@ const filteredMusicFiles = useMemo(() => {
 
 ---
 
+## 🎭 File Roles Explained with Analogies
+
+This section explains every file's role using real-world analogies to help beginners understand the architecture intuitively.
+
+### The Big Picture: Your App is Like a **Restaurant**
+
+Think of your Electron app like a fancy restaurant:
+
+| Restaurant Part | App Equivalent | What It Does |
+|----------------|----------------|--------------|
+| **Kitchen** | `electron/` (Main Process) | Where all the "real work" happens - cooking (file operations, downloads, database) |
+| **Dining Room** | `src/` (Renderer/React) | What customers see - the beautiful UI, menus, tables |
+| **Service Window** | `preload.ts` | The secure "pass-through" where orders go from dining room to kitchen |
+| **Manager** | `main.ts` | Opens the restaurant, hires staff, coordinates everything |
+
+---
+
+### 🍳 THE KITCHEN (electron/ folder - Backend)
+
+| File | Analogy | Role |
+|------|---------|------|
+| **`main.ts`** | 🏪 **The Restaurant Manager** | Opens the restaurant doors, turns on the lights, hires all the staff, and makes sure everything is ready before customers arrive. It's the first thing that runs when you start your app. |
+| **`window.ts`** | 🪟 **The Storefront Window Designer** | Builds the actual window frame you see - the glass pane, the frame without the ugly default Windows border, the custom background color. Like choosing between a modern minimalist shopfront vs. a traditional one. |
+| **`preload.ts`** | 🛎️ **The Waiter/Service Bell** | Acts as the secure messenger between the kitchen and dining room. Customers (React) ring the bell, the waiter takes the order to the kitchen safely, and brings back the food. Customers never go into the kitchen directly (for safety!). |
+| **`tray.ts`** | 📍 **The "We're Open" Sign** | Creates that little icon in your Windows taskbar that shows "hey, the app is running!" and lets you do quick things like play/pause without opening the full window. |
+| **`musicScanner.ts`** | 🔍 **The Kitchen Inventory Clerk** | Walks through your entire music folder like checking every shelf in a pantry, reads the labels on each file (title, artist, album art), and makes a complete list of what you have. |
+| **`parallelMetadataScanner.ts`** | 🔍×4 **A Team of Inventory Clerks** | Instead of one person checking every file, this hires multiple clerks who work simultaneously. Faster for large libraries! |
+| **`fileWatcher.ts`** | 👀 **The Security Camera** | Constantly watches your music folder. If someone adds a new song or deletes one, it immediately notices and tells the dining room to update the menu. |
+| **`metadataCache.ts`** | 📋 **The "Already Checked" List** | Keeps a database of "we scanned this file before, it had X metadata." So if you restart the app, it doesn't have to rescan 1000+ songs - it remembers! |
+| **`youtubeDownloader.ts`** | 📦 **The Delivery Service** | Takes a YouTube URL, goes out, downloads the audio, wraps it nicely as an MP3 with the thumbnail, and delivers it to your music folder. |
+| **`playlistDatabase.ts`** | 📚 **The Recipe Book** | Stores all your playlists in a organized database. "Summer Vibes" playlist has songs A, B, C. It never forgets even if you close the app. |
+| **`binaryManager.ts`** | 🧰 **The Tool Checker** | Checks if all the specialized tools (yt-dlp, fpcalc, whisper) are installed and working. Like a chef checking if all their knives are sharp before service. |
+| **`fpcalcManager.ts`** | 👂 **The Audio Fingerprint Expert** | Creates a unique "fingerprint" of any song. Think of it like a Shazam for your app - it listens to the song and creates a code that can identify it. |
+| **`whisperManager.ts`** | 🗣️ **The Transcription Expert** | Manages the AI that can listen to songs and try to write down the lyrics. Downloads and manages the AI model files. |
+| **`settings.ts`** | 📝 **The Preferences Notepad** | Remembers your settings - "music folder is here, download folder is there, scan subfolders = yes." Saved to a file so it remembers after restart. |
+
+---
+
+### 📂 IPC Handlers (electron/ipc/ - The Kitchen Staff)
+
+Think of these as **specialized chefs** in the kitchen, each handling specific types of orders:
+
+| Handler File | Analogy | Role |
+|--------------|---------|------|
+| **`handlers.ts`** | 👨‍🍳 **Head Chef** | Hires all the specialized chefs and routes all incoming orders to the right person. "That's a download order? Send it to the YouTube chef!" |
+| **`musicHandlers.ts`** | 🎵 **The Music Chef** | Handles all music-related orders: "scan this folder," "read this file's metadata," "write cover art to this file." |
+| **`playlistHandlers.ts`** | 📜 **The Playlist Chef** | Handles playlist orders: "create a playlist called X," "add these songs to playlist Y," "delete playlist Z." |
+| **`youtubeHandlers.ts`** | 📹 **The Download Chef** | Handles YouTube downloads and binary installations. |
+| **`apiHandlers.ts`** | 🌐 **The Internet Chef** | Talks to external services: AcoustID (song identification), MusicBrainz (music metadata), and downloads album art. |
+| **`systemHandlers.ts`** | ⚙️ **The Maintenance Chef** | Handles system stuff: minimize/maximize window, get platform info, save settings. |
+| **`cacheHandlers.ts`** | 🗄️ **The Cache Chef** | Talks to the metadata database: "is this file scanned?" "mark this as scanned." |
+| **`fingerprintHandlers.ts`** | 🎼 **The Fingerprint Chef** | Generates audio fingerprints for song identification. |
+| **`lyricsHandlers.ts`** | 📝 **The Lyrics Chef** | Orchestrates the AI lyrics generation: vocal isolation + transcription. |
+| **`watchHandlers.ts`** | 👁️ **The Watcher Chef** | Manages the file watcher: start watching, stop watching, get status. |
+
+---
+
+### 🍽️ THE DINING ROOM (src/ folder - Frontend/React)
+
+| File/Folder | Analogy | Role |
+|-------------|---------|------|
+| **`main.tsx`** | 🚪 **The Front Door** | The very first thing that runs on the React side. It mounts your entire app to the HTML page. |
+| **`App.tsx`** | 🧠 **The Dining Room Manager** | Coordinates everything: knows what song is playing, what's in the library, which playlist is selected. Passes information to all the components. |
+| **`App.css` + `index.css`** | 🎨 **The Interior Designer** | All the colors, fonts, spacing, animations. Makes everything look pretty. |
+
+#### 📂 React Hooks (src/hooks/ - The Smart Assistants)
+
+| Hook | Analogy | Role |
+|------|---------|------|
+| **`useAudioPlayer.ts`** | 🎧 **The DJ Booth** | Controls the actual music playback: play, pause, skip, volume, shuffle, repeat. Knows what's currently playing. |
+| **`useMusicLibrary.ts`** | 📖 **The Library Catalog** | Keeps track of all your songs, handles sorting (by title, artist, date), and updates when files change. |
+| **`useSongScanner.ts`** | 🔬 **The Song Identifier** | Handles batch scanning - takes many songs, identifies them one by one, shows progress, can be cancelled. |
+| **`usePlaylists.ts`** | 📋 **The Playlist Manager** | Creates, deletes, renames playlists. Adds/removes songs from playlists. |
+
+#### 📂 Components (src/components/ - The Furniture & Decorations)
+
+**Layout Components (the room structure):**
+
+| Component | Analogy | Role |
+|-----------|---------|------|
+| **`TitleBar/`** | 🏠 **The Window Frame** | Custom window controls (minimize, maximize, close). Draggable like a normal window. |
+| **`Sidebar/`** | 📑 **The Side Menu** | Navigation: shows Artists, Albums, Playlists. Click to filter your library. |
+| **`PlaybackBar/`** | 🎛️ **The Control Panel** | Bottom bar with play/pause, skip buttons, progress bar, volume, album art display. |
+
+**Feature Components:**
+
+| Component | Analogy | Role |
+|-----------|---------|------|
+| **`SongList/`** | 📋 **The Menu Display** | Shows all songs in a scrollable list with album art, title, artist. Right-click for options. |
+| **`BatchScanProgress/`** | 📊 **The Progress Report** | Floating card showing "scanning song 5 of 100..." with cancel button. |
+| **`Settings/`** | ⚙️ **The Preferences Menu** | Modal where you choose folders, install binaries, configure options. |
+| **`LyricsPanel/`** | 📝 **The Lyrics Display** | Slide-in panel showing AI-generated lyrics with progress stages. |
+| **`DownloadButton/`** | 📥 **The Order Button** | Input field to paste YouTube URL and trigger download. |
+| **`DownloadNotification/`** | 📦 **The Delivery Tracker** | Shows download progress when downloading from YouTube. |
+
+**Common Components (reusable parts):**
+
+| Component | Analogy | Role |
+|-----------|---------|------|
+| **`AudioVisualizer/`** | 🎆 **The Light Show** | Animated bars that dance to the music. |
+| **`ContextMenu/`** | 📋 **The Right-Click Menu** | Pop-up menu when you right-click on things. |
+| **`NotificationToast/`** | 📢 **The Announcement System** | Pop-up notifications like "Song identified!" or "Download complete!" |
+
+#### 📂 Services (src/services/ - The Phone Operators)
+
+| Service | Analogy | Role |
+|---------|---------|------|
+| **`acoustid.ts`** | 📞 **The AcoustID Hotline** | Calls the AcoustID API: "Here's an audio fingerprint, tell me what song this is." |
+| **`musicbrainz.ts`** | 📚 **The Music Encyclopedia** | Calls the MusicBrainz API: "Give me all the metadata about this recording." |
+| **`fingerprint.ts`** | 🎵 **The Fingerprint Generator** | Uses the backend to generate audio fingerprints for songs. |
+
+#### 📂 Utils (src/utils/ - The Helper Tools)
+
+| Utility | Analogy | Role |
+|---------|---------|------|
+| **`colorExtractor.ts`** | 🎨 **The Color Picker** | Extracts dominant colors from album art for dynamic theming. |
+| **`rateLimiter.ts`** | ⏱️ **The Traffic Light** | Makes sure you don't call APIs too fast (to avoid getting blocked). |
+| **`sortMusicFiles.ts`** | 📊 **The Sorter** | Sorts songs by title, artist, track number, date added, etc. |
+| **`pathResolver.ts`** | 🗺️ **The Path Translator** | Converts `C:\Users\Music\song.mp3` to `file:///C:/Users/Music/song.mp3` for the browser. |
+
+---
+
+## 🚨 Security Warnings Explained
+
+During development, you may see Electron security warnings in the console. This section explains what they mean and why they appear.
+
+### Warning 1: "Disabled webSecurity"
+
+```
+Electron Security Warning (Disabled webSecurity) This renderer process has "webSecurity" disabled.
+This exposes users of this app to severe security risks.
+```
+
+#### 🏠 The Analogy: House with No Locks
+
+Imagine your web browser is like a house with security locks and rules:
+- **Normal browser**: "I can only visit websites on the internet. I can't access files on your computer. I can't mix content from different sources."
+- **Your app with `webSecurity: false`**: "I can do ANYTHING - access local files, mix content from anywhere, no restrictions!"
+
+#### 🔓 Why It's Needed for THIS App
+
+Your music player **MUST** access local files like `C:\Users\Music\song.mp3`. Normal browsers can't do this for security reasons. By disabling `webSecurity`:
+- ✅ You can play local audio files via `file://` protocol
+- ✅ You can show local album art images
+- ⚠️ But you also lose some browser security protections
+
+#### 📊 Risk Assessment
+
+| Risk | In Normal Website | In Your App |
+|------|------------------|-------------|
+| **Cross-site attacks** | HIGH (anyone can visit your site) | LOW (it's a desktop app, no random visitors) |
+| **Local file access** | BLOCKED (would be dangerous) | REQUIRED (that's the whole point!) |
+
+**Verdict**: ⚠️ **Expected and Normal** - Required for a music player that plays local files.
+
+---
+
+### Warning 2: "allowRunningInsecureContent"
+
+```
+Electron Security Warning (allowRunningInsecureContent) This renderer process has "allowRunningInsecureContent"
+enabled. This exposes users of this app to severe security risks.
+```
+
+#### 🚦 The Analogy: Mixing HTTPS and HTTP
+
+Imagine a secure bank (HTTPS) with security guards. Normally, the guards say:
+- "We only accept packages from other secure places (HTTPS)"
+- "We reject anything from insecure couriers (HTTP)"
+
+With `allowRunningInsecureContent: true`:
+- "We'll accept packages from ANYONE, secure or not"
+
+#### 🔓 Why It's Needed for THIS App
+
+Your app loads local files using `file://` protocol. This is similar to mixing "insecure" content:
+- ✅ Allows playing `file://C:/Users/Music/song.mp3`
+- ✅ Allows showing `file://C:/Users/Music/albumArt.jpg`
+- ⚠️ Relaxes some security checks
+
+#### 📊 Risk Assessment
+
+| Risk | On the Internet | In Your App |
+|------|----------------|-------------|
+| **Man-in-the-middle attacks** | HIGH (attackers can inject malicious scripts) | VERY LOW (you're loading YOUR OWN files) |
+| **Data interception** | HIGH (unencrypted data can be read) | N/A (files are on your own computer) |
+
+**Verdict**: ⚠️ **Expected and Normal** - Necessary for local file access.
+
+---
+
+### Warning 3: "Insecure Content-Security-Policy"
+
+```
+Electron Security Warning (Insecure Content-Security-Policy) This renderer process has either no Content Security
+Policy set or a policy with "unsafe-eval" enabled.
+```
+
+#### 🛡️ The Analogy: A Bouncer with a Very Short Guest List
+
+Imagine a nightclub with a bouncer. A strict **Content Security Policy (CSP)** is like a bouncer with a very specific guest list:
+- "Only scripts from **our-domain.com** can enter"
+- "Only styles from **trusted-cdn.com** can enter"  
+- "No strangers! No random code execution!"
+
+With a weak/missing CSP:
+- "Anyone can come in! Run any script you want!"
+
+#### 🔓 Why It's Like This for THIS App
+
+During development, Electron apps often have relaxed CSP to:
+- ✅ Allow Vite's hot-reload scripts
+- ✅ Allow inline styles and scripts for faster development
+- ⚠️ But also allows `unsafe-eval` (running arbitrary code from strings)
+
+#### 📊 Risk Assessment
+
+| Risk | On a Website | In Your App |
+|------|-------------|-------------|
+| **XSS (Cross-Site Scripting)** | HIGH (attackers can inject scripts via user input) | LOW (no user-generated HTML/JS in your app) |
+| **Malicious code injection** | HIGH | LOW (only you control the codebase) |
+
+**Verdict**: ⚠️ **Development Only** - This warning disappears when the app is packaged for production.
+
+---
+
+### Summary: Security Warnings Assessment
+
+| Warning | During Development | In Packaged App | Should You Worry? |
+|---------|-------------------|-----------------|-------------------|
+| **Disabled webSecurity** | Shows | Shows | ⚠️ **No** - Required for local file access |
+| **allowRunningInsecureContent** | Shows | Shows | ⚠️ **No** - Required for file:// protocol |
+| **Insecure CSP** | Shows | Hidden | ⚠️ **Low** - Only matters in dev |
+
+#### 🏠 The Restaurant Analogy Summary
+
+Imagine you're running a **private restaurant** (not open to the public):
+
+1. **Disabled webSecurity** = "Staff can go in the back door without ID checks" - Fine because only trusted staff (your code) enter, not random people
+2. **allowRunningInsecureContent** = "We accept deliveries from any truck" - Fine because you ordered ALL the deliveries yourself
+3. **Insecure CSP** = "We don't have a strict dress code during setup" - Fine because customers aren't here yet (during development)
+
+#### ✅ What This Means for Your App
+
+These warnings are **expected and normal** for Electron music players. They would be serious problems for:
+- 🌐 A website that strangers visit
+- 🌐 An app that runs untrusted code
+- 🌐 An app connected to the internet processing user input as code
+
+But for THIS app:
+- It's a desktop app (no random visitors)
+- YOU control all the code
+- Local file access is the whole point
+- The CSP warning disappears when packaged
+
+**Conclusion**: You're fine! 👍 The warnings are Electron being cautious, not signs of actual problems for your use case.
+
+---
+

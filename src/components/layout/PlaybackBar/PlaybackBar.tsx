@@ -159,122 +159,122 @@ export function PlaybackBar({
               Playing from: {playbackContextName}
             </div>
           )}
-          <div className="seek-bar-container">
-            {/* Audio Visualizer behind the seek bar */}
-            {isPlaying && currentSound && (
-              <AudioVisualizer
-                mode={visualizerMode}
-                colors={{
-                  primary: glowColors.primary,
-                  secondary: glowColors.secondary
-                }}
-                howl={currentSound}
-              />
-            )}
-            <div className="seek-bar-wrapper">
-              <Slider
-                min={0}
-                max={duration || 0}
-                value={isDragging ? dragTime : currentTime}
-                onChange={handleSeekChange}
-                onChangeComplete={handleSeekAfterChange}
-                className="seek-bar-slider"
-                disabled={!currentSong}
-                trackStyle={{ height: 4 }}
-                handleStyle={{
-                  width: 14,
-                  height: 14,
-                  marginTop: -5,
-                }}
-                railStyle={{ height: 4 }}
-              />
-            </div>
-            <div
-              className="time-display"
-            >
-              <span>{formatTime(isDragging ? dragTime : currentTime)}</span>
-              <span>{formatTime(duration)}</span>
-            </div>
-          </div>
         </div>
-        <div className="playback-controls">
-          <button
-            className={`control-button toggle-button ${shuffle ? 'active' : ''}`}
-            onClick={(e) => {
-              e.stopPropagation()
-              onToggleShuffle()
-            }}
-            aria-label="Toggle shuffle"
-            title={shuffle ? 'Shuffle On' : 'Shuffle Off'}
-          >
-            <span className="toggle-icon">🔀</span>
-          </button>
-          <button
-            className={`control-button toggle-button ${repeatMode !== 'off' ? 'active' : ''}`}
-            onClick={(e) => {
-              e.stopPropagation()
-              onCycleRepeatMode()
-            }}
-            aria-label={`Cycle repeat mode (${repeatLabel})`}
-            title={repeatLabel}
-          >
-            <span className="toggle-icon">{repeatIcon}</span>
-          </button>
-          <button
-            className="control-button prev-button"
-            onClick={(e) => {
-              e.stopPropagation()
-              onPrevious()
-            }}
-            disabled={!currentSong}
-            aria-label="Previous"
-          >
-            <img src={backwardButtonIcon} alt="Previous" className="control-icon" />
-          </button>
-          <button
-            className="control-button play-pause-button"
-            onClick={(e) => {
-              e.stopPropagation()
-              onPlayPause()
-            }}
-            disabled={!currentSong}
-            aria-label={isPlaying ? 'Pause' : 'Play'}
-          >
-            {isPlaying ? (
-              <img src={pauseButtonIcon} alt="Pause" className="control-icon" />
-            ) : (
-              <img src={playButtonIcon} alt="Play" className="control-icon" />
-            )}
-          </button>
-          <button
-            className="control-button next-button"
-            onClick={(e) => {
-              e.stopPropagation()
-              onNext()
-            }}
-            disabled={!currentSong}
-            aria-label="Next"
-          >
-            <img src={forwardButtonIcon} alt="Next" className="control-icon" />
-          </button>
-          <div className="volume-control">
-            <img src={volumeControlIcon} alt="Volume" className="volume-icon" />
+        <div className="seek-bar-container">
+          {/* Audio Visualizer behind the seek bar */}
+          {isPlaying && currentSound && (
+            <AudioVisualizer
+              mode={visualizerMode}
+              colors={{
+                primary: glowColors.primary,
+                secondary: glowColors.secondary
+              }}
+              howl={currentSound}
+            />
+          )}
+          <div className="seek-bar-wrapper">
             <Slider
               min={0}
-              max={1}
-              step={0.01}
-              value={volume}
-              onChange={(value) => onVolumeChange(Array.isArray(value) ? value[0] : value)}
-              className="volume-slider"
-              trackStyle={{ height: 3 }}
+              max={duration || 0}
+              value={isDragging ? dragTime : currentTime}
+              onChange={handleSeekChange}
+              onChangeComplete={handleSeekAfterChange}
+              className="seek-bar-slider"
+              disabled={!currentSong}
+              trackStyle={{ height: 4 }}
               handleStyle={{
-                width: 10,
-                height: 10,
-                marginTop: -3.5,
+                width: 14,
+                height: 14,
+                marginTop: -5,
               }}
-              railStyle={{ height: 3 }}
+              railStyle={{ height: 4 }}
             />
           </div>
+          <div
+            className="time-display"
+          >
+            <span>{formatTime(isDragging ? dragTime : currentTime)}</span>
+            <span>{formatTime(duration)}</span>
+          </div>
+        </div>
+      </div>
+      <div className="playback-controls">
+        <button
+          className={`control-button toggle-button ${shuffle ? 'active' : ''}`}
+          onClick={(e) => {
+            e.stopPropagation()
+            onToggleShuffle()
+          }}
+          aria-label="Toggle shuffle"
+          title={shuffle ? 'Shuffle On' : 'Shuffle Off'}
+        >
+          <span className="toggle-icon">🔀</span>
+        </button>
+        <button
+          className={`control-button toggle-button ${repeatMode !== 'off' ? 'active' : ''}`}
+          onClick={(e) => {
+            e.stopPropagation()
+            onCycleRepeatMode()
+          }}
+          aria-label={`Cycle repeat mode (${repeatLabel})`}
+          title={repeatLabel}
+        >
+          <span className="toggle-icon">{repeatIcon}</span>
+        </button>
+        <button
+          className="control-button prev-button"
+          onClick={(e) => {
+            e.stopPropagation()
+            onPrevious()
+          }}
+          disabled={!currentSong}
+          aria-label="Previous"
+        >
+          <img src={backwardButtonIcon} alt="Previous" className="control-icon" />
+        </button>
+        <button
+          className="control-button play-pause-button"
+          onClick={(e) => {
+            e.stopPropagation()
+            onPlayPause()
+          }}
+          disabled={!currentSong}
+          aria-label={isPlaying ? 'Pause' : 'Play'}
+        >
+          {isPlaying ? (
+            <img src={pauseButtonIcon} alt="Pause" className="control-icon" />
+          ) : (
+            <img src={playButtonIcon} alt="Play" className="control-icon" />
+          )}
+        </button>
+        <button
+          className="control-button next-button"
+          onClick={(e) => {
+            e.stopPropagation()
+            onNext()
+          }}
+          disabled={!currentSong}
+          aria-label="Next"
+        >
+          <img src={forwardButtonIcon} alt="Next" className="control-icon" />
+        </button>
+        <div className="volume-control">
+          <img src={volumeControlIcon} alt="Volume" className="volume-icon" />
+          <Slider
+            min={0}
+            max={1}
+            step={0.01}
+            value={volume}
+            onChange={(value) => onVolumeChange(Array.isArray(value) ? value[0] : value)}
+            className="volume-slider"
+            trackStyle={{ height: 3 }}
+            handleStyle={{
+              width: 10,
+              height: 10,
+              marginTop: -3.5,
+            }}
+            railStyle={{ height: 3 }}
+          />
         </div>
       </div>
     </div>

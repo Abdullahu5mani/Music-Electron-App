@@ -1,106 +1,75 @@
 @import 'overlayscrollbars/styles/overlayscrollbars.css';
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap');
 
+/* ====== UNIFIED GRADIENT THEME ====== */
 :root {
-  font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
-  line-height: 1.5;
-  font-weight: 400;
+  /* Single unified color palette */
+  --bg-deep: #0d1117;
+  --bg-main: #161b22;
+  --bg-surface: rgba(22, 27, 34, 0.6);
+  --bg-hover: rgba(48, 54, 61, 0.6);
 
-  color-scheme: light dark;
-  color: rgba(255, 255, 255, 0.87);
-  background-color: #242424;
+  /* Glass Effects - very subtle */
+  --glass-border: rgba(255, 255, 255, 0.06);
 
-  font-synthesis: none;
-  text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+  /* Premium Accent - Indigo/Cyan */
+  --accent-primary: #6366f1;
+  --accent-secondary: #06b6d4;
+  --accent-glow: rgba(99, 102, 241, 0.3);
+  --accent-gradient: linear-gradient(135deg, #6366f1 0%, #06b6d4 100%);
+
+  /* Text */
+  --text-primary: #f0f6fc;
+  --text-secondary: #8b949e;
+  --text-dim: #6e7681;
+
+  /* Layout */
+  --sidebar-width: 280px;
+  --playback-height: 90px;
+  --radius-lg: 20px;
+  --radius-md: 14px;
+  --radius-sm: 10px;
+
+  font-family: 'Outfit', -apple-system, BlinkMacSystemFont, sans-serif;
+  color-scheme: dark;
 }
 
-a {
-  font-weight: 500;
-  color: #646cff;
-  text-decoration: inherit;
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  user-select: none;
+  -webkit-user-select: none;
 }
-a:hover {
-  color: #535bf2;
+
+input,
+textarea {
+  user-select: text;
+  -webkit-user-select: text;
 }
 
 body {
-  margin: 0;
-  padding: 0;
-  width: 100%;
+  background-color: var(--bg-deep);
+  color: var(--text-primary);
+  overflow: hidden;
   height: 100vh;
-  overflow-x: hidden;
+  width: 100vw;
 }
 
-html {
-  width: 100%;
-  height: 100%;
-}
-
-h1 {
-  font-size: 3.2em;
-  line-height: 1.1;
+/* Scrollbar */
+.os-theme-dark {
+  --os-size: 6px;
+  --os-track-bg: transparent;
+  --os-scrollbar-bg: rgba(255, 255, 255, 0.1);
+  --os-scrollbar-bg-hover: rgba(255, 255, 255, 0.15);
+  --os-scrollbar-border-radius: 10px;
 }
 
 button {
-  border-radius: 8px;
-  border: 1px solid transparent;
-  padding: 0.6em 1.2em;
-  font-size: 1em;
-  font-weight: 500;
-  font-family: inherit;
-  background-color: #1a1a1a;
   cursor: pointer;
-  transition: border-color 0.25s;
-}
-button:hover {
-  border-color: #646cff;
-}
-button:focus,
-button:focus-visible {
-  outline: 4px auto -webkit-focus-ring-color;
-}
-
-@media (prefers-color-scheme: light) {
-  :root {
-    color: #213547;
-    background-color: #ffffff;
-  }
-  a:hover {
-    color: #747bff;
-  }
-  button {
-    background-color: #f9f9f9;
-  }
-}
-
-/* OverlayScrollbars Custom Theme - Pink Theme */
-.os-theme-dark {
-  --os-size: 12px;
-  --os-padding-perpendicular: 0;
-  --os-padding-axis: 0;
-  --os-track-border-radius: 6px;
-  --os-track-bg: rgba(26, 26, 26, 0.8);
-  --os-track-bg-hover: rgba(26, 26, 26, 0.9);
-  --os-track-bg-active: rgba(26, 26, 26, 0.9);
-  --os-track-border: none;
-  --os-track-border-hover: none;
-  --os-track-border-active: none;
-  --os-scrollbar-border-radius: 6px;
-  --os-scrollbar-bg: linear-gradient(135deg, #ff6b9d 0%, #c44569 100%);
-  --os-scrollbar-bg-hover: linear-gradient(135deg, #ff7ba8 0%, #d4557a 100%);
-  --os-scrollbar-bg-active: linear-gradient(135deg, #ff6b9d 0%, #c44569 100%);
-  --os-scrollbar-border: 2px solid rgba(26, 26, 26, 0.5);
-  --os-scrollbar-border-hover: 2px solid rgba(26, 26, 26, 0.7);
-  --os-scrollbar-border-active: 2px solid rgba(26, 26, 26, 0.7);
-  --os-scrollbar-min-size: 12px;
-  --os-scrollbar-max-size: 12px;
-  --os-scrollbar-perpendicular-size: 12px;
-  --os-scrollbar-perpendicular-padding: 0;
-  --os-scrollbar-axis-perpendicular-size: 12px;
-  --os-scrollbar-axis-perpendicular-padding: 0;
-  --os-scrollbar-interactive-border-radius: 6px;
-  --os-scrollbar-interactive-bg: linear-gradient(135deg, #ff6b9d 0%, #c44569 100%);
-  --os-scrollbar-interactive-bg-hover: linear-gradient(135deg, #ff7ba8 0%, #d4557a 100%);
-  --os-scrollbar-interactive-bg-active: linear-gradient(135deg, #ff6b9d 0%, #c44569 100%);
+  font-family: inherit;
+  border: none;
+  outline: none;
+  background: none;
+  transition: all 0.2s ease;
 }

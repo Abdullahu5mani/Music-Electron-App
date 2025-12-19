@@ -47,15 +47,17 @@ export function SongList({
   const [scanStatuses, setScanStatuses] = useState<Record<string, ScanStatusType>>({})
   const [loadingStatuses, setLoadingStatuses] = useState(false)
 
-  // Track recently updated songs for smooth animation
-  const [recentlyUpdated, setRecentlyUpdated] = useState<Set<string>>(new Set())
+  // Track recently updated songs for glow animation (using ref + forceUpdate to minimize re-renders)
+  const recentlyUpdatedRef = useRef<Set<string>>(new Set())
+  const [, forceUpdate] = useState(0)
 
   // FLIP Animation: Store positions before update for smooth transitions
   const positionCache = useRef<Map<string, DOMRect>>(new Map())
   const pendingFlip = useRef<string | null>(null)
 
-  // Store old metadata during animation (shows old data while moving, then reveals new)
-  const [oldMetadataCache, setOldMetadataCache] = useState<Map<string, {
+  // Store old metadata during animation - using REF to avoid extra re-renders
+  // The display update happens when songs array changes, not when this cache changes
+  const oldMetadataCacheRef = useRef<Map<string, {
     title?: string
     artist?: string
     albumArt?: string
@@ -330,15 +332,11 @@ export function SongList({
               console.log('Updating single file metadata in-place...')
               const filePath = file.path
 
-              // Step 1: Cache OLD metadata to display during animation
-              setOldMetadataCache(prev => {
-                const next = new Map(prev)
-                next.set(filePath, {
-                  title: file.metadata?.title || file.name.replace(/\.[^/.]+$/, ''),
-                  artist: file.metadata?.artist || 'Unknown Artist',
-                  albumArt: file.metadata?.albumArt
-                })
-                return next
+              // Step 1: Cache OLD metadata to display during animation (using ref - no re-render)
+              oldMetadataCacheRef.current.set(filePath, {
+                title: file.metadata?.title || file.name.replace(/\.[^/.]+$/, ''),
+                artist: file.metadata?.artist || 'Unknown Artist',
+                albumArt: file.metadata?.albumArt
               })
 
               // Step 2: Capture position BEFORE update for FLIP animation
@@ -348,10 +346,10 @@ export function SongList({
                 pendingFlip.current = filePath
               }
 
-              // Step 3: Update the file (this triggers re-render with new sorted position)
+              // Step 3: Update the file (this triggers ONE re-render with new sorted position)
               await onUpdateSingleFile(filePath)
 
-              // Step 4: After FLIP animation (700ms), scroll to follow and reveal new data
+              // Step 4: After FLIP animation completes, do scroll + reveal in ONE update
               setTimeout(() => {
                 // Scroll to the item so user can see it
                 const updatedElement = songRefs.current.get(filePath)
@@ -362,28 +360,24 @@ export function SongList({
                   })
                 }
 
-                // Step 5: Wait for scroll to COMPLETE, then reveal new data
+                // Step 5: After scroll settles, reveal new data and show glow (ONE re-render)
                 setTimeout(() => {
-                  // Clear the cached old metadata to reveal new data
-                  setOldMetadataCache(prev => {
-                    const next = new Map(prev)
-                    next.delete(filePath)
-                    return next
-                  })
+                  // Clear the cached old metadata (ref update - no re-render)
+                  oldMetadataCacheRef.current.delete(filePath)
 
-                  // Start the glow animation
-                  setRecentlyUpdated(prev => new Set(prev).add(filePath))
+                  // Add glow effect (ref update - no re-render yet)
+                  recentlyUpdatedRef.current.add(filePath)
 
-                  // Clear the glow animation after it completes
+                  // Trigger ONE re-render to show new metadata + glow
+                  forceUpdate(n => n + 1)
+
+                  // Clear the glow animation after it completes (ONE more re-render)
                   setTimeout(() => {
-                    setRecentlyUpdated(prev => {
-                      const next = new Set(prev)
-                      next.delete(filePath)
-                      return next
-                    })
+                    recentlyUpdatedRef.current.delete(filePath)
+                    forceUpdate(n => n + 1)
                   }, 1500)
-                }, 2000)  // Wait for scroll to COMPLETE (2 seconds)
-              }, 700)  // Wait for FLIP animation to finish
+                }, 1500)  // Reduced from 2000ms - scroll doesn't take that long
+              }, 650)  // Slightly reduced to match animation end better
             }
           } else {
             console.error('Failed to write metadata:', metadataResult.error)
@@ -461,7 +455,7 @@ export function SongList({
           <li
             key={file.path}
             ref={(el) => setSongRef(file.path, el)}
-            className={`song-item ${playingIndex === index ? 'playing' : ''} ${recentlyUpdated.has(file.path) ? 'metadata-updated' : ''}`}
+            className={`song-item ${playingIndex === index ? 'playing' : ''} ${recentlyUpdatedRef.current.has(file.path) ? 'metadata-updated' : ''}`}
             onClick={() => onSongClick(file, index)}
             onContextMenu={(e) => {
               e.preventDefault()
@@ -472,8 +466,8 @@ export function SongList({
               {(() => {
                 // Use cached old metadata during animation, or current metadata
                 // Check if cache HAS this file (not just if values exist) - so old art stays old
-                const hasCachedMeta = oldMetadataCache.has(file.path)
-                const cachedMeta = oldMetadataCache.get(file.path)
+                const hasCachedMeta = oldMetadataCacheRef.current.has(file.path)
+                const cachedMeta = oldMetadataCacheRef.current.get(file.path)
 
                 const displayTitle = hasCachedMeta
                   ? (cachedMeta?.title || file.name.replace(/\.[^/.]+$/, ''))

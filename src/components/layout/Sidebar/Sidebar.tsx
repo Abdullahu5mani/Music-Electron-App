@@ -92,6 +92,13 @@ export function Sidebar({
 
   return (
     <div className="sidebar">
+      {/* App Logo and Name */}
+      <div className="sidebar-header">
+        <div className="sidebar-logo">
+          <span className="logo-icon">🎵</span>
+          <span className="logo-text">Music Sync</span>
+        </div>
+      </div>
       {/* Unified Playlists section - includes All Songs + user playlists */}
       <div className={`sidebar-section playlists-section ${playlistsCollapsed ? 'collapsed' : 'expanded'}`}>
         <div

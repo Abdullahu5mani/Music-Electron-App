@@ -411,102 +411,106 @@ function App() {
 
   return (
     <div className="app-container">
-      <TitleBar />
-      <div className="app-content">
-        <div className="app-header">
-          <h1>Music Sync App</h1>
-          <div className="search-container" title="Search by title, artist, or album">
-            <input
-              type="text"
-              className="search-input"
-              placeholder="Search title, artist, album..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-            />
-          </div>
-          <div className="header-actions">
-            <button
-              className="settings-button"
-              onClick={() => setShowSettings(true)}
-              aria-label="Settings"
-              title="Settings"
-            >
-              ⚙️
-            </button>
-            <DownloadButton
-              onDownload={handleDownload}
-              isDownloading={isDownloading}
-              progress={downloadProgress}
-              binaryStatus={binaryDownloadStatus}
-              binaryProgress={binaryDownloadProgress}
-            />
-          </div>
-        </div>
+      {/* Sidebar is now full-height on the left */}
+      <Sidebar
+        selectedView={selectedView}
+        onViewChange={(view) => {
+          setSelectedView(view)
+          // Clear active playlist when switching away from playlist view
+          if (!view.startsWith('playlist:')) {
+            clearActivePlaylist()
+            setSelectedPlaylistId(null)
+          }
+        }}
+        musicFiles={sortedMusicFiles}
+        playlists={playlists}
+        selectedPlaylistId={selectedPlaylistId}
+        onPlaylistClick={(playlistId) => {
+          setSelectedPlaylistId(playlistId)
+          loadPlaylist(playlistId)
+        }}
+        onCreatePlaylist={() => {
+          setPendingSongsForPlaylist([])
+          setShowCreatePlaylistModal(true)
+        }}
+        onDeletePlaylist={deletePlaylist}
+      />
 
-        {error && <div className="error">{error}</div>}
-
-        {loading && <div className="loading">Scanning music files...</div>}
-
-        <div className="main-content">
-          <Sidebar
-            selectedView={selectedView}
-            onViewChange={(view) => {
-              setSelectedView(view)
-              // Clear active playlist when switching away from playlist view
-              if (!view.startsWith('playlist:')) {
-                clearActivePlaylist()
-                setSelectedPlaylistId(null)
-              }
-            }}
-            musicFiles={sortedMusicFiles}
-            playlists={playlists}
-            selectedPlaylistId={selectedPlaylistId}
-            onPlaylistClick={(playlistId) => {
-              setSelectedPlaylistId(playlistId)
-              loadPlaylist(playlistId)
-            }}
-            onCreatePlaylist={() => {
-              setPendingSongsForPlaylist([])
-              setShowCreatePlaylistModal(true)
-            }}
-            onDeletePlaylist={deletePlaylist}
-          />
-          <div className="music-list-container">
-            <OverlayScrollbarsComponent
-              options={{
-                scrollbars: {
-                  theme: 'os-theme-dark',
-                  autoHide: 'move',
-                  autoHideDelay: 800,
-                },
-              }}
-              className="music-list-scroll"
-            >
-              <SongList
-                songs={filteredMusicFiles}
-                onSongClick={(file) => {
-                  // Find the actual index in the full library
-                  const actualIndex = sortedMusicFiles.findIndex(f => f.path === file.path)
-                  if (actualIndex !== -1) {
-                    playSong(file, actualIndex)
-                  }
-                }}
-                playingIndex={playingIndex !== null ? filteredMusicFiles.findIndex(f => f.path === sortedMusicFiles[playingIndex]?.path) : null}
-                sortBy={sortBy}
-                onSortChange={setSortBy}
-                onUpdateSingleFile={updateSingleFile}
-                onShowNotification={showToastNotification}
-                isPlaying={isPlaying}
-                onPlayPause={togglePlayPause}
-                playlists={playlists}
-                onAddToPlaylist={addSongsToPlaylist}
-                onCreatePlaylistWithSongs={(filePaths) => {
-                  setPendingSongsForPlaylist(filePaths)
-                  setShowCreatePlaylistModal(true)
-                }}
-                onProcessLyrics={handleProcessLyrics}
+      {/* Main content area (right side) */}
+      <div className="app-main">
+        <TitleBar />
+        <div className="app-content">
+          <div className="app-header">
+            <div className="search-container" title="Search by title, artist, or album">
+              <input
+                type="text"
+                className="search-input"
+                placeholder="Search title, artist, album..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
               />
-            </OverlayScrollbarsComponent>
+            </div>
+            <div className="header-actions">
+              <button
+                className="settings-button"
+                onClick={() => setShowSettings(true)}
+                aria-label="Settings"
+                title="Settings"
+              >
+                ⚙️
+              </button>
+              <DownloadButton
+                onDownload={handleDownload}
+                isDownloading={isDownloading}
+                progress={downloadProgress}
+                binaryStatus={binaryDownloadStatus}
+                binaryProgress={binaryDownloadProgress}
+              />
+            </div>
+          </div>
+
+          {error && <div className="error">{error}</div>}
+
+          {loading && <div className="loading">Scanning music files...</div>}
+
+          <div className="main-content">
+            <div className="music-list-container">
+              <OverlayScrollbarsComponent
+                options={{
+                  scrollbars: {
+                    theme: 'os-theme-dark',
+                    autoHide: 'move',
+                    autoHideDelay: 800,
+                  },
+                }}
+                className="music-list-scroll"
+              >
+                <SongList
+                  songs={filteredMusicFiles}
+                  onSongClick={(file) => {
+                    // Find the actual index in the full library
+                    const actualIndex = sortedMusicFiles.findIndex(f => f.path === file.path)
+                    if (actualIndex !== -1) {
+                      playSong(file, actualIndex)
+                    }
+                  }}
+                  playingIndex={playingIndex !== null ? filteredMusicFiles.findIndex(f => f.path === sortedMusicFiles[playingIndex]?.path) : null}
+                  sortBy={sortBy}
+                  onSortChange={setSortBy}
+                  onUpdateSingleFile={updateSingleFile}
+                  onShowNotification={showToastNotification}
+                  isPlaying={isPlaying}
+                  onPlayPause={togglePlayPause}
+                  playlists={playlists}
+                  onAddToPlaylist={addSongsToPlaylist}
+                  onCreatePlaylistWithSongs={(filePaths) => {
+                    setPendingSongsForPlaylist(filePaths)
+                    setShowCreatePlaylistModal(true)
+                  }}
+                  onProcessLyrics={handleProcessLyrics}
+                />
+              </OverlayScrollbarsComponent>
+            </div>
           </div>
         </div>
       </div>

@@ -209,13 +209,13 @@ export function AudioVisualizer({
             const offsetX = (width - actualTotalWidth) / 2 // Center the bars
 
             const gradient = ctx.createLinearGradient(0, height, 0, 0)
-            gradient.addColorStop(0, primary + '40') // increased opacity
-            gradient.addColorStop(0.5, primary + '80') // increased opacity
-            gradient.addColorStop(1, secondary + 'FF') // full opacity at top
+            gradient.addColorStop(0, primary + '10') // very subtle
+            gradient.addColorStop(0.5, primary + '25')
+            gradient.addColorStop(1, secondary + '40')
 
-            // Add glow effect for better visibility
-            ctx.shadowBlur = 15
-            ctx.shadowColor = primary
+            // Subtle glow effect
+            ctx.shadowBlur = 5
+            ctx.shadowColor = primary + '40'
 
             ctx.fillStyle = gradient
 
@@ -226,11 +226,6 @@ export function AudioVisualizer({
                 // Draw outline for better contrast
                 if (barHeight > 0) {
                     ctx.fillRect(x, height - barHeight, Math.max(1, barWidth - gap), barHeight)
-
-                    // Add a subtle top highlight
-                    ctx.fillStyle = '#ffffff80'
-                    ctx.fillRect(x, height - barHeight, Math.max(1, barWidth - gap), 2)
-                    ctx.fillStyle = gradient
                 }
             }
 
@@ -252,13 +247,13 @@ export function AudioVisualizer({
             const sliceWidth = width / bufferLength
 
             const gradient = ctx.createLinearGradient(0, 0, 0, height)
-            gradient.addColorStop(0, primary + '90')
-            gradient.addColorStop(0.5, secondary + '70')
-            gradient.addColorStop(1, primary + '30')
+            gradient.addColorStop(0, primary + '20')
+            gradient.addColorStop(0.5, secondary + '15')
+            gradient.addColorStop(1, primary + '08')
 
-            // Add glow effect
-            ctx.shadowBlur = 10
-            ctx.shadowColor = primary
+            // Subtle glow
+            ctx.shadowBlur = 3
+            ctx.shadowColor = primary + '30'
 
             ctx.beginPath()
             ctx.moveTo(0, height)
@@ -287,12 +282,12 @@ export function AudioVisualizer({
                 else ctx.lineTo(x, y)
                 x += sliceWidth
             }
-            ctx.strokeStyle = '#ffffff80' // White overlay for visibility
-            ctx.lineWidth = 2
+            ctx.strokeStyle = '#ffffff15'
+            ctx.lineWidth = 1
             ctx.stroke()
 
-            ctx.strokeStyle = primary
-            ctx.lineWidth = 2
+            ctx.strokeStyle = primary + '30'
+            ctx.lineWidth = 1
             ctx.stroke()
 
             // Reset shadow

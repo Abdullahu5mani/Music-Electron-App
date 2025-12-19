@@ -1,182 +1,79 @@
-.sidebar {
-  width: 220px;
-  min-width: 200px;
-  max-width: 220px;
-  max-height: 100%;
-  min-height: 0;
-  background-color: #1a1a1a;
-  border: 1px solid #333;
-  border-radius: 12px;
-  display: flex;
-  flex-direction: column;
-  overflow-y: auto;
-  overflow-x: hidden;
-  padding: 0.75rem 0;
-  box-sizing: border-box;
-}
-
+/* ====== SIDEBAR STYLES ====== */
 .sidebar-section {
-  position: relative;
-  width: 100%;
-  display: flex;
-  flex-direction: column;
+  padding: 0 10px;
 }
 
-.sidebar-section.expanded {
-  flex: 1;
-  min-height: 0;
-  overflow: hidden;
-  margin-bottom: 0.5rem;
-}
-
-.sidebar-section.collapsed {
-  flex: 0 0 auto;
-  margin-bottom: 0.5rem;
-}
-
-/* Playlists section should not overlap with sections below */
-.playlists-section {
-  flex: 0 0 auto;
-  padding-bottom: 0.5rem;
-  margin-bottom: 0.5rem;
-}
-
-/* Collapsible title header */
 .sidebar-title {
-  color: #888;
+  padding: 15px 15px 10px;
   font-size: 0.7rem;
   font-weight: 600;
+  color: var(--text-dim);
   text-transform: uppercase;
-  letter-spacing: 0.5px;
-  margin: 0 0.75rem 0.5rem 0.75rem;
-  padding: 0.5rem 0;
+  letter-spacing: 1.5px;
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  flex-shrink: 0;
-}
-
-.sidebar-title.collapsible {
+  gap: 8px;
   cursor: pointer;
-  user-select: none;
-  transition: color 0.2s;
 }
 
-.sidebar-title.collapsible:hover {
-  color: #bbb;
+.sidebar-title:hover {
+  color: var(--text-secondary);
 }
 
 .collapse-icon {
-  font-size: 0.6rem;
-  transition: transform 0.2s ease;
+  font-size: 0.5rem;
+  transition: transform 0.2s;
 }
 
 .collapse-icon.collapsed {
   transform: rotate(-90deg);
 }
 
-/* Search input container */
-.sidebar-search {
-  padding: 0.25rem 0.5rem 0.5rem;
-  flex-shrink: 0;
-}
-
-.sidebar-search-input {
-  width: 100%;
-  max-width: 100%;
-  box-sizing: border-box;
-  padding: 0.4rem 0.5rem;
-  background: #252525;
-  border: 1px solid #333;
-  border-radius: 6px;
-  color: #ddd;
-  font-size: 0.75rem;
-  outline: none;
-  transition: border-color 0.2s, background-color 0.2s;
-}
-
-.sidebar-search-input:focus {
-  border-color: #667eea;
-  background: #2a2a2a;
-}
-
-.sidebar-search-input::placeholder {
-  color: #666;
-}
-
-/* Scrollable list container */
 .sidebar-list {
-  flex: 1;
+  padding: 0 5px;
   overflow-y: auto;
-  overflow-x: hidden;
-  width: 100%;
-  min-height: 0;
-  /* Important for firefox flex nesting */
+  flex: 1;
 }
 
-.sidebar-list::-webkit-scrollbar {
-  width: 4px;
-}
-
-.sidebar-list::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.sidebar-list::-webkit-scrollbar-thumb {
-  background: #444;
-  border-radius: 2px;
-}
-
-/* Sidebar items */
 .sidebar-item {
   width: 100%;
-  max-width: 100%;
-  box-sizing: border-box;
+  padding: 10px 15px;
+  border-radius: var(--radius-sm);
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  padding: 0.5rem 0.5rem;
-  background: none;
+  gap: 12px;
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+  font-weight: 500;
+  margin-bottom: 2px;
   border: none;
-  color: #bbb;
-  font-size: 0.8rem;
+  background: none;
   text-align: left;
-  cursor: pointer;
-  transition: background-color 0.15s, color 0.15s;
+  transition: all 0.2s ease;
 }
 
 .sidebar-item:hover {
-  background-color: #252525;
+  background: rgba(255, 255, 255, 0.05);
   color: #fff;
 }
 
 .sidebar-item.active {
-  background-color: rgba(102, 126, 234, 0.15);
-  color: #667eea;
-  border-left: 3px solid #667eea;
+  background: rgba(99, 102, 241, 0.12);
+  color: var(--accent-primary);
+  border-left: 2px solid var(--accent-primary);
 }
 
-.sidebar-item span:first-child,
-.sidebar-item .artist-icon {
-  font-size: 0.9rem;
-  width: 18px;
-  text-align: center;
-  flex-shrink: 0;
-}
-
-.sidebar-item span:last-child {
-  flex: 1;
+.sidebar-item span {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-/* Playlist icon for All Songs */
-.sidebar-item span.playlist-icon-emoji {
+.playlist-icon-emoji {
   width: 32px;
   height: 32px;
-  border-radius: 6px;
-  background: linear-gradient(135deg, rgba(99, 102, 241, 0.3) 0%, rgba(139, 92, 246, 0.3) 100%);
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 8px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -184,54 +81,95 @@
   flex-shrink: 0;
 }
 
-/* Album thumbnails */
-.album-item {
-  padding: 0.4rem 0.75rem;
+.sidebar-item.active .playlist-icon-emoji {
+  background: rgba(99, 102, 241, 0.15);
+}
+
+.artist-icon {
+  font-size: 1rem;
+  opacity: 0.6;
 }
 
 .album-thumb {
-  width: 24px;
-  height: 24px;
-  border-radius: 4px;
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
   object-fit: cover;
   flex-shrink: 0;
 }
 
 .album-thumb-placeholder {
-  width: 24px;
-  height: 24px;
-  border-radius: 4px;
-  background: #2a2a2a;
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  background: var(--bg-hover);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 0.7rem;
+  font-size: 0.9rem;
   flex-shrink: 0;
 }
 
-/* No results message */
+.sidebar-search {
+  padding: 5px 10px 15px;
+}
+
+.sidebar-search-input {
+  width: 100%;
+  padding: 10px 14px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--glass-border);
+  border-radius: 10px;
+  color: #fff;
+  font-size: 0.85rem;
+  outline: none;
+}
+
+.sidebar-search-input::placeholder {
+  color: var(--text-dim);
+}
+
+.sidebar-search-input:focus {
+  border-color: var(--accent-primary);
+  background: rgba(255, 255, 255, 0.05);
+}
+
 .sidebar-no-results {
-  padding: 0.75rem;
-  color: #666;
-  font-size: 0.75rem;
+  padding: 20px;
   text-align: center;
-  font-style: italic;
+  color: var(--text-dim);
+  font-size: 0.85rem;
 }
 
-/* Custom scrollbar for sidebar */
-.sidebar::-webkit-scrollbar {
-  width: 6px;
+/* Playlists Section */
+.playlists-section {
+  border-bottom: 1px solid var(--glass-border);
+  padding-bottom: 10px;
+  margin-bottom: 5px;
 }
 
-.sidebar::-webkit-scrollbar-track {
-  background: #1a1a1a;
+.sidebar-section.expanded {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
-.sidebar::-webkit-scrollbar-thumb {
-  background: #444;
-  border-radius: 3px;
+.sidebar-section.collapsed .sidebar-list {
+  display: none;
 }
 
-.sidebar::-webkit-scrollbar-thumb:hover {
-  background: #555;
+/* Scrollbar */
+.sidebar-list::-webkit-scrollbar {
+  width: 4px;
+}
+
+.sidebar-list::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+}
+
+.sidebar-list::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.2);
 }
