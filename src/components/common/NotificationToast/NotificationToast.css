@@ -1,7 +1,9 @@
 .notification-toast {
   position: fixed;
-  bottom: 180px; /* Above the playback bar (which is ~150px tall) */
-  right: 1.5rem; /* Avoid overlapping the scrollbar */
+  bottom: 180px;
+  /* Above the playback bar (which is ~150px tall) */
+  right: 1.5rem;
+  /* Avoid overlapping the scrollbar */
   z-index: 10001;
   min-width: 280px;
   max-width: 400px;
@@ -48,6 +50,14 @@
   font-size: 1.25rem;
   flex-shrink: 0;
   font-weight: bold;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.toast-icon-img {
+  width: 20px;
+  height: 20px;
 }
 
 .notification-toast.success .toast-icon {
@@ -92,7 +102,3 @@
 .toast-close:hover {
   color: white;
 }
-
-
-
-

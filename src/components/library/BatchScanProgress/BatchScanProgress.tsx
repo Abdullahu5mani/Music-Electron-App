@@ -1,5 +1,11 @@
 import './BatchScanProgress.css'
 import type { ApiPhase } from '../../../hooks/useSongScanner'
+import musicNoteIcon from '../../../assets/icons/music-note.svg'
+import discIcon from '../../../assets/icons/disc.svg'
+import folderIcon from '../../../assets/icons/folder.svg'
+import downloadIcon from '../../../assets/icons/download.svg'
+import refreshIcon from '../../../assets/icons/refresh.svg'
+import closeIcon from '../../../assets/icons/close.svg'
 
 interface BatchScanProgressProps {
   isVisible: boolean
@@ -12,10 +18,10 @@ interface BatchScanProgressProps {
 
 // Map phases to display text and icons
 const phaseDisplay: Record<Exclude<ApiPhase, null>, { icon: string; text: string }> = {
-  acoustid: { icon: '🎵', text: 'AcoustID lookup...' },
-  musicbrainz: { icon: '📀', text: 'MusicBrainz lookup...' },
-  coverart: { icon: '🖼️', text: 'Cover Art lookup...' },
-  writing: { icon: '💾', text: 'Writing metadata...' }
+  acoustid: { icon: musicNoteIcon, text: 'AcoustID lookup...' },
+  musicbrainz: { icon: discIcon, text: 'MusicBrainz lookup...' },
+  coverart: { icon: folderIcon, text: 'Cover Art lookup...' },
+  writing: { icon: downloadIcon, text: 'Writing metadata...' }
 }
 
 /**
@@ -38,14 +44,14 @@ export function BatchScanProgress({
   return (
     <div className="batch-scan-progress">
       <div className="batch-scan-header">
-        <span className="batch-scan-title">🔍 Scanning Library</span>
+        <span className="batch-scan-title"><img src={refreshIcon} alt="" className="batch-scan-title-icon" /> Scanning Library</span>
         {onCancel && (
           <button
             className="batch-scan-cancel"
             onClick={onCancel}
             title="Cancel scan"
           >
-            ✕
+            <img src={closeIcon} alt="Cancel" className="batch-scan-cancel-icon" />
           </button>
         )}
       </div>
@@ -63,7 +69,7 @@ export function BatchScanProgress({
 
       {phase && (
         <div className="batch-scan-phase">
-          {phase.icon} {phase.text}
+          <img src={phase.icon} alt="" className="batch-scan-phase-icon" /> {phase.text}
         </div>
       )}
 

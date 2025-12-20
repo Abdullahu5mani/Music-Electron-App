@@ -92,14 +92,24 @@ export function updateWindowVisibility(_visible: boolean) {
  */
 export function createTray(): Tray {
   // Get the path to the tray icon
-  // In dev: src/assets/trayIcon.svg
-  // In production: dist/assets/trayIcon.svg (if copied) or use public folder
+  // Windows requires .ico format for system tray icons
+  // In dev: src/assets/logo.ico
+  // In production: the icon is bundled with the app
   const iconPath = VITE_DEV_SERVER_URL
-    ? path.join(process.env.APP_ROOT, 'src', 'assets', 'trayIcon.svg')
-    : path.join(process.env.APP_ROOT, 'dist', 'assets', 'trayIcon.svg')
+    ? path.join(process.env.APP_ROOT, 'src', 'assets', 'logo.ico')
+    : path.join(process.env.APP_ROOT, 'src', 'assets', 'logo.ico')
+
+  console.log('[Tray] Icon path:', iconPath)
 
   // Create native image from the icon file
   const icon = nativeImage.createFromPath(iconPath)
+
+  // Check if icon loaded successfully
+  if (icon.isEmpty()) {
+    console.error('[Tray] Failed to load icon from:', iconPath)
+  } else {
+    console.log('[Tray] Icon loaded successfully, size:', icon.getSize())
+  }
 
   // Create tray with the icon
   tray = new Tray(icon)

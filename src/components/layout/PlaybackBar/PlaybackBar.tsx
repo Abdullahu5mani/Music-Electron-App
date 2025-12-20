@@ -7,7 +7,7 @@ import pauseButtonIcon from '../../../assets/icons/pause.svg'
 import backwardButtonIcon from '../../../assets/icons/skip-back.svg'
 import forwardButtonIcon from '../../../assets/icons/skip-forward.svg'
 import volumeControlIcon from '../../../assets/icons/volume.svg'
-import trayIcon from '../../../assets/trayIcon.svg'
+import logoIcon from '../../../assets/logo.png'
 import shuffleIcon from '../../../assets/icons/shuffle.svg'
 import repeatIcon from '../../../assets/icons/repeat.svg'
 import repeatOneIcon from '../../../assets/icons/repeat-one.svg'
@@ -140,7 +140,7 @@ export function PlaybackBar({
               />
             ) : (
               <img
-                src={trayIcon}
+                src={logoIcon}
                 alt="No song playing"
                 className="playback-art-placeholder"
               />

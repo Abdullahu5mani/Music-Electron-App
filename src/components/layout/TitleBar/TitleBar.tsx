@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import trayIcon from '../../../assets/trayIcon.svg'
+import logoIcon from '../../../assets/logo.svg'
 import minimizeIcon from '../../../assets/icons/minimize.svg'
 import maximizeIcon from '../../../assets/icons/maximize.svg'
 import restoreIcon from '../../../assets/icons/restore.svg'
@@ -41,7 +41,7 @@ export function TitleBar() {
     <div className="title-bar">
       <div className="title-bar-content">
         <div className="title-bar-title">
-          <img src={trayIcon} alt="Music Sync App" className="title-icon" />
+          <img src={logoIcon} alt="Music Sync App" className="title-icon" />
           <span>Music Sync App</span>
         </div>
         <div className="title-bar-controls">

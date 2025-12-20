@@ -1,4 +1,8 @@
 import { useEffect, useState } from 'react'
+import successIcon from '../../../assets/icons/success.svg'
+import errorIcon from '../../../assets/icons/error.svg'
+import warningIcon from '../../../assets/icons/warning.svg'
+import infoIcon from '../../../assets/icons/info.svg'
 import './NotificationToast.css'
 
 interface NotificationToastProps {
@@ -9,12 +13,12 @@ interface NotificationToastProps {
   onClose?: () => void
 }
 
-export function NotificationToast({ 
-  message, 
-  type, 
+export function NotificationToast({
+  message,
+  type,
   isVisible,
   duration = 3000,
-  onClose 
+  onClose
 }: NotificationToastProps) {
   const [shouldRender, setShouldRender] = useState(isVisible)
 
@@ -42,14 +46,14 @@ export function NotificationToast({
     <div className={`notification-toast ${type} ${isVisible ? 'visible' : ''}`}>
       <div className="toast-content">
         <span className="toast-icon">
-          {type === 'success' && '✓'}
-          {type === 'error' && '✕'}
-          {type === 'warning' && '⚠'}
-          {type === 'info' && 'ℹ'}
+          {type === 'success' && <img src={successIcon} alt="" className="toast-icon-img" />}
+          {type === 'error' && <img src={errorIcon} alt="" className="toast-icon-img" />}
+          {type === 'warning' && <img src={warningIcon} alt="" className="toast-icon-img" />}
+          {type === 'info' && <img src={infoIcon} alt="" className="toast-icon-img" />}
         </span>
         <span className="toast-message">{message}</span>
         {onClose && (
-          <button 
+          <button
             className="toast-close"
             onClick={onClose}
             aria-label="Close"

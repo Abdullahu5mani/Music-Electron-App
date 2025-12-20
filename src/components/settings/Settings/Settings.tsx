@@ -1,6 +1,9 @@
 import { useState, useEffect } from 'react'
 import type { AppSettings, BinaryStatus, PlatformInfo, WhisperModel } from '../../../types/electron.d'
 import type { VisualizerMode } from '../../common/AudioVisualizer/AudioVisualizer'
+import successIcon from '../../../assets/icons/success.svg'
+import refreshIcon from '../../../assets/icons/refresh.svg'
+import infoIcon from '../../../assets/icons/info.svg'
 import './Settings.css'
 
 interface SettingsProps {
@@ -312,11 +315,11 @@ export function Settings({
                     disabled={isBatchScanning || unscannedCount === 0}
                   >
                     {isBatchScanning ? (
-                      <>⏳ Scanning...</>
+                      <>Scanning...</>
                     ) : unscannedCount === 0 ? (
-                      <>✅ All songs scanned</>
+                      <><img src={successIcon} alt="" className="settings-btn-icon" /> All songs scanned</>
                     ) : (
-                      <>🔍 Scan {unscannedCount} Unscanned Songs</>
+                      <>Scan {unscannedCount} Unscanned Songs</>
                     )}
                   </button>
                 </div>
@@ -386,7 +389,7 @@ export function Settings({
                     disabled={loadingBinaries}
                     title="Refresh binary statuses"
                   >
-                    ↻
+                    <img src={refreshIcon} alt="Refresh" className="binary-refresh-icon" />
                   </button>
                 </div>
                 {loadingBinaries ? (
@@ -466,8 +469,8 @@ export function Settings({
                 </select>
                 {selectedWhisperModel && (
                   <div className="whisper-model-info">
-                    <span className="model-size">📦 {selectedWhisperModel.size}</span>
-                    <span className="model-desc">💡 {selectedWhisperModel.description}</span>
+                    <span className="model-size"><img src={infoIcon} alt="" className="whisper-info-icon" /> {selectedWhisperModel.size}</span>
+                    <span className="model-desc">{selectedWhisperModel.description}</span>
                   </div>
                 )}
               </div>

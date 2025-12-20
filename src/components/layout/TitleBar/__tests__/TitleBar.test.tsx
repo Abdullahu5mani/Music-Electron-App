@@ -106,10 +106,10 @@ describe('TitleBar', () => {
 
     describe('window state', () => {
         it('should show maximize icon when not maximized', () => {
-            render(<TitleBar />)
+            const { container } = render(<TitleBar />)
 
-            const maximizeButton = screen.getByRole('button', { name: /maximize/i })
-            expect(maximizeButton).toHaveTextContent('□')
+            const maximizeButton = container.querySelector('.maximize-button')
+            expect(maximizeButton?.querySelector('.control-icon')).toBeInTheDocument()
         })
 
         it('should update button when window state changes to maximized', () => {
@@ -130,7 +130,7 @@ describe('TitleBar', () => {
             })
 
             const restoreButton = screen.getByRole('button', { name: /restore/i })
-            expect(restoreButton).toHaveTextContent('❐')
+            expect(restoreButton.querySelector('.control-icon')).toBeInTheDocument()
         })
 
         it('should call onWindowStateChanged on mount', () => {

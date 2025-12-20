@@ -91,7 +91,15 @@ export function ContextMenu({ x, y, items, onClose }: ContextMenuProps) {
                         }}
                         disabled={item.disabled}
                     >
-                        {item.icon && <span className="context-menu-icon">{item.icon}</span>}
+                        {item.icon && (
+                            <span className="context-menu-icon">
+                                {item.icon.includes('.svg') ? (
+                                    <img src={item.icon} alt="" className="context-menu-icon-img" />
+                                ) : (
+                                    item.icon
+                                )}
+                            </span>
+                        )}
                         <span className="context-menu-label">{item.label}</span>
                     </button>
                 )

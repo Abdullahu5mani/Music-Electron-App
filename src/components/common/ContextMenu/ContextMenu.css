@@ -59,6 +59,19 @@
     width: 20px;
     text-align: center;
     flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.context-menu-icon-img {
+    width: 16px;
+    height: 16px;
+    filter: brightness(0) invert(0.8);
+}
+
+.context-menu-item:hover:not(.disabled) .context-menu-icon-img {
+    filter: brightness(0) invert(1);
 }
 
 .context-menu-label {

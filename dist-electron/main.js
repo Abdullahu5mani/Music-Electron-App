@@ -1,2 +1,2 @@
 import "electron";
-import "./main-DXDzaGSN.js";
+import "./main-De_mm32i.js";

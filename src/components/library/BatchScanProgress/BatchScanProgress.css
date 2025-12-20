@@ -108,3 +108,30 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
+
+.batch-scan-title-icon {
+  width: 14px;
+  height: 14px;
+  filter: brightness(0) invert(0.9);
+  vertical-align: middle;
+  margin-right: 6px;
+}
+
+.batch-scan-cancel-icon {
+  width: 12px;
+  height: 12px;
+  filter: brightness(0) invert(0.5);
+  transition: filter 0.2s;
+}
+
+.batch-scan-cancel:hover .batch-scan-cancel-icon {
+  filter: invert(60%) sepia(75%) saturate(1500%) hue-rotate(315deg);
+}
+
+.batch-scan-phase-icon {
+  width: 14px;
+  height: 14px;
+  filter: invert(60%) sepia(95%) saturate(1500%) hue-rotate(165deg);
+  vertical-align: middle;
+  margin-right: 4px;
+}

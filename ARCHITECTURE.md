@@ -556,30 +556,38 @@ Music-Electron-App/
 │   │   ├── common/              # Reusable UI primitives
 │   │   │   ├── AudioVisualizer/     # Canvas-based spectrum visualizer
 │   │   │   │   ├── AudioVisualizer.tsx
-│   │   │   │   └── AudioVisualizer.css
+│   │   │   │   ├── AudioVisualizer.css
+│   │   │   │   └── __tests__/       # Component tests
 │   │   │   ├── ContextMenu/         # Right-click context menu
 │   │   │   │   ├── ContextMenu.tsx
-│   │   │   │   └── ContextMenu.css
+│   │   │   │   ├── ContextMenu.css
+│   │   │   │   └── __tests__/       # Component tests
 │   │   │   └── NotificationToast/   # Toast notifications
 │   │   │       ├── NotificationToast.tsx
-│   │   │       └── NotificationToast.css
+│   │   │       ├── NotificationToast.css
+│   │   │       └── __tests__/       # Component tests
 │   │   │
 │   │   ├── layout/              # App structure components
 │   │   │   ├── TitleBar/            # Custom window title bar
 │   │   │   │   ├── TitleBar.tsx
-│   │   │   │   └── TitleBar.css
+│   │   │   │   ├── TitleBar.css
+│   │   │   │   └── __tests__/       # Component tests
 │   │   │   ├── Sidebar/             # Library navigation + playlists
 │   │   │   │   ├── Sidebar.tsx
-│   │   │   │   └── Sidebar.css
+│   │   │   │   ├── Sidebar.css
+│   │   │   │   └── __tests__/       # Component tests
 │   │   │   └── PlaybackBar/         # Audio controls and progress
-│   │   │       └── PlaybackBar.tsx
+│   │   │       ├── PlaybackBar.tsx
+│   │   │       └── __tests__/       # Component tests
 │   │   │
 │   │   ├── library/             # Music library feature
 │   │   │   ├── SongList/            # Song list with context menu
-│   │   │   │   └── SongList.tsx
+│   │   │   │   ├── SongList.tsx
+│   │   │   │   └── __tests__/       # Component tests
 │   │   │   └── BatchScanProgress/   # Batch scan progress UI
 │   │   │       ├── BatchScanProgress.tsx
-│   │   │       └── BatchScanProgress.css
+│   │   │       ├── BatchScanProgress.css
+│   │   │       └── __tests__/       # Component tests
 │   │   │
 │   │   ├── playlists/           # Playlist feature (flat structure)
 │   │   │   ├── PlaylistList.tsx     # Sidebar playlist section
@@ -678,11 +686,22 @@ The `src/` folder follows a **feature-based organization** pattern rather than a
 │  │                                                                       │
 │  ├── assets/           # Static assets (SVGs for UI)                   │
 │  │   ├── trayIcon.svg         # System tray icon                       │
-│  │   ├── playButton.svg       # Play control                           │
-│  │   ├── pauseButton.svg      # Pause control                          │
-│  │   ├── forwardButton.svg    # Skip forward                           │
-│  │   ├── backwardButton.svg   # Skip backward                          │
-│  │   └── volumeControl.svg    # Volume slider icon                     │
+│  │   ├── playButton.svg       # Play button (playback bar)             │
+│  │   ├── pauseButton.svg      # Pause button (playback bar)            │
+│  │   ├── forwardButton.svg    # Skip forward (playback bar)            │
+│  │   ├── backwardButton.svg   # Skip backward (playback bar)           │
+│  │   ├── volumeControl.svg    # Volume slider icon                     │
+│  │   └── icons/               # 39 custom SVG icons organized by use   │
+│  │       ├── index.ts         # Re-exports all icons                   │
+│  │       ├── Playback: play, pause, skip-back, skip-forward, shuffle   │
+│  │       │            repeat, repeat-one, volume, volume-low, volume-mute│
+│  │       ├── Navigation: music-note, chevron-down, user, disc, folder  │
+│  │       ├── Window: minimize, maximize, restore, close                │
+│  │       ├── Settings: settings, download, refresh                     │
+│  │       ├── Lyrics: microphone, speaker, robot, check, warning        │
+│  │       ├── Notifications: success, error, info                       │
+│  │       ├── Context Menu: play-circle, playlist-add, edit, trash      │
+│  │       └── Utility: clock, plus, app-logo, info-circle               │
 │  │                                                                       │
 │  ├── components/       # React UI Components (feature-based)           │
 │  │   │                                                                   │
@@ -1379,8 +1398,8 @@ A slide-in panel that displays lyrics generation progress and results.
 **Features:**
 
 - **Smooth animation**: Slides in from right (0.35s ease)
-- **Progress display**: Visual stages with checkmarks
-- **Lyrics display**: Scrollable text area
+- **Progress display**: Visual stages with SVG icons (speaker, robot, check)
+- **Lyrics display**: Scrollable text area with OverlayScrollbars
 - **Disclaimer**: "AI-generated lyrics may not be 100% accurate"
 
 **Component Location:** `src/components/lyrics/LyricsPanel/`
@@ -1455,8 +1474,8 @@ The orchestrator that combines all hooks and components.
 
 | Component | Purpose |
 |-----------|---------|
-| **`TitleBar.tsx`** | Custom draggable title bar for frameless window; listens for window state changes to toggle maximize/restore icon |
-| **`Sidebar.tsx`** | Collapsible artist/album/playlist sections with search functionality; shows album art thumbnails; integrates PlaylistList component; filters library with active selection |
+| **`TitleBar.tsx`** | Custom draggable title bar for frameless window; uses SVG icons (minimize, maximize, restore, close); listens for window state changes to toggle icon |
+| **`Sidebar.tsx`** | Collapsible artist/album/playlist sections with search; uses SVG icons (music-note, chevron-down, user, disc); integrates PlaylistList component; filters by selection |
 | **`SongList.tsx`** | Displays songs with metadata, album art; handles play selection; includes context menu with "Identify Song" and "Add to Playlist" options; auto-scrolls to current track; uses toast notifications for scan feedback |
 | **`PlaybackBar.tsx`** | Shows current track info/art with dynamic glow border, playback controls, seek bar with audio visualizer, and volume slider |
 | **`AudioVisualizer.tsx`** | Canvas-based audio spectrum analyzer with "bars" (mirrored spectrum) and "wave" (liquid waveform) modes; extracts audio data from Howler.js |
@@ -1465,7 +1484,7 @@ The orchestrator that combines all hooks and components.
 | **`NotificationToast.tsx`** | General-purpose toasts (success/warning/info/error) with auto-dismiss |
 | **`Settings.tsx`** | Modal for folder selection, binary status, platform info, batch scan, and visualizer mode toggle |
 | **`ContextMenu.tsx`** | Generic right-click context menu with icons, dividers, and nested items; used for song actions including playlist additions |
-| **`PlaylistList.tsx`** | Sidebar component displaying user playlists with create/delete buttons; shows playlist names and song counts; supports active selection state |
+| **`PlaylistList.tsx`** | Sidebar component displaying user playlists; uses SVG icons (folder, trash, plus); shows playlist names and song counts; supports active selection state |
 | **`CreatePlaylistModal.tsx`** | Modal dialog for creating new playlists with name input, optional description, and animated backdrop; glassmorphism design |
 
 ### Custom Hooks
@@ -2071,7 +2090,7 @@ interface PlaylistCreateResponse {
 │   │  Renders:                                                            │   │
 │   │  • Header: "Playlists" + "+" create button                          │   │
 │   │  • List of playlist items with:                                     │   │
-│   │    - Icon (🎵 or cover art thumbnail)                               │   │
+│   │    - Icon (folder SVG or cover art thumbnail)                       │   │
 │   │    - Playlist name                                                   │   │
 │   │    - Song count ("5 songs")                                         │   │
 │   │    - Delete button (on hover)                                       │   │
@@ -3821,14 +3840,145 @@ Redesigned sliders with gradient fills, glow effects, and smooth animations.
 
 ---
 
+## Custom SVG Icon System
+
+The application uses a comprehensive set of **38 custom SVG icons** instead of emojis for a consistent, scalable, and professional appearance across all platforms.
+
+### Icon Architecture
+
+**Location:** `src/assets/icons/`
+
+**Export Pattern:** All icons are exported from `src/assets/icons/index.ts` for centralized imports:
+
+```typescript
+import { playIcon, pauseIcon, settingsIcon } from '../assets/icons'
+```
+
+**Design Principles:**
+- All icons use `stroke="currentColor"` for easy CSS theming
+- Consistent 24x24 viewBox for uniform sizing
+- Minimal file size (200-400 bytes each)
+- No external dependencies
+
+### Icon Categories
+
+#### Playback Controls (10 icons)
+| Icon | Export Name | Usage |
+|------|-------------|-------|
+| ▶️ Play | `playIcon` | Play button |
+| ⏸️ Pause | `pauseIcon` | Pause button |
+| ⏮️ Skip Back | `skipBackIcon` | Previous track |
+| ⏭️ Skip Forward | `skipForwardIcon` | Next track |
+| 🔀 Shuffle | `shuffleIcon` | Shuffle toggle |
+| 🔁 Repeat | `repeatIcon` | Repeat all mode |
+| 🔂 Repeat One | `repeatOneIcon` | Repeat one mode |
+| 🔊 Volume | `volumeIcon` | Volume high |
+| 🔉 Volume Low | `volumeLowIcon` | Volume low |
+| 🔇 Volume Mute | `volumeMuteIcon` | Muted state |
+
+#### Window Controls (4 icons)
+| Icon | Export Name | Usage |
+|------|-------------|-------|
+| ➖ Minimize | `minimizeIcon` | Window minimize |
+| 🗖 Maximize | `maximizeIcon` | Window maximize |
+| 🗗 Restore | `restoreIcon` | Window restore |
+| ✕ Close | `closeIcon` | Window close |
+
+#### Navigation & Sidebar (6 icons)
+| Icon | Export Name | Usage |
+|------|-------------|-------|
+| 🎵 Music Note | `musicNoteIcon` | "All Songs" in sidebar |
+| ⌄ Chevron Down | `chevronDownIcon` | Collapsible sections |
+| 👤 User | `userIcon` | Artist items |
+| 💿 Disc | `discIcon` | Album items |
+| 📁 Folder | `folderIcon` | Music folder selection |
+| ➕ Plus | `plusIcon` | Create new playlist |
+
+#### Settings & Actions (3 icons)
+| Icon | Export Name | Usage |
+|------|-------------|-------|
+| ⚙️ Settings | `settingsIcon` | Settings button |
+| ⬇️ Download | `downloadIcon` | Download actions |
+| 🔄 Refresh | `refreshIcon` | Refresh/sync actions |
+
+#### Lyrics Panel (5 icons)
+| Icon | Export Name | Usage |
+|------|-------------|-------|
+| 🎤 Microphone | `microphoneIcon` | Vocal isolation stage |
+| 🔈 Speaker | `speakerIcon` | Audio processing |
+| 🤖 Robot | `robotIcon` | AI transcription stage |
+| ✓ Check | `checkIcon` | Completed status |
+| ⚠️ Warning | `warningIcon` | Warning/error status |
+
+#### Notifications (3 icons)
+| Icon | Export Name | Usage |
+|------|-------------|-------|
+| ✅ Success | `successIcon` | Success notifications |
+| ❌ Error | `errorIcon` | Error notifications |
+| ℹ️ Info | `infoIcon` | Info notifications |
+
+#### Context Menu (5 icons)
+| Icon | Export Name | Usage |
+|------|-------------|-------|
+| ▶️ Play Circle | `playCircleIcon` | "Play" menu item |
+| ➕ Playlist Add | `playlistAddIcon` | "Add to Playlist" menu item |
+| ✏️ Edit | `editIcon` | Edit/rename actions |
+| 🗑️ Trash | `trashIcon` | Delete actions |
+| ℹ️ Info Circle | `infoCircleIcon` | Song info/details |
+
+#### Utility (2 icons)
+| Icon | Export Name | Usage |
+|------|-------------|-------|
+| 🎵 App Logo | `appLogoIcon` | Application branding |
+| 🕐 Clock | `clockIcon` | Duration/time display |
+
+### Usage in Components
+
+```tsx
+// Example: Using icons in a component
+import { playIcon, pauseIcon } from '../../assets/icons'
+
+function PlayButton({ isPlaying, onClick }) {
+  return (
+    <button onClick={onClick} className="play-button">
+      <img 
+        src={isPlaying ? pauseIcon : playIcon} 
+        alt={isPlaying ? 'Pause' : 'Play'}
+        className="icon"
+      />
+    </button>
+  )
+}
+```
+
+### CSS Theming
+
+Icons inherit color from their parent via `currentColor`:
+
+```css
+.icon {
+  width: 20px;
+  height: 20px;
+  filter: brightness(0) invert(1); /* White icons on dark theme */
+  opacity: 0.9;
+  transition: opacity 0.2s;
+}
+
+.icon:hover {
+  opacity: 1;
+}
+```
+
+---
+
 ## Known Limitations & Future Work
 
 - **Library UX:** Search bar added; no multi-select for bulk actions yet.
 - **Downloads:** No download queue/history; single-link flow with fixed delay.
 - **Cover art:** Downloaded art cleaned immediately after embedding; backup cleanup at 30 days.
 - **File System Watching:** ✅ Implemented! Auto-detects new/changed/removed files (Linux recursive watching may be limited).
-- **Keyboard shortcuts:** Basic playback controls implemented; no mute toggle or seek shortcuts yet.
-- **Testing/observability:** No automated tests; limited structured logging.
+- **Keyboard shortcuts:** ✅ Full playback controls implemented (Space, arrows, M for mute, S for shuffle, R for repeat).
+- **Testing:** ✅ Unit and integration tests implemented using Vitest. See `TESTING.md` for details.
 - **ARM64 Support:** fpcalc not available for Windows ARM64 or Linux ARM64 platforms.
 
 ### Proposed Improvements (v2.0)
@@ -4063,6 +4213,7 @@ interface DownloadOptions {
 interface AppSettings {
   musicFolderPath: string | null
   downloadFolderPath: string | null
+  scanSubfolders: boolean        // Whether to scan subdirectories (default: true)
 }
 ```
 
@@ -5279,6 +5430,19 @@ This file defines the `ElectronAPI` interface and all supporting types for commu
 interface AppSettings {
   musicFolderPath: string | null   // Path to music library
   downloadFolderPath: string | null // Path for YouTube downloads
+  scanSubfolders: boolean          // Scan subdirectories recursively (default: true)
+}
+```
+
+**`WhisperModel`** - AI model configuration for lyrics transcription:
+```typescript
+interface WhisperModel {
+  id: string          // Model identifier (e.g., "tiny", "base", "small")
+  name: string        // Display name
+  filename: string    // Model file name (e.g., "ggml-tiny.bin")
+  size: string        // Human-readable size (e.g., "75 MB")
+  sizeBytes: number   // Size in bytes
+  description: string // Model description
 }
 ```
 

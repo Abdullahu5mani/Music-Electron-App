@@ -6,6 +6,14 @@ import { generateFingerprint } from '../../../services/fingerprint'
 import { lookupFingerprint } from '../../../services/acoustid'
 import { lookupRecording, getCoverArtUrls, pickBestRelease } from '../../../services/musicbrainz'
 import { ContextMenu, type ContextMenuItem } from '../../common/ContextMenu/ContextMenu'
+import musicNoteIcon from '../../../assets/icons/music-note.svg'
+import playIcon from '../../../assets/icons/play.svg'
+import pauseIcon from '../../../assets/icons/pause.svg'
+import refreshIcon from '../../../assets/icons/refresh.svg'
+import editIcon from '../../../assets/icons/edit.svg'
+import playlistAddIcon from '../../../assets/icons/playlist-add.svg'
+import plusIcon from '../../../assets/icons/plus.svg'
+import microphoneIcon from '../../../assets/icons/microphone.svg'
 
 interface SongListProps {
   songs: MusicFile[]
@@ -491,7 +499,7 @@ export function SongList({
                       </div>
                     ) : (
                       <div className="album-art-container no-art">
-                        <span>🎵</span>
+                        <img src={musicNoteIcon} alt="" className="album-art-placeholder" />
                       </div>
                     )}
                     <div className="song-info">
@@ -527,14 +535,14 @@ export function SongList({
               // This song is playing - show pause/play toggle
               items.push({
                 label: isPlaying ? 'Pause' : 'Resume',
-                icon: isPlaying ? '⏸️' : '▶️',
+                icon: isPlaying ? pauseIcon : playIcon,
                 onClick: onPlayPause
               })
             } else {
               // Different song - show play option
               items.push({
                 label: 'Play',
-                icon: '▶️',
+                icon: playIcon,
                 onClick: () => onSongClick(currentSong, contextMenu.songIndex)
               })
             }
@@ -551,7 +559,7 @@ export function SongList({
             if (!isScanningSong && currentStatus !== 'scanned-tagged') {
               items.push({
                 label: currentStatus === 'scanned-no-match' ? 'Retry Identification' : 'Identify Song',
-                icon: '🔍',
+                icon: refreshIcon,
                 onClick: () => {
                   // Mock event for handleGenerateFingerprint
                   handleGenerateFingerprint({ stopPropagation: () => { } } as any, currentSong)
@@ -564,7 +572,7 @@ export function SongList({
               playlists.slice(0, 5).forEach(playlist => {
                 items.push({
                   label: `Add to "${playlist.name}"`,
-                  icon: '📝',
+                  icon: editIcon,
                   onClick: () => onAddToPlaylist(playlist.id, [currentSong.path])
                 })
               })
@@ -572,7 +580,7 @@ export function SongList({
               if (playlists.length > 5) {
                 items.push({
                   label: `... and ${playlists.length - 5} more playlists`,
-                  icon: '📋',
+                  icon: playlistAddIcon,
                   onClick: () => { },
                   disabled: true
                 })
@@ -583,7 +591,7 @@ export function SongList({
             if (onCreatePlaylistWithSongs) {
               items.push({
                 label: 'Create playlist with song',
-                icon: '➕',
+                icon: plusIcon,
                 onClick: () => onCreatePlaylistWithSongs([currentSong.path])
               })
             }
@@ -592,7 +600,7 @@ export function SongList({
             if (onProcessLyrics) {
               items.push({
                 label: 'Lyrics',
-                icon: '🎤',
+                icon: microphoneIcon,
                 onClick: () => {
                   const songName = currentSong.metadata?.title || currentSong.name
                   onProcessLyrics(currentSong.path, songName)

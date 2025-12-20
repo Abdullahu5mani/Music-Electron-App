@@ -78,6 +78,17 @@
     color: #fff;
 }
 
+.close-button-icon {
+    width: 14px;
+    height: 14px;
+    filter: brightness(0) invert(0.5);
+    transition: filter 0.15s;
+}
+
+.close-button:hover .close-button-icon {
+    filter: brightness(0) invert(1);
+}
+
 /* Body */
 .modal-body {
     padding: 24px;

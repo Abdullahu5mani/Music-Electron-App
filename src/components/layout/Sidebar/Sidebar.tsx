@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react'
 import { PlaylistList } from '../../playlists'
 import type { Playlist } from '../../../types/electron.d'
+import logoIcon from '../../../assets/logo.svg'
 import musicNoteIcon from '../../../assets/icons/music-note.svg'
 import chevronDownIcon from '../../../assets/icons/chevron-down.svg'
 import userIcon from '../../../assets/icons/user.svg'
@@ -99,7 +100,7 @@ export function Sidebar({
       {/* App Logo and Name */}
       <div className="sidebar-header">
         <div className="sidebar-logo">
-          <img src={musicNoteIcon} alt="" className="logo-icon" />
+          <img src={logoIcon} alt="" className="logo-icon" />
           <span className="logo-text">Music Sync</span>
         </div>
       </div>

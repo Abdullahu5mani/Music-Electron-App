@@ -9,8 +9,11 @@
   },
   "files": [
     "dist",
-    "dist-electron"
+    "dist-electron",
+    "src/assets/**/*"
   ],
+  // Icon configuration
+  "icon": "src/assets/logo.ico",
   // GitHub Releases configuration
   "publish": {
     "provider": "github",

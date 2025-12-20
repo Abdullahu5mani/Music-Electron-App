@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import closeIcon from '../../assets/icons/close.svg'
 import './CreatePlaylistModal.css'
 
 interface CreatePlaylistModalProps {
@@ -71,7 +72,7 @@ export function CreatePlaylistModal({ isOpen, onClose, onCreate }: CreatePlaylis
                 <div className="modal-header">
                     <h2>Create New Playlist</h2>
                     <button className="close-button" onClick={onClose} aria-label="Close">
-                        ✕
+                        <img src={closeIcon} alt="" className="close-button-icon" />
                     </button>
                 </div>
 

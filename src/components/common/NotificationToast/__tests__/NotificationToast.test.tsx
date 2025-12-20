@@ -46,7 +46,7 @@ describe('NotificationToast', () => {
         })
 
         it('should render correct icon for success type', () => {
-            render(
+            const { container } = render(
                 <NotificationToast
                     message="Success!"
                     type="success"
@@ -54,11 +54,11 @@ describe('NotificationToast', () => {
                 />
             )
 
-            expect(screen.getByText('✓')).toBeInTheDocument()
+            expect(container.querySelector('.toast-icon-img')).toBeInTheDocument()
         })
 
         it('should render correct icon for error type', () => {
-            render(
+            const { container } = render(
                 <NotificationToast
                     message="Error!"
                     type="error"
@@ -66,11 +66,11 @@ describe('NotificationToast', () => {
                 />
             )
 
-            expect(screen.getByText('✕')).toBeInTheDocument()
+            expect(container.querySelector('.toast-icon-img')).toBeInTheDocument()
         })
 
         it('should render correct icon for warning type', () => {
-            render(
+            const { container } = render(
                 <NotificationToast
                     message="Warning!"
                     type="warning"
@@ -78,11 +78,11 @@ describe('NotificationToast', () => {
                 />
             )
 
-            expect(screen.getByText('⚠')).toBeInTheDocument()
+            expect(container.querySelector('.toast-icon-img')).toBeInTheDocument()
         })
 
         it('should render correct icon for info type', () => {
-            render(
+            const { container } = render(
                 <NotificationToast
                     message="Info!"
                     type="info"
@@ -90,7 +90,7 @@ describe('NotificationToast', () => {
                 />
             )
 
-            expect(screen.getByText('ℹ')).toBeInTheDocument()
+            expect(container.querySelector('.toast-icon-img')).toBeInTheDocument()
         })
 
         it('should apply the correct CSS class for the type', () => {

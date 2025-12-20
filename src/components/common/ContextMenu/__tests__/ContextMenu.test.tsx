@@ -11,9 +11,9 @@ describe('ContextMenu', () => {
     const mockOnClose = vi.fn()
 
     const defaultItems: ContextMenuItem[] = [
-        { label: 'Play', icon: '▶', onClick: vi.fn() },
-        { label: 'Add to Playlist', icon: '📋', onClick: vi.fn() },
-        { label: 'Delete', icon: '🗑', onClick: vi.fn(), disabled: true },
+        { label: 'Play', icon: '/assets/icons/play.svg', onClick: vi.fn() },
+        { label: 'Add to Playlist', icon: '/assets/icons/playlist-add.svg', onClick: vi.fn() },
+        { label: 'Delete', icon: '/assets/icons/trash.svg', onClick: vi.fn(), disabled: true },
         { divider: true, label: '', onClick: vi.fn() },
         { label: 'Properties', onClick: vi.fn() },
     ]
@@ -54,8 +54,9 @@ describe('ContextMenu', () => {
                 />
             )
 
-            expect(screen.getByText('▶')).toBeInTheDocument()
-            expect(screen.getByText('📋')).toBeInTheDocument()
+            // Icons should be rendered as img elements
+            const icons = document.querySelectorAll('.context-menu-icon-img')
+            expect(icons.length).toBeGreaterThan(0)
         })
 
         it('should render dividers', () => {

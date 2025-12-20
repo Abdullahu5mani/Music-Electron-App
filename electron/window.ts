@@ -30,6 +30,11 @@ let win: BrowserWindow | null = null
 export function createWindow(): BrowserWindow {
   const isMac = process.platform === 'darwin'
 
+  // Debug: Log the icon path
+  const iconPath = path.join(process.env.APP_ROOT, 'src/assets/logo.ico')
+  console.log('[Window] Icon path:', iconPath)
+  console.log('[Window] APP_ROOT:', process.env.APP_ROOT)
+
   win = new BrowserWindow({
     width: 820,           // Default width
     height: 720,          // Default height
@@ -41,7 +46,7 @@ export function createWindow(): BrowserWindow {
     // Position traffic lights on macOS (moved down to avoid overlap with custom titlebar)
     trafficLightPosition: isMac ? { x: 15, y: 12 } : undefined,
     backgroundColor: '#0d1117', // Unified dark theme
-    icon: path.join(process.env.APP_ROOT, 'src/assets/trayIcon.svg'),
+    icon: iconPath,
     webPreferences: {
       preload: path.join(__dirname, 'preload.mjs'),
       webSecurity: false, // Allow loading local files via file:// protocol for audio playback
