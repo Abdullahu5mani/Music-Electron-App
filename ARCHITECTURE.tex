@@ -32,7 +32,7 @@
 \usepackage{fontawesome5}
 \usepackage{tikz}
 \usepackage{pifont}
-\usetikzlibrary{shapes.geometric, arrows, positioning, calc}
+\usetikzlibrary{shapes.geometric, arrows, arrows.meta, positioning, calc, fit, backgrounds}
 
 %------------------------------------------------------------------------------
 % COLORS
@@ -242,6 +242,245 @@ Think of this app as having two separate programs running at the same time:
 
 These two worlds \textbf{cannot directly talk to each other} for security. They communicate through a ``bridge'' called the \techterm{Preload Script}.
 
+\begin{figure}[ht!]
+    \centering
+    \begin{tikzpicture}[
+        node distance=2cm,
+        process/.style={rectangle, rounded corners, draw=sectioncolor, fill=accentcolor!10, thick, minimum width=4cm, minimum height=1.5cm, align=center},
+        bridge/.style={ellipse, draw=warningcolor!80, fill=warningcolor!10, thick, minimum width=3cm, minimum height=1cm, align=center},
+        arrow/.style={thick, <->, >=stealth, sectioncolor}
+    ]
+        % Nodes
+        \node (main) [process] {\textbf{Main Process} \\ \small (Node.js, File System, OS)};
+        \node (bridge) [bridge, right=of main] {\textbf{IPC Bridge} \\ \small (Preload Script)};
+        \node (renderer) [process, right=of bridge] {\textbf{Renderer Process} \\ \small (React UI, Web Audio API)};
+
+        % Paths
+        \draw [arrow] (main) -- (bridge);
+        \draw [arrow] (bridge) -- (renderer);
+
+        % Labels
+        \node [above=0.2cm of main] {\color{sectioncolor}\textbf{Backend}};
+        \node [above=0.2cm of renderer] {\color{sectioncolor}\textbf{Frontend}};
+        \node [below=0.5cm of bridge, text width=6cm, align=center] {\small \textit{Communication via window.electronAPI}};
+    \end{tikzpicture}
+    \caption{Process Isolation and IPC Communication Architecture}
+    \label{fig:process_isolation}
+\end{figure}
+
+\section{How IPC Actually Works (Step-by-Step Example)}
+
+This section explains \textbf{exactly} how the backend exposes a function to the frontend. We'll use a real example from our app: scanning a music folder.
+
+\subsection{The Three-Layer Pattern}
+
+Every IPC operation involves \textbf{three files}:
+
+\begin{enumerate}
+    \item \textbf{Backend Handler} (\filepath{electron/ipc/modules/*.ts}) --- The actual function that does the work
+    \item \textbf{Preload Bridge} (\filepath{electron/preload.ts}) --- Safely exposes the function to frontend
+    \item \textbf{Frontend Call} (\filepath{src/*.tsx}) --- React code that calls the exposed function
+\end{enumerate}
+
+\begin{figure}[ht!]
+\centering
+\begin{tikzpicture}[
+    node distance=1.5cm,
+    file/.style={draw, rounded corners, minimum width=4cm, minimum height=1.2cm, align=center, font=\small},
+    code/.style={draw, rectangle, fill=gray!5, minimum width=5cm, align=left, font=\ttfamily\tiny},
+    arrow/.style={->, thick, >=stealth, accentcolor}
+]
+    % Three layers
+    \node[file, fill=blue!10] (backend) {\textbf{1. Backend Handler}\\musicHandlers.ts};
+    \node[file, fill=yellow!15, right=3cm of backend] (preload) {\textbf{2. Preload Bridge}\\preload.ts};
+    \node[file, fill=green!10, right=3cm of preload] (frontend) {\textbf{3. Frontend Call}\\App.tsx};
+    
+    % Arrows with method names
+    \draw[arrow] (backend) -- node[above, font=\scriptsize] {ipcMain.handle()} (preload);
+    \draw[arrow] (preload) -- node[above, font=\scriptsize] {contextBridge} (frontend);
+    
+    % Labels
+    \node[below=0.3cm of backend, font=\scriptsize\itshape] {Node.js World};
+    \node[below=0.3cm of frontend, font=\scriptsize\itshape] {Browser World};
+\end{tikzpicture}
+\caption{The Three-Layer IPC Pattern}
+\label{fig:ipc_three_layer}
+\end{figure}
+
+\subsection{Step 1: Backend Handler (The Actual Work)}
+
+This is where the real work happens. The handler has \textbf{full access} to Node.js APIs (file system, databases, network).
+
+\begin{lstlisting}[language=TypeScript, title=electron/ipc/modules/musicHandlers.ts]
+import { ipcMain } from 'electron';
+import { scanMusicFiles } from '../../musicScanner';
+
+export function registerMusicHandlers() {
+  // Register a handler for 'scan-music-folder' channel
+  ipcMain.handle('scan-music-folder', async (event, folderPath: string) => {
+    try {
+      // This code runs in Node.js - full file system access!
+      const files = await scanMusicFiles(folderPath);
+      return { success: true, data: files };
+    } catch (error) {
+      return { success: false, error: error.message };
+    }
+  });
+}
+\end{lstlisting}
+
+\begin{infobox}
+\textbf{Key Method:} \inlinecode{ipcMain.handle(channelName, handlerFunction)}
+
+This registers a handler that the frontend can call. The handler receives any arguments passed from the frontend and can return a value (or Promise).
+\end{infobox}
+
+\subsection{Step 2: Preload Bridge (The Secure Gateway)}
+
+The preload script runs in a \textbf{special context} --- it can access both Node.js and browser APIs, but it's isolated from both. Its job is to create a \textbf{safe, limited API} for the frontend.
+
+\begin{lstlisting}[language=TypeScript, title=electron/preload.ts]
+import { contextBridge, ipcRenderer } from 'electron';
+
+// Expose a safe API to the renderer (frontend)
+contextBridge.exposeInMainWorld('electronAPI', {
+  // This is what the frontend will call
+  scanMusicFolder: (folderPath: string) => {
+    // Forward to the backend handler via IPC
+    return ipcRenderer.invoke('scan-music-folder', folderPath);
+  },
+  
+  // More functions can be added here...
+  selectMusicFolder: () => ipcRenderer.invoke('select-music-folder'),
+  getSettings: () => ipcRenderer.invoke('get-settings'),
+});
+\end{lstlisting}
+
+\begin{warningbox}
+\textbf{Key Method:} \inlinecode{contextBridge.exposeInMainWorld(apiName, apiObject)}
+
+This is \textbf{THE} security mechanism. It creates a \inlinecode{window.electronAPI} object that the frontend can access, but with \textbf{only the functions you explicitly define}. The frontend cannot access \inlinecode{require()}, \inlinecode{fs}, or any other Node.js APIs.
+\end{warningbox}
+
+\subsection{Step 3: Frontend Call (React Component)}
+
+The frontend calls the exposed API just like any async function. It has \textbf{no idea} that Node.js is involved --- it just sees a Promise-based API.
+
+\begin{lstlisting}[language=TypeScript, title=src/App.tsx]
+// The frontend calls window.electronAPI
+const handleScanFolder = async () => {
+  const folderPath = '/Users/music/library';
+  
+  // This looks like a normal async call!
+  const result = await window.electronAPI.scanMusicFolder(folderPath);
+  
+  if (result.success) {
+    setMusicFiles(result.data);  // Update React state
+    console.log(`Found ${result.data.length} songs!`);
+  } else {
+    showError(result.error);
+  }
+};
+\end{lstlisting}
+
+\subsection{Complete Data Flow Visualization}
+
+\begin{figure}[ht!]
+\centering
+\begin{tikzpicture}[
+    node distance=0.8cm,
+    ipcstep/.style={draw, rounded corners, minimum width=6cm, minimum height=0.7cm, align=center, font=\small},
+    code/.style={draw, rectangle, fill=gray!5, minimum width=6cm, align=left, font=\ttfamily\scriptsize},
+    arrow/.style={->, thick, >=stealth}
+]
+    % Frontend
+    \node[ipcstep, fill=green!10] (call) {1. Frontend calls \texttt{window.electronAPI.scanMusicFolder(path)}};
+    
+    % Preload
+    \node[ipcstep, fill=yellow!15, below=of call] (preload) {2. Preload: \texttt{ipcRenderer.invoke('scan-music-folder', path)}};
+    
+    % IPC Channel
+    \node[ipcstep, fill=gray!20, below=of preload] (ipc) {3. IPC Channel: Message sent to Main Process};
+    
+    % Backend
+    \node[ipcstep, fill=blue!10, below=of ipc] (handler) {4. Backend: \texttt{ipcMain.handle()} receives message};
+    
+    % Work
+    \node[ipcstep, fill=blue!20, below=of handler] (work) {5. Backend executes: \texttt{scanMusicFiles(path)}};
+    
+    % Response
+    \node[ipcstep, fill=blue!10, below=of work] (response) {6. Backend returns: \texttt{\{success: true, data: [...]\}}};
+    
+    % Back up
+    \node[ipcstep, fill=yellow!15, below=of response] (preload2) {7. Preload: Promise resolves with result};
+    
+    % Frontend receives
+    \node[ipcstep, fill=green!10, below=of preload2] (receive) {8. Frontend: \texttt{await} completes, React state updates};
+    
+    % Arrows
+    \draw[arrow] (call) -- (preload);
+    \draw[arrow] (preload) -- (ipc);
+    \draw[arrow] (ipc) -- (handler);
+    \draw[arrow] (handler) -- (work);
+    \draw[arrow] (work) -- (response);
+    \draw[arrow, dashed] (response) -- (preload2);
+    \draw[arrow, dashed] (preload2) -- (receive);
+    
+    % Labels
+    \node[left=0.5cm of call, font=\scriptsize\bfseries, text=successcolor] {RENDERER};
+    \node[left=0.5cm of handler, font=\scriptsize\bfseries, text=accentcolor] {MAIN};
+\end{tikzpicture}
+\caption{Complete IPC Round-Trip: Request and Response Flow}
+\label{fig:ipc_roundtrip}
+\end{figure}
+
+\subsection{The Two IPC Methods}
+
+Electron provides two ways to communicate:
+
+\begin{table}[h!]
+\centering
+\begin{tabular}{@{}p{3cm}p{4cm}p{6cm}@{}}
+\toprule
+\textbf{Method} & \textbf{Pattern} & \textbf{Use Case} \\
+\midrule
+\inlinecode{invoke/handle} & Request $\rightarrow$ Response & When you need a result back (scanning, API calls) \\
+\inlinecode{send/on} & Fire \& Forget & When you don't need a response (window minimize) \\
+\bottomrule
+\end{tabular}
+\caption{IPC Communication Methods}
+\end{table}
+
+\textbf{Example of send/on (fire \& forget):}
+
+\begin{lstlisting}[language=TypeScript]
+// Preload (no return value)
+minimizeWindow: () => ipcRenderer.send('window-minimize'),
+
+// Backend (uses 'on' instead of 'handle')
+ipcMain.on('window-minimize', () => {
+  mainWindow.minimize();  // No return value
+});
+\end{lstlisting}
+
+\subsection{Why This Pattern Matters}
+
+\begin{itemize}
+    \item \textbf{Security}: The frontend \textbf{cannot} access \inlinecode{require()}, \inlinecode{fs}, or any Node.js API directly. It can only call the functions you explicitly expose.
+    \item \textbf{Type Safety}: TypeScript interfaces in \filepath{src/types/electron.d.ts} define exactly what \inlinecode{window.electronAPI} contains.
+    \item \textbf{Maintainability}: Each handler module (\filepath{musicHandlers.ts}, \filepath{playlistHandlers.ts}, etc.) is focused on one feature.
+    \item \textbf{Testability}: Backend handlers can be unit tested independently of the UI.
+\end{itemize}
+
+\begin{tipbox}
+\textbf{Summary}: To expose a backend function to the frontend:
+\begin{enumerate}
+    \item Create a handler with \inlinecode{ipcMain.handle('channel-name', fn)}
+    \item Expose it in preload with \inlinecode{contextBridge.exposeInMainWorld()}
+    \item Call it from React with \inlinecode{await window.electronAPI.yourFunction()}
+\end{enumerate}
+\end{tipbox}
+
 \section{File Map: What Does What?}
 
 \subsection{Electron Backend (Node.js)}
@@ -321,6 +560,102 @@ Located in \filepath{electron/ipc/modules/}:
     \end{itemize}
 \end{enumerate}
 
+\begin{figure}[ht!]
+    \centering
+    \begin{tikzpicture}[
+        node distance=1.2cm,
+        flowstep/.style={rectangle, rounded corners, draw=sectioncolor, fill=accentcolor!10, thick, minimum width=3.5cm, minimum height=0.8cm, align=center, font=\small},
+        arrow/.style={thick, ->, >=stealth, sectioncolor}
+    ]
+        % Flow steps
+        \node (click) [flowstep] {User clicks song};
+        \node (songlist) [flowstep, below=of click] {SongList.tsx};
+        \node (app) [flowstep, below=of songlist] {App.tsx};
+        \node (hook) [flowstep, below=of app] {useAudioPlayer};
+        \node (howler) [flowstep, below=of hook, fill=successcolor!15] {Howler.js};
+        \node (audio) [flowstep, below=of howler, fill=warningcolor!15] {Web Audio API};
+        
+        % Arrows
+        \draw [arrow] (click) -- node[right, font=\scriptsize] {onPlaySong()} (songlist);
+        \draw [arrow] (songlist) -- node[right, font=\scriptsize] {playSong()} (app);
+        \draw [arrow] (app) -- node[right, font=\scriptsize] {hook call} (hook);
+        \draw [arrow] (hook) -- node[right, font=\scriptsize] {new Howl()} (howler);
+        \draw [arrow] (howler) -- node[right, font=\scriptsize] {sound.play()} (audio);
+        
+        % UI updates branch
+        \node (state) [flowstep, right=3cm of hook] {State Update};
+        \node (rerender) [flowstep, below=of state] {React Re-render};
+        \node (ui) [flowstep, below=of rerender, fill=infocolor!15] {UI Updates};
+        
+        \draw [arrow] (hook) -- node[above, font=\scriptsize] {setIsPlaying(true)} (state);
+        \draw [arrow] (state) -- (rerender);
+        \draw [arrow] (rerender) -- (ui);
+    \end{tikzpicture}
+    \caption{Audio Playback Data Flow}
+    \label{fig:playback_flow}
+\end{figure}
+
+% Playback Ecosystem Diagram
+\begin{figure}[ht!]
+\centering
+\begin{tikzpicture}[
+    node distance=1.5cm,
+    component/.style={draw, rounded corners, minimum width=3cm, minimum height=1cm, align=center, fill=white},
+    arrow/.style={->, thick, >=stealth}
+]
+    % Main components
+    \node[component, fill=green!10] (react) {React Component\\(SongList / PlaybackBar)};
+    \node[component, fill=blue!10, right=3cm of react] (hook) {useAudioPlayer\\(React State)};
+    \node[component, fill=yellow!15, below=of hook] (howler) {Howler.js\\(Playback Engine)};
+    \node[component, fill=orange!15, below=of react] (media) {MediaSession\\(System Metadata)};
+    \node[component, fill=purple!10, left=2cm of media] (tray) {Main Process Tray\\(Global Controls)};
+    
+    % Arrows
+    \draw[arrow] (react) -- node[above, font=\scriptsize] {User Action} (hook);
+    \draw[arrow] (hook) -- node[right, font=\scriptsize] {Play/Pause} (howler);
+    \draw[arrow] (hook) -- node[above, font=\scriptsize] {Update} (media);
+    \draw[arrow, <->] (tray) -- node[below, font=\scriptsize] {IPC} (media);
+    
+    % Caption below
+    \node[below=2.5cm of howler, text width=10cm, align=center, font=\small\itshape] {Interplay between UI, State, Playback Engine, and OS Services};
+\end{tikzpicture}
+\caption{Playback Ecosystem: State Synchronization and OS Integration}
+\label{fig:playback_ecosystem}
+\end{figure}
+
+% MediaSession API Integration Diagram
+\begin{figure}[ht!]
+\centering
+\begin{tikzpicture}[
+    node distance=1.2cm,
+    box/.style={draw, rounded corners, minimum width=3.5cm, minimum height=0.9cm, align=center, fill=white},
+    arrow/.style={->, thick, >=stealth}
+]
+    % Left column - App side
+    \node[box, fill=blue!10] (howler) {Howler.js Playback};
+    \node[box, fill=green!10, below=of howler] (hook) {useAudioPlayer Hook};
+    \node[box, fill=yellow!15, below=of hook] (mediasession) {MediaSession API};
+    \node[box, fill=orange!15, below=of mediasession] (os) {OS Media Controls};
+    
+    % Right column - Details
+    \node[box, fill=gray!5, right=3cm of mediasession] (metadata) {Update Metadata\\Title, Artist, Album Art};
+    \node[box, fill=gray!5, below=of metadata] (handlers) {Action Handlers\\Play, Pause, Next, Prev};
+    
+    % Arrows
+    \draw[arrow] (howler) -- node[right, font=\scriptsize] {Audio state changes} (hook);
+    \draw[arrow] (hook) -- node[right, font=\scriptsize] {State management} (mediasession);
+    \draw[arrow] (mediasession) -- node[right, font=\scriptsize] {Browser integration} (os);
+    \draw[arrow] (mediasession) -- (metadata);
+    \draw[arrow] (mediasession) -- (handlers);
+    \draw[arrow, dashed] (os) to[bend left=60] node[left, font=\scriptsize] {User presses OS button} (hook);
+    
+    % Note
+    \node[below=0.5cm of os, text width=12cm, align=center, font=\small\itshape] {Integration: App metadata and controls appear in Windows taskbar, macOS control center, and Linux media widgets};
+\end{tikzpicture}
+\caption{MediaSession API Integration: OS-Level Media Controls Synchronization}
+\label{fig:mediasession}
+\end{figure}
+
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % CHAPTER 2: OVERVIEW
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -339,6 +674,177 @@ This is an \textbf{Electron + React + TypeScript} desktop music player applicati
     \item Create and manage playlists
     \item Generate AI-powered lyrics using Whisper transcription
 \end{itemize}
+
+% Overview diagrams grid
+\begin{figure}[ht!]
+\centering
+\begin{tikzpicture}[
+    box/.style={draw, rounded corners, minimum width=2.5cm, minimum height=0.7cm, align=center, font=\small}
+]
+    % Node.js vs Browser APIs
+    \node[box, fill=blue!10] at (0,0) (main) {Main Process};
+    \node[font=\scriptsize, below=0.1cm of main] {fs, path, net};
+    \node[box, fill=green!10] at (3.5,0) (renderer) {Renderer};
+    \node[font=\scriptsize, below=0.1cm of renderer] {DOM, Canvas, Audio};
+    \node[box, fill=yellow!15] at (1.75,-1.5) (bridge) {IPC Bridge};
+    \draw[->, thick] (main) -- (bridge);
+    \draw[->, thick] (renderer) -- (bridge);
+\end{tikzpicture}
+\caption{Node.js vs Browser APIs}
+\label{fig:nodejs_browser}
+\end{figure}
+
+\begin{figure}[ht!]
+\centering
+\begin{tikzpicture}[
+    box/.style={draw, rounded corners, minimum width=3cm, align=center, font=\scriptsize, fill=gray!5}
+]
+    \node[box] at (0,0) {AcoustID: \{``results'': [...]\}};
+    \node[box] at (0,-0.8) {MusicBrainz: \{``title'': ``...''\}};
+    \node[box] at (0,-1.6) {Cover Art: \{``images'': [...]\}};
+\end{tikzpicture}
+\caption{API Response Examples}
+\label{fig:api_responses}
+\end{figure}
+
+\begin{figure}[ht!]
+\centering
+\begin{tikzpicture}[
+    layer/.style={draw, rounded corners, minimum width=4cm, minimum height=0.6cm, align=center, font=\small}
+]
+    \node[layer, fill=green!10] at (0,0) {Unit Tests (Future)};
+    \node[layer, fill=yellow!15] at (0,-0.8) {Integration Tests};
+    \node[layer, fill=orange!15] at (0,-1.6) {E2E Tests};
+    \node[layer, fill=red!10] at (0,-2.4) {Manual Testing (Current)};
+\end{tikzpicture}
+\caption{Testing Strategy}
+\label{fig:testing_pyramid}
+\end{figure}
+
+\begin{figure}[ht!]
+\centering
+\begin{tikzpicture}[
+    box/.style={draw, rounded corners, minimum width=2cm, minimum height=0.6cm, align=center, font=\scriptsize},
+    arrow/.style={->, thick}
+]
+    \node[box, fill=blue!10] at (0,0) (branch) {Feature Branch};
+    \node[box, fill=gray!10] at (2.5,0) (commits) {Commits};
+    \node[box, fill=yellow!15] at (5,0) (push) {Push to GitHub};
+    \node[box, fill=orange!15] at (7.5,0) (pr) {Pull Request};
+    \node[box, fill=green!10] at (10,0) (merge) {Merge to main};
+    \draw[arrow] (branch) -- (commits);
+    \draw[arrow] (commits) -- (push);
+    \draw[arrow] (push) -- (pr);
+    \draw[arrow] (pr) -- (merge);
+\end{tikzpicture}
+\caption{Git Workflow}
+\label{fig:git_workflow}
+\end{figure}
+
+\begin{figure}[ht!]
+\centering
+\begin{tikzpicture}[
+    box/.style={draw, rounded corners, minimum width=3cm, minimum height=0.7cm, align=center, font=\small}
+]
+    \node[box, fill=red!10] at (0,0) {Dev: 'unsafe-inline'};
+    \node[box, fill=green!10] at (4,0) {Prod: Strict CSP};
+\end{tikzpicture}
+\caption{CSP Configuration}
+\label{fig:csp_config}
+\end{figure}
+
+\begin{figure}[ht!]
+\centering
+\begin{tikzpicture}[
+    box/.style={draw, rounded corners, minimum width=2.5cm, minimum height=0.6cm, align=center, font=\small},
+    arrow/.style={->, thick}
+]
+    \node[box, fill=blue!10] at (0,0) (env) {Environment Variables};
+    \node[box, fill=yellow!15] at (4,0) (build) {Build Injection};
+    \node[box, fill=red!10] at (8,0) (git) {Never in Git};
+    \draw[arrow] (env) -- (build);
+    \draw[arrow] (build) -- (git);
+\end{tikzpicture}
+\caption{API Key Management}
+\label{fig:api_keys}
+\end{figure}
+
+\begin{figure}[ht!]
+\centering
+\begin{tikzpicture}[
+    box/.style={draw, rounded corners, minimum width=2cm, minimum height=0.6cm, align=center, font=\small},
+    decision/.style={draw, diamond, aspect=2, fill=yellow!15, font=\small},
+    arrow/.style={->, thick}
+]
+    \node[box, fill=blue!10] at (0,0) (check) {Check Size};
+    \node[decision] at (3,0) (size) {$>$150KB?};
+    \node[box, fill=red!10] at (6,0.8) (discard) {Discard};
+    \node[box, fill=green!10] at (6,-0.8) (keep) {Keep};
+    \draw[arrow] (check) -- (size);
+    \draw[arrow] (size) -- node[above, font=\scriptsize] {Yes} (discard);
+    \draw[arrow] (size) -- node[below, font=\scriptsize] {No} (keep);
+\end{tikzpicture}
+\caption{Album Art Size Optimization}
+\label{fig:album_art_size}
+\end{figure}
+
+\begin{figure}[ht!]
+\centering
+\begin{tikzpicture}[
+    box/.style={draw, rounded corners, minimum width=2.5cm, minimum height=0.7cm, align=center, font=\small}
+]
+    \node[box, fill=red!10] at (0,0) {Before:\\667 IPC calls};
+    \node[box, fill=green!10] at (4,0) {After:\\67 IPC calls};
+    \node[font=\small\bfseries, fill=successcolor!20, draw, rounded corners] at (7.5,0) {90\% reduction};
+\end{tikzpicture}
+\caption{Batch IPC Optimization}
+\label{fig:batch_ipc}
+\end{figure}
+
+\begin{figure}[ht!]
+\centering
+\begin{tikzpicture}[
+    box/.style={draw, rounded corners, minimum width=3cm, align=center, font=\small, fill=gray!5}
+]
+    \node[box] at (0,0) {Windows ARM64: \cmark};
+    \node[box] at (0,-0.7) {macOS ARM64: \cmark};
+    \node[box] at (0,-1.4) {Linux ARM64: Untested};
+\end{tikzpicture}
+\caption{ARM64 Support Status}
+\label{fig:arm64_support}
+\end{figure}
+
+\begin{figure}[ht!]
+\centering
+\begin{tikzpicture}[
+    layer/.style={draw, rounded corners, minimum width=3cm, minimum height=0.6cm, align=center, font=\small}
+]
+    \node[layer, fill=green!10] at (0,0) {UI: React + TS};
+    \node[layer, fill=yellow!15] at (0,-0.7) {IPC: Bridge};
+    \node[layer, fill=blue!10] at (0,-1.4) {Main: Node.js};
+    \node[layer, fill=orange!15] at (0,-2.1) {Data: SQLite};
+    \node[layer, fill=purple!10] at (0,-2.8) {External: APIs};
+\end{tikzpicture}
+\caption{Technology Stack Layers}
+\label{fig:tech_layers}
+\end{figure}
+
+\begin{figure}[ht!]
+\centering
+\begin{tikzpicture}[
+    box/.style={draw, rounded corners, minimum width=2.5cm, minimum height=0.6cm, align=center, font=\small},
+    arrow/.style={->, thick}
+]
+    \node[box, fill=blue!10] at (0,0) (dev) {npm run dev};
+    \node[box, fill=yellow!15] at (3.5,0) (vite) {Vite Dev Server};
+    \node[box, fill=green!10] at (0,-1.2) (build) {npm run build};
+    \node[box, fill=orange!15] at (3.5,-1.2) (electron) {electron-builder};
+    \draw[arrow] (dev) -- (vite);
+    \draw[arrow] (build) -- (electron);
+\end{tikzpicture}
+\caption{Build Process Flow}
+\label{fig:build_process}
+\end{figure}
 
 \section{Tech Stack}
 
@@ -410,6 +916,109 @@ music-electron-app/
 +-- electron-builder.json5
 \end{lstlisting}
 
+% SQL Query Collection diagram
+\begin{figure}[ht!]
+\centering
+\begin{tikzpicture}[
+    box/.style={draw, rounded corners, minimum width=5cm, align=center, font=\scriptsize, fill=gray!5}
+]
+    \node[box] at (0,0) {Get Playlists: SELECT * FROM playlists};
+    \node[box] at (0,-0.7) {Add Song: INSERT INTO playlist\_songs};
+    \node[box] at (0,-1.4) {Cache: SELECT * FROM metadata\_cache};
+\end{tikzpicture}
+\caption{SQL Query Collection}
+\label{fig:sql_queries}
+\end{figure}
+
+% First-Time User Onboarding Flow
+\begin{figure}[ht!]
+\centering
+\begin{tikzpicture}[
+    node distance=1cm,
+    box/.style={draw, rounded corners, minimum width=3cm, minimum height=0.7cm, align=center, font=\small},
+    arrow/.style={->, thick, >=stealth}
+]
+    \node[box, fill=blue!10] (launch) {Launch App};
+    \node[box, fill=yellow!15, below=of launch] (first) {First time?};
+    \node[box, fill=orange!15, below=of first] (welcome) {Welcome Screen};
+    \node[box, fill=green!10, below=of welcome] (select) {Select Music Folder};
+    \node[box, fill=blue!10, below=of select] (scan) {Initial Scan};
+    \node[box, fill=successcolor!20, below=of scan] (ready) {Ready to Use};
+    
+    \draw[arrow] (launch) -- (first);
+    \draw[arrow] (first) -- (welcome);
+    \draw[arrow] (welcome) -- (select);
+    \draw[arrow] (select) -- (scan);
+    \draw[arrow] (scan) -- (ready);
+    
+    \node[right=2cm of scan, text width=3cm, font=\scriptsize, align=left] {Typical Time:\\667 files: 678ms};
+\end{tikzpicture}
+\caption{First-Time User Onboarding: Initial Setup and Library Scan Flow}
+\label{fig:onboarding}
+\end{figure}
+
+% Technology Stack Layered Architecture
+\begin{figure}[ht!]
+\centering
+\begin{tikzpicture}[
+    layer/.style={draw, rounded corners, minimum width=10cm, minimum height=0.8cm, align=center, font=\small}
+]
+    \node[layer, fill=green!10] at (0,0) {UI Layer --- React 18 + TypeScript};
+    \node[layer, fill=yellow!15] at (0,-1) {Runtime Layer --- Electron 39};
+    \node[layer, fill=blue!10] at (0,-2) {Media Layer --- Audio Processing};
+    \node[layer, fill=orange!15] at (0,-3) {Data Layer --- Storage \& APIs};
+    \node[layer, fill=purple!10] at (0,-4) {System Layer --- External Binaries};
+\end{tikzpicture}
+\caption{Technology Stack Layered Architecture}
+\label{fig:tech_stack_layers}
+\end{figure}
+
+% YouTube Search and Acquisition Flow
+\begin{figure}[ht!]
+\centering
+\begin{tikzpicture}[
+    node distance=1cm,
+    box/.style={draw, rounded corners, minimum width=2.5cm, minimum height=0.7cm, align=center, font=\small},
+    arrow/.style={->, thick, >=stealth}
+]
+    \node[box, fill=blue!10] (search) {Search Input};
+    \node[box, fill=yellow!15, right=of search] (yt) {YouTube Search};
+    \node[box, fill=orange!15, right=of yt] (result) {Result Selection};
+    \node[box, fill=green!10, right=of result] (download) {Download Queue};
+    \node[box, fill=successcolor!20, right=of download] (tag) {Tagging \& Import};
+    
+    \draw[arrow] (search) -- (yt);
+    \draw[arrow] (yt) -- (result);
+    \draw[arrow] (result) -- (download);
+    \draw[arrow] (download) -- (tag);
+\end{tikzpicture}
+\caption{YouTube Search and Acquisition Flow}
+\label{fig:youtube_search}
+\end{figure}
+
+% YouTube Download to Library Pipeline
+\begin{figure}[ht!]
+\centering
+\begin{tikzpicture}[
+    node distance=1.2cm,
+    box/.style={draw, rounded corners, minimum width=3cm, minimum height=0.8cm, align=center, font=\small},
+    arrow/.style={->, thick, >=stealth}
+]
+    \node[box, fill=red!10] (url) {YouTube URL};
+    \node[box, fill=blue!10, below=of url] (ytdlp) {yt-dlp Wrapper};
+    \node[box, fill=yellow!15, below=of ytdlp] (metadata) {Identify Metadata\\(MusicBrainz)};
+    \node[box, fill=orange!15, below=of metadata] (embed) {Embed ID3 Tags\\(taglib-wasm)};
+    \node[box, fill=green!10, below=of embed] (folder) {User Music Folder};
+    
+    \draw[arrow] (url) -- (ytdlp);
+    \draw[arrow] (ytdlp) -- (metadata);
+    \draw[arrow] (metadata) -- (embed);
+    \draw[arrow] (embed) -- (folder);
+\end{tikzpicture}
+\caption{YouTube Download to Library Pipeline}
+\label{fig:youtube_pipeline}
+\end{figure}
+
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % CHAPTER 3: ARCHITECTURE
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -468,6 +1077,41 @@ music-electron-app/
 
 Handlers are organized into \textbf{modular files} for better maintainability.
 
+\begin{figure}[ht!]
+\centering
+\begin{tikzpicture}[
+    node distance=2.5cm,
+    actor/.style={draw, rectangle, minimum width=2.5cm, minimum height=1cm, fill=white, rounded corners},
+    line/.style={draw, -latex, thick}
+]
+    % Vertical Lifelines
+    \node[actor, fill=green!10] (react) {React UI};
+    \node[actor, fill=yellow!20, right=of react] (preload) {Preload Bridge};
+    \node[actor, fill=blue!10, right=of preload] (main) {Main Process};
+    
+    \draw[thick, gray] (react.south) -- +(0,-5.5);
+    \draw[thick, gray] (preload.south) -- +(0,-5.5);
+    \draw[thick, gray] (main.south) -- +(0,-5.5);
+    
+    % Messages
+    \draw[line] ([yshift=-1cm]react.south) -- node[above, font=\scriptsize] {window.electronAPI.scanMusicFolder()} ([yshift=-1cm]preload.south);
+    \draw[line] ([yshift=-1.8cm]preload.south) -- node[above, font=\scriptsize] {ipcRenderer.invoke()} ([yshift=-1.8cm]main.south);
+    
+    \node[draw, fill=gray!5, font=\tiny, right=0.3cm of main, yshift=-3cm, align=left, dashed] (work) {
+        1. Open Dialog\\
+        2. Walk Folders\\
+        3. Parse Metadata\\
+        4. Update SQLite
+    };
+    \draw[dotted] ([yshift=-3cm]main.south) -- (work);
+    
+    \draw[line, dashed] ([yshift=-4.2cm]main.south) -- node[above, font=\scriptsize] {Result (File Array)} ([yshift=-4.2cm]preload.south);
+    \draw[line, dashed] ([yshift=-5.0cm]preload.south) -- node[above, font=\scriptsize] {Promise Resolve} ([yshift=-5.0cm]react.south);
+\end{tikzpicture}
+\caption{IPC Request/Response Sequence Diagram}
+\label{fig:ipc_sequence}
+\end{figure}
+
 \section{All IPC Endpoints}
 
 \begin{longtable}{@{}p{3cm}p{4.5cm}p{1.5cm}p{5.5cm}@{}}
@@ -519,11 +1163,238 @@ playlistHandlers & \inlinecode{playlist-create} & invoke & Create a new playlist
 \caption{All IPC Endpoints}
 \end{longtable}
 
+% Song Identification User Journey
+\begin{figure}[ht!]
+\centering
+\begin{tikzpicture}[
+    node distance=0.8cm,
+    box/.style={draw, rounded corners, minimum width=2.8cm, minimum height=0.6cm, align=center, font=\scriptsize},
+    arrow/.style={->, thick, >=stealth}
+]
+    \node[box, fill=blue!10] (select) {Select Song};
+    \node[box, fill=gray!10, below=of select] (rightclick) {Right-click};
+    \node[box, fill=yellow!15, below=of rightclick] (identify) {Click ''Identify''};
+    \node[box, fill=orange!15, below=of identify] (fingerprint) {Generate Fingerprint};
+    \node[box, fill=blue!10, below=of fingerprint] (acoustid) {Query AcoustID};
+    \node[box, fill=green!10, below=of acoustid] (musicbrainz) {Query MusicBrainz};
+    \node[box, fill=purple!10, below=of musicbrainz] (cover) {Download Cover Art};
+    \node[box, fill=successcolor!20, below=of cover] (write) {Write Tags};
+    \node[box, fill=green!20, below=of write] (success) {Success!};
+    
+    \draw[arrow] (select) -- (rightclick);
+    \draw[arrow] (rightclick) -- (identify);
+    \draw[arrow] (identify) -- (fingerprint);
+    \draw[arrow] (fingerprint) -- (acoustid);
+    \draw[arrow] (acoustid) -- (musicbrainz);
+    \draw[arrow] (musicbrainz) -- (cover);
+    \draw[arrow] (cover) -- (write);
+    \draw[arrow] (write) -- (success);
+    
+    \node[right=1.5cm of fingerprint, text width=3cm, font=\scriptsize, align=left] {Typical Time:\\Fingerprint: 1s\\API calls: 2-3s\\Total: 4-5s};
+\end{tikzpicture}
+\caption{Song Identification User Journey}
+\label{fig:song_id_journey}
+\end{figure}
+
+% YouTube Download User Flow
+\begin{figure}[ht!]
+\centering
+\begin{tikzpicture}[
+    node distance=0.7cm,
+    box/.style={draw, rounded corners, minimum width=2.5cm, minimum height=0.6cm, align=center, font=\scriptsize},
+    arrow/.style={->, thick, >=stealth}
+]
+    \node[box, fill=blue!10] (paste) {Paste URL};
+    \node[box, fill=yellow!15, right=of paste] (preview) {Show Preview};
+    \node[box, fill=orange!15, right=of preview] (quality) {Select Quality};
+    \node[box, fill=blue!10, right=of quality] (download) {Download};
+    \node[box, fill=green!10, below=1cm of download] (convert) {Convert to MP3};
+    \node[box, fill=purple!10, left=of convert] (embed) {Embed Metadata};
+    \node[box, fill=successcolor!20, left=of embed] (move) {Move to Library};
+    
+    \draw[arrow] (paste) -- (preview);
+    \draw[arrow] (preview) -- (quality);
+    \draw[arrow] (quality) -- (download);
+    \draw[arrow] (download) -- (convert);
+    \draw[arrow] (convert) -- (embed);
+    \draw[arrow] (embed) -- (move);
+\end{tikzpicture}
+\caption{YouTube Download User Flow}
+\label{fig:youtube_user_flow}
+\end{figure}
+
+% Settings Persistence Flow
+\begin{figure}[ht!]
+\centering
+\begin{tikzpicture}[
+    node distance=1cm,
+    box/.style={draw, rounded corners, minimum width=2.5cm, minimum height=0.6cm, align=center, font=\small},
+    storage/.style={draw, rounded corners, minimum width=1.8cm, minimum height=0.8cm, fill=yellow!10, font=\scriptsize, align=center},
+    arrow/.style={->, thick, >=stealth}
+]
+    \node[box, fill=blue!10] (startup) {App Startup};
+    \node[storage, right=2cm of startup] (json) {settings.json};
+    \node[box, fill=green!10, below=1.5cm of startup] (user) {User Changes Setting};
+    \node[box, fill=orange!15, right=of user] (serialize) {Serialize JSON};
+    
+    \draw[arrow] (startup) -- node[above, font=\scriptsize] {IPC: get-settings} (json);
+    \draw[arrow] (user) -- (serialize);
+    \draw[arrow] (serialize) -- node[above, font=\scriptsize] {Write} (json);
+    
+    \node[below=0.3cm of json, font=\scriptsize\itshape] {userData folder};
+\end{tikzpicture}
+\caption{Settings Persistence Flow}
+\label{fig:settings_flow}
+\end{figure}
+
+% Playlist Creation Flow
+\begin{figure}[ht!]
+\centering
+\begin{tikzpicture}[
+    node distance=0.7cm,
+    box/.style={draw, rounded corners, minimum width=2.5cm, minimum height=0.6cm, align=center, font=\scriptsize},
+    arrow/.style={->, thick, >=stealth}
+]
+    \node[box, fill=blue!10] (click) {Click ''New Playlist''};
+    \node[box, fill=yellow!15, below=of click] (modal) {Open Modal};
+    \node[box, fill=gray!10, below=of modal] (enter) {Enter Details};
+    \node[box, fill=orange!15, below=of enter] (create) {Create Playlist};
+    \node[box, fill=green!10, below=of create] (insert) {Insert to DB};
+    \node[box, fill=successcolor!20, below=of insert] (ready) {Playlist Ready};
+    
+    \draw[arrow] (click) -- (modal);
+    \draw[arrow] (modal) -- (enter);
+    \draw[arrow] (enter) -- (create);
+    \draw[arrow] (create) -- node[right, font=\scriptsize] {IPC to Main} (insert);
+    \draw[arrow] (insert) -- (ready);
+\end{tikzpicture}
+\caption{Playlist Creation Flow}
+\label{fig:playlist_creation}
+\end{figure}
+
+% Lyrics Generation Workflow
+\begin{figure}[ht!]
+\centering
+\begin{tikzpicture}[
+    node distance=0.7cm,
+    box/.style={draw, rounded corners, minimum width=2.5cm, minimum height=0.6cm, align=center, font=\scriptsize},
+    arrow/.style={->, thick, >=stealth}
+]
+    \node[box, fill=blue!10] (click) {Click ''Generate''};
+    \node[box, fill=yellow!15, below=of click] (check) {Check Binary};
+    \node[box, fill=gray!10, below=of check] (model) {Select Model};
+    \node[box, fill=orange!15, below=of model] (extract) {Extract Vocals};
+    \node[box, fill=purple!10, below=of extract] (transcribe) {Transcribe};
+    \node[box, fill=blue!10, below=of transcribe] (parse) {Parse Output};
+    \node[box, fill=green!10, below=of parse] (format) {Format Lyrics};
+    \node[box, fill=successcolor!20, below=of format] (display) {Display};
+    
+    \draw[arrow] (click) -- (check);
+    \draw[arrow] (check) -- (model);
+    \draw[arrow] (model) -- (extract);
+    \draw[arrow] (extract) -- node[right, font=\scriptsize] {FFmpeg} (transcribe);
+    \draw[arrow] (transcribe) -- node[right, font=\scriptsize] {Whisper.cpp} (parse);
+    \draw[arrow] (parse) -- (format);
+    \draw[arrow] (format) -- (display);
+    
+    \node[right=1.5cm of transcribe, text width=3cm, font=\scriptsize, align=left] {Processing Time:\\tiny: 30s\\small: 2-3min\\medium: 5-7min};
+\end{tikzpicture}
+\caption{Lyrics Generation Workflow}
+\label{fig:lyrics_workflow}
+\end{figure}
+
+% Album Art Processing Flow
+\begin{figure}[ht!]
+\centering
+\begin{tikzpicture}[
+    node distance=1cm,
+    box/.style={draw, rounded corners, minimum width=2.5cm, minimum height=0.6cm, align=center, font=\small},
+    decision/.style={draw, diamond, aspect=2, fill=yellow!15, font=\small},
+    arrow/.style={->, thick, >=stealth}
+]
+    \node[box, fill=blue!10] (file) {Audio File};
+    \node[box, fill=gray!10, below=of file] (parse) {Parse Metadata};
+    \node[decision, below=of parse] (has) {Has Art?};
+    \node[box, fill=green!10, below left=0.8cm and 1cm of has] (extract) {Extract Image};
+    \node[box, fill=orange!15, below right=0.8cm and 1cm of has] (download) {Download from CAA};
+    \node[box, fill=purple!10, below=2.5cm of has] (process) {Process Image};
+    \node[box, fill=successcolor!20, below=of process] (display) {Display in UI};
+    
+    \draw[arrow] (file) -- (parse);
+    \draw[arrow] (parse) -- (has);
+    \draw[arrow] (has) -- node[left, font=\scriptsize] {Yes} (extract);
+    \draw[arrow] (has) -- node[right, font=\scriptsize] {No} (download);
+    \draw[arrow] (extract) |- (process);
+    \draw[arrow] (download) |- (process);
+    \draw[arrow] (process) -- (display);
+    
+    \node[right=1.5cm of process, font=\scriptsize, text width=2.5cm, align=left] {150KB Limit:\\Prevents IPC blocking};
+\end{tikzpicture}
+\caption{Album Art Extraction and Embedding}
+\label{fig:album_art_flow}
+\end{figure}
+
+% IPC Channels Map
+\begin{figure}[ht!]
+\centering
+\begin{tikzpicture}[
+    node distance=0.3cm,
+    hub/.style={draw, circle, fill=yellow!20, minimum size=1.5cm, font=\small\bfseries},
+    module/.style={draw, rounded corners, fill=blue!10, minimum width=2cm, minimum height=0.5cm, font=\scriptsize, align=center}
+]
+    \node[hub] (bridge) {IPC\\Bridge};
+    
+    \node[module, above=1.5cm of bridge] (music) {Music\\scan, read, write};
+    \node[module, above right=1cm and 2cm of bridge] (youtube) {YouTube\\download, status};
+    \node[module, right=2.5cm of bridge] (apis) {APIs\\acoustid, mb, image};
+    \node[module, below right=1cm and 2cm of bridge] (fingerprint) {Fingerprint\\generate, check};
+    \node[module, below=1.5cm of bridge] (playlists) {Playlists\\CRUD operations};
+    \node[module, below left=1cm and 2cm of bridge] (cache) {Cache\\status, mark};
+    \node[module, left=2.5cm of bridge] (system) {System\\window, settings};
+    \node[module, above left=1cm and 2cm of bridge] (lyrics) {Lyrics\\generate, progress};
+    
+    \draw[thick] (bridge) -- (music);
+    \draw[thick] (bridge) -- (youtube);
+    \draw[thick] (bridge) -- (apis);
+    \draw[thick] (bridge) -- (fingerprint);
+    \draw[thick] (bridge) -- (playlists);
+    \draw[thick] (bridge) -- (cache);
+    \draw[thick] (bridge) -- (system);
+    \draw[thick] (bridge) -- (lyrics);
+\end{tikzpicture}
+\caption{IPC Channels Map: Modular Handler Organization}
+\label{fig:ipc_channels_map}
+\end{figure}
+
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % CHAPTER 5: EXTERNAL API INTEGRATION
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \chapter{External API Integration}
 \label{ch:api}
+
+\begin{figure}[ht!]
+\centering
+\begin{tikzpicture}[
+    node distance=1.5cm,
+    box/.style={draw, rounded corners, minimum width=3cm, minimum height=1cm, align=center, fill=white},
+    api/.style={draw, ellipse, fill=yellow!10, minimum width=2.5cm},
+    arrow/.style={->, thick, >=stealth}
+]
+    \node[box, fill=blue!10] (fp) {Generate Fingerprint\\(\techterm{fpcalc})};
+    \node[api, below=of fp] (acoustid) {AcoustID API};
+    \node[api, right=2.5cm of acoustid] (mb) {MusicBrainz API};
+    \node[api, below=of mb] (caa) {Cover Art Archive};
+    \node[box, left=2.5cm of caa, fill=green!10] (taglib) {Embed Tags\\(taglib-wasm)};
+
+    \draw[arrow] (fp) -- (acoustid);
+    \draw[arrow] (acoustid) -- node[above, font=\scriptsize] {MBID} (mb);
+    \draw[arrow] (mb) -- node[right, font=\scriptsize] {Release ID} (caa);
+    \draw[arrow] (caa) -- (taglib);
+    \draw[arrow] (mb) |- (taglib);
+\end{tikzpicture}
+\caption{Song Identification API Flow}
+\label{fig:api_flow}
+\end{figure}
 
 \section{Rate Limiting}
 
@@ -544,6 +1415,60 @@ API calls are rate-limited to respect external service limits.
 \caption{API Rate Limiting}
 \end{table}
 
+% Rate Limiting Timeline
+\begin{figure}[ht!]
+\centering
+\begin{tikzpicture}[scale=0.8]
+    % Timeline axis
+    \draw[thick, ->] (0,0) -- (12,0) node[right] {Time (ms)};
+    
+    % AcoustID calls
+    \foreach \x in {0, 2, 4, 6} {
+        \fill[blue!30] (\x,0.5) rectangle (\x+1.5,1);
+    }
+    \node[left] at (0,0.75) {AcoustID};
+    \node[font=\scriptsize] at (0.75,1.3) {500ms};
+    
+    % MusicBrainz calls
+    \foreach \x in {0, 2.5, 5} {
+        \fill[green!30] (\x,-0.5) rectangle (\x+2,-1);
+    }
+    \node[left] at (0,-0.75) {MusicBrainz};
+    \node[font=\scriptsize] at (1,-1.3) {1100ms};
+    
+    % Legend
+    \node[draw, fill=blue!30, minimum width=0.5cm, minimum height=0.3cm] at (9,1) {};
+    \node[right, font=\scriptsize] at (9.4,1) {AcoustID: 500ms};
+    \node[draw, fill=green!30, minimum width=0.5cm, minimum height=0.3cm] at (9,-0.5) {};
+    \node[right, font=\scriptsize] at (9.4,-0.5) {MusicBrainz: 1100ms};
+\end{tikzpicture}
+\caption{Rate Limiting Timeline: API Call Delays}
+\label{fig:rate_limit_timeline}
+\end{figure}
+
+% Circuit Breaker State Machine
+\begin{figure}[ht!]
+\centering
+\begin{tikzpicture}[
+    node distance=3cm,
+    state/.style={draw, ellipse, minimum width=2.5cm, minimum height=1.2cm, align=center, font=\small},
+    arrow/.style={->, thick, >=stealth}
+]
+    \node[state, fill=green!10] (closed) {CLOSED\\Normal Operation};
+    \node[state, fill=yellow!15, right=of closed] (halfopen) {HALF-OPEN\\Testing};
+    \node[state, fill=red!10, right=of halfopen] (open) {OPEN\\Circuit Broken};
+    
+    \draw[arrow] (closed) to[bend left=20] node[above, font=\scriptsize] {5+ failures} (open);
+    \draw[arrow] (open) to[bend left=20] node[below, font=\scriptsize] {30s timeout} (halfopen);
+    \draw[arrow] (halfopen) to[bend left=20] node[above, font=\scriptsize] {Success} (closed);
+    \draw[arrow] (halfopen) to[bend right=40] node[below, font=\scriptsize] {Failure} (open);
+    
+    \node[below=0.5cm of halfopen, font=\scriptsize\itshape, text width=8cm, align=center] {Protection: Prevents hammering external APIs during widespread failures};
+\end{tikzpicture}
+\caption{API Circuit Breaker State Machine}
+\label{fig:circuit_breaker}
+\end{figure}
+
 \section{Cover Art Fallback System}
 
 The Cover Art Archive often returns 404 for specific releases. The app tries multiple URLs in priority order:
@@ -554,6 +1479,44 @@ The Cover Art Archive often returns 404 for specific releases. The app tries mul
     \item \textbf{Original size} for each release (largest)
     \item \textbf{Release group} fallback (if all releases fail)
 \end{enumerate}
+
+% Cover Art Fallback Cascade
+\begin{figure}[ht!]
+\centering
+\begin{tikzpicture}[
+    node distance=0.8cm,
+    box/.style={draw, rounded corners, minimum width=4cm, minimum height=0.6cm, align=center, font=\small},
+    decision/.style={draw, diamond, aspect=2, fill=yellow!15, font=\small},
+    arrow/.style={->, thick, >=stealth}
+]
+    \node[box, fill=blue!10] (try1) {Try 1: 250px front cover};
+    \node[decision, below=of try1] (s1) {Success?};
+    \node[box, fill=blue!10, below=of s1] (try2) {Try 2: 500px front cover};
+    \node[decision, below=of try2] (s2) {Success?};
+    \node[box, fill=blue!10, below=of s2] (try3) {Try 3: Original size};
+    \node[decision, below=of try3] (s3) {Success?};
+    \node[box, fill=blue!10, below=of s3] (try4) {Try 4: Release Group};
+    \node[decision, below=of try4] (s4) {Success?};
+    \node[box, fill=red!10, below=of s4] (fail) {No Cover Art};
+    
+    \node[box, fill=green!10, right=3cm of s1] (use) {Use Image};
+    
+    \draw[arrow] (try1) -- (s1);
+    \draw[arrow] (s1) -- node[left, font=\scriptsize] {404} (try2);
+    \draw[arrow] (s1) -- node[above, font=\scriptsize] {Yes} (use);
+    \draw[arrow] (try2) -- (s2);
+    \draw[arrow] (s2) -- node[left, font=\scriptsize] {404} (try3);
+    \draw[arrow] (s2) -- node[above, font=\scriptsize] {Yes} (use);
+    \draw[arrow] (try3) -- (s3);
+    \draw[arrow] (s3) -- node[left, font=\scriptsize] {404} (try4);
+    \draw[arrow] (s3) -- node[above, font=\scriptsize] {Yes} (use);
+    \draw[arrow] (try4) -- (s4);
+    \draw[arrow] (s4) -- node[left, font=\scriptsize] {404} (fail);
+    \draw[arrow] (s4) -- node[above, font=\scriptsize] {Yes} (use);
+\end{tikzpicture}
+\caption{Cover Art Fallback Cascade}
+\label{fig:cover_fallback}
+\end{figure}
 
 \section{Fingerprint + Tag Flow}
 
@@ -580,6 +1543,34 @@ Fingerprinting runs in the \textbf{Main Process} using the \inlinecode{fpcalc} b
 \section{Process Isolation (contextBridge)}
 
 We strictly enforce \textbf{Context Isolation} to prevent the Renderer from directly accessing Node.js primitives.
+
+\begin{figure}[ht!]
+\centering
+\begin{tikzpicture}[
+    node distance=1.5cm,
+    context/.style={draw, thick, minimum width=4cm, minimum height=2.5cm, align=center, fill=white},
+    arrow/.style={thick, ->, >=stealth},
+    blocked/.style={thick, ->, >=stealth, red, dashed}
+]
+    % Renderer Context
+    \node[context, fill=red!5] (renderer) at (0,0) {\textbf{Renderer}\\(Isolated)\\[0.3em]\scriptsize No require()\\No fs, No process};
+    
+    % Preload Context
+    \node[context, fill=yellow!10, right=2.5cm of renderer] (preload) {\textbf{Preload}\\(Bridge)\\[0.3em]\scriptsize contextBridge\\exposeInMainWorld};
+    
+    % Main Context
+    \node[context, fill=green!10, right=2.5cm of preload] (main) {\textbf{Main Process}\\(Full Access)\\[0.3em]\scriptsize Node.js APIs\\File System};
+    
+    % Allowed connections
+    \draw[arrow, accentcolor] (renderer) -- node[above, font=\scriptsize] {IPC} (preload);
+    \draw[arrow, successcolor] (preload) -- node[above, font=\scriptsize] {Validated} (main);
+    
+    % Blocked connection
+    \draw[blocked] (renderer.south) -- ++(0,-0.8) -| node[below, font=\scriptsize, pos=0.25] {BLOCKED} (main.south);
+\end{tikzpicture}
+\caption{Context Isolation Security Model}
+\label{fig:context_isolation}
+\end{figure}
 
 \begin{itemize}
     \item \textbf{Renderer Context:}
@@ -628,6 +1619,41 @@ webPreferences: {
 \label{ch:multithreaded}
 
 The application uses two distinct worker pool systems to maximize CPU utilization.
+
+\begin{figure}[ht!]
+\centering
+\begin{tikzpicture}[
+    node distance=1cm,
+    box/.style={draw, minimum width=3cm, minimum height=0.7cm, align=center},
+    worker/.style={draw, circle, fill=blue!20, inner sep=2pt, font=\scriptsize},
+    arrow/.style={->, thick, >=stealth}
+]
+    \node[box, fill=gray!10] (walk) {File Discovery};
+    \node[box, fill=yellow!10, below=of walk] (queue) {Task Queue};
+    
+    % Workers
+    \node[worker, below left=0.8cm and 0.3cm of queue] (w1) {W1};
+    \node[worker, right=0.3cm of w1] (w2) {W2};
+    \node[worker, right=0.3cm of w2] (w3) {...};
+    \node[worker, right=0.3cm of w3] (wn) {W15};
+    
+    \node[box, fill=green!10, below=2cm of queue] (db) {SQLite Cache};
+    \node[box, fill=blue!10, right=3cm of queue] (ui) {React UI};
+
+    \draw[arrow] (walk) -- (queue);
+    \draw[arrow] (queue) -- (w1);
+    \draw[arrow] (queue) -- (w2);
+    \draw[arrow] (queue) -- (wn);
+    
+    \draw[arrow] (w1) -- (db);
+    \draw[arrow] (w2) -- (db);
+    \draw[arrow] (wn) -- (db);
+    
+    \draw[arrow, dashed] (db) -- node[above, font=\scriptsize] {Batch Updates} (ui);
+\end{tikzpicture}
+\caption{Parallel Metadata Scanning Architecture}
+\label{fig:worker_pool}
+\end{figure}
 
 \section{Worker Pool Systems}
 
