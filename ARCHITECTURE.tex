@@ -225,6 +225,17 @@ This guide is written for developers new to Electron. If you're experienced with
 
 \section{The Two Worlds of Electron}
 
+\begin{tipbox}
+\textbf{Analogy: A Theater Production}
+
+Think of Electron like a \textbf{theater production}:
+\begin{itemize}
+    \item \textbf{Backstage} (Backend/Main Process) --- Stagehands move props, control lights, and manage everything behind the curtain. The audience never sees them.
+    \item \textbf{The Stage} (Frontend/Renderer) --- Where actors perform. The audience only sees this.
+    \item \textbf{Intercom System} (IPC Bridge) --- How the director backstage tells actors when to enter.
+\end{itemize}
+\end{tipbox}
+
 Think of this app as having two separate programs running at the same time:
 
 \begin{table}[h!]
@@ -273,6 +284,18 @@ These two worlds \textbf{cannot directly talk to each other} for security. They 
 This section explains \textbf{exactly} how the backend exposes a function to the frontend. We'll use a real example from our app: scanning a music folder.
 
 \subsection{The Three-Layer Pattern}
+
+\begin{tipbox}
+\textbf{Analogy: A Drive-Through Window}
+
+IPC is like a \textbf{fast food drive-through}:
+\begin{itemize}
+    \item \textbf{Kitchen} (Backend Handler) --- Where the actual cooking happens. The customer never enters the kitchen.
+    \item \textbf{Window} (Preload Bridge) --- The small window where orders are passed. It controls what can go in and out.
+    \item \textbf{Customer in Car} (Frontend) --- Places an order through the window, receives food back. Never touches the stove.
+\end{itemize}
+The window is there for \textbf{safety} --- customers shouldn't wander into the kitchen!
+\end{tipbox}
 
 Every IPC operation involves \textbf{three files}:
 
@@ -479,6 +502,1140 @@ ipcMain.on('window-minimize', () => {
     \item Expose it in preload with \inlinecode{contextBridge.exposeInMainWorld()}
     \item Call it from React with \inlinecode{await window.electronAPI.yourFunction()}
 \end{enumerate}
+\end{tipbox}
+
+%------------------------------------------------------------------------------
+% OBJECT-ORIENTED PROGRAMMING SECTION
+%------------------------------------------------------------------------------
+\section{Object-Oriented Programming (OOP) Basics}
+
+\begin{infobox}
+\textbf{New to programming concepts?} This section explains the core ideas behind how modern code is organized. These concepts appear throughout this codebase and most professional software.
+\end{infobox}
+
+Object-Oriented Programming (OOP) is a way of organizing code around ``objects'' --- bundles of data and the functions that work with that data. Let's explore the key concepts with everyday analogies.
+
+\subsection{Encapsulation: Hiding the Messy Details}
+
+\begin{tipbox}
+\textbf{Analogy: A Car Dashboard}
+
+When you drive a car, you interact with a simple interface: steering wheel, gas pedal, brake. You don't need to understand the engine's internal combustion process --- that complexity is \textbf{hidden} from you.
+
+\textbf{Encapsulation} means bundling data with the methods that operate on it, and hiding internal details from the outside world.
+\end{tipbox}
+
+\begin{figure}[ht!]
+\centering
+\begin{tikzpicture}[
+    box/.style={draw, rounded corners, minimum width=4cm, minimum height=2.5cm, align=center},
+    hidden/.style={font=\scriptsize, gray},
+    public/.style={font=\small, black}
+]
+    % The object
+    \node[box, fill=blue!10] (obj) at (0, 0) {};
+    \node[above=0cm of obj, font=\bfseries] {AudioPlayer};
+    
+    % Hidden internals
+    \node[hidden] at (0, 0.6) {-- howlInstance (hidden)};
+    \node[hidden] at (0, 0.2) {-- audioContext (hidden)};
+    \node[hidden] at (0, -0.2) {-- internalState (hidden)};
+    
+    % Public interface
+    \node[public, green!60!black] at (0, -0.8) {+ play() \cmark};
+    \node[public, green!60!black] at (0, -1.2) {+ pause() \cmark};
+    
+    % Outside world
+    \node[draw, rounded corners, fill=yellow!10, right=2cm of obj] (user) {Your Code};
+    
+    \draw[->, thick] (user) -- node[above, font=\scriptsize] {Can call} (obj.east |- 0,-0.8);
+    \draw[->, thick, red, dashed] (user) -- node[below, font=\scriptsize, red] {Can't access} (obj.east |- 0,0.4);
+\end{tikzpicture}
+\caption{Encapsulation: Public Interface vs Hidden Internals}
+\label{fig:encapsulation}
+\end{figure}
+
+\textbf{In this codebase}: The \inlinecode{useAudioPlayer} hook exposes simple functions like \inlinecode{play()}, \inlinecode{pause()}, \inlinecode{next()}, but hides the complex Howler.js audio management internally.
+
+\subsection{Abstraction: Simplifying Complex Things}
+
+\begin{tipbox}
+\textbf{Analogy: A TV Remote}
+
+A remote control is an \textbf{abstraction} of the TV. Instead of understanding circuits and signals, you just press ``Volume Up.'' The remote \textbf{abstracts away} the complexity into simple buttons.
+
+\textbf{Abstraction} means representing complex systems with simplified interfaces.
+\end{tipbox}
+
+\begin{lstlisting}[language=TypeScript, title=Abstraction Example]
+// Complex reality: scanning involves fingerprinting, API calls, 
+// rate limiting, caching, tag writing...
+
+// Abstracted interface: one simple function
+await window.electronAPI.scanSongs(selectedSongs);
+
+// You don't need to know HOW it works internally
+\end{lstlisting}
+
+\textbf{In this codebase}: The \inlinecode{electronAPI} abstracts away all IPC complexity. React components just call simple functions without knowing about Electron's internal messaging.
+
+\subsection{Interfaces: Contracts for Code}
+
+\begin{tipbox}
+\textbf{Analogy: A Job Description}
+
+An interface is like a \textbf{job description}. It lists what abilities are required (``must be able to fly''), but doesn't specify HOW to do it. A bird and an airplane both satisfy the ``can fly'' requirement, but they implement it very differently.
+\end{tipbox}
+
+\begin{figure}[ht!]
+\centering
+\begin{tikzpicture}[
+    interface/.style={draw, rounded corners, minimum width=3.5cm, minimum height=1.5cm, align=center, fill=yellow!15},
+    impl/.style={draw, rounded corners, minimum width=3cm, minimum height=1.2cm, align=center},
+    arrow/.style={->, thick, >=stealth}
+]
+    % Interface
+    \node[interface] (iface) at (0, 2) {interface Playable\\play(): void\\pause(): void};
+    
+    % Implementations
+    \node[impl, fill=green!15] (music) at (-3, -0.5) {MusicPlayer\\implements Playable};
+    \node[impl, fill=blue!15] (video) at (0, -0.5) {VideoPlayer\\implements Playable};
+    \node[impl, fill=purple!15] (podcast) at (3, -0.5) {PodcastPlayer\\implements Playable};
+    
+    \draw[arrow] (iface) -- (music);
+    \draw[arrow] (iface) -- (video);
+    \draw[arrow] (iface) -- (podcast);
+    
+    \node[below=0.2cm of video, font=\scriptsize\itshape] {All must have play() and pause()};
+\end{tikzpicture}
+\caption{Interface: One Contract, Multiple Implementations}
+\label{fig:interface_oop}
+\end{figure}
+
+\begin{lstlisting}[language=TypeScript, title=Interface in TypeScript]
+// The contract
+interface MusicFile {
+  path: string;
+  title: string;
+  play(): void;
+}
+
+// Any object that has these properties/methods 
+// satisfies the MusicFile interface
+\end{lstlisting}
+
+\textbf{In this codebase}: The \inlinecode{MusicFile} interface ensures every song object has the same properties, making the code predictable and type-safe.
+
+\subsection{Inheritance: Building on What Exists}
+
+\begin{tipbox}
+\textbf{Analogy: Family Traits}
+
+Children inherit traits from their parents --- eye color, height, etc. They get the parent's features ``for free'' and can add their own unique traits.
+
+\textbf{Inheritance} lets you create new classes based on existing ones, reusing code without rewriting it.
+\end{tipbox}
+
+\begin{figure}[ht!]
+\centering
+\begin{tikzpicture}[
+    class/.style={draw, rounded corners, minimum width=3cm, minimum height=1.2cm, align=center},
+    arrow/.style={->, thick, >=stealth}
+]
+    % Parent
+    \node[class, fill=blue!15] (parent) at (0, 2) {MediaItem\\title, duration\\play()};
+    
+    % Children
+    \node[class, fill=green!15] (song) at (-2.5, 0) {Song\\+ artist\\+ album};
+    \node[class, fill=purple!15] (podcast) at (2.5, 0) {Podcast\\+ episode\\+ host};
+    
+    \draw[arrow] (parent) -- (song);
+    \draw[arrow] (parent) -- (podcast);
+    
+    \node[below=0.1cm of song, font=\scriptsize] {Inherits title, duration, play()};
+    \node[below=0.1cm of podcast, font=\scriptsize] {Inherits title, duration, play()};
+\end{tikzpicture}
+\caption{Inheritance: Children Extend Parents}
+\label{fig:inheritance}
+\end{figure}
+
+\begin{lstlisting}[language=TypeScript, title=Inheritance Example]
+class MediaItem {
+  title: string;
+  duration: number;
+  play() { /* base implementation */ }
+}
+
+class Song extends MediaItem {
+  artist: string;  // Song-specific
+  album: string;   // Song-specific
+  // Automatically has title, duration, play() from parent
+}
+\end{lstlisting}
+
+\subsection{Polymorphism: Same Action, Different Behaviors}
+
+\begin{tipbox}
+\textbf{Analogy: The ``Speak'' Command}
+
+If you tell a dog to ``speak,'' it barks. If you tell a cat to ``speak,'' it meows. Same command, different behavior based on who's receiving it.
+
+\textbf{Polymorphism} means the same method name can behave differently depending on the object.
+\end{tipbox}
+
+\begin{figure}[ht!]
+\centering
+\begin{tikzpicture}[
+    animal/.style={draw, rounded corners, minimum width=2.5cm, minimum height=1cm, align=center},
+    arrow/.style={->, thick, >=stealth}
+]
+    % Command
+    \node[draw, fill=yellow!20, rounded corners] (cmd) at (0, 2) {animal.speak()};
+    
+    % Animals
+    \node[animal, fill=orange!15] (dog) at (-3, 0) {Dog};
+    \node[animal, fill=gray!15] (cat) at (0, 0) {Cat};
+    \node[animal, fill=brown!15] (cow) at (3, 0) {Cow};
+    
+    \draw[arrow] (cmd) -- (dog);
+    \draw[arrow] (cmd) -- (cat);
+    \draw[arrow] (cmd) -- (cow);
+    
+    \node[below=0.2cm of dog] {``Woof!''};
+    \node[below=0.2cm of cat] {``Meow!''};
+    \node[below=0.2cm of cow] {``Moo!''};
+\end{tikzpicture}
+\caption{Polymorphism: Same Method, Different Behaviors}
+\label{fig:polymorphism}
+\end{figure}
+
+\textbf{In this codebase}: The notification system uses polymorphism --- calling \inlinecode{show()} on different notification types (success, error, warning) produces different colored toasts.
+
+\subsection{OOP Summary Table}
+
+\begin{table}[h!]
+\centering
+\begin{tabular}{@{}p{3cm}p{4cm}p{6.5cm}@{}}
+\toprule
+\textbf{Concept} & \textbf{Analogy} & \textbf{What It Does} \\
+\midrule
+Encapsulation & Car dashboard & Hides complexity, exposes simple controls \\
+Abstraction & TV remote & Simplifies complex systems into easy actions \\
+Interface & Job description & Defines requirements without implementation \\
+Inheritance & Family traits & Child classes get parent features for free \\
+Polymorphism & ``Speak'' command & Same method, different behaviors per object \\
+\bottomrule
+\end{tabular}
+\caption{OOP Concepts at a Glance}
+\end{table}
+
+\begin{tipbox}
+\textbf{Why OOP Matters}: These concepts make large codebases manageable. Instead of one giant file with thousands of lines, code is organized into logical pieces that are easier to understand, test, and modify independently.
+\end{tipbox}
+
+\subsection{Real OOP Examples in This App}
+
+Here are actual examples of OOP patterns used in this codebase:
+
+\subsubsection{Class with Encapsulation: ParallelMetadataScanner}
+
+The \filepath{parallelMetadataScanner.ts} file contains a class that demonstrates encapsulation perfectly:
+
+\begin{lstlisting}[language=TypeScript, title=electron/parallelMetadataScanner.ts (simplified)]
+export class ParallelMetadataScanner {
+    // PRIVATE: Hidden from outside code
+    private numWorkers: number
+    private queue: ScanJob[] = []
+    private completedCount: number = 0
+    private isScanning: boolean = false
+    
+    // PUBLIC: The only way to interact with this class
+    constructor(concurrency?: number) {
+        this.numWorkers = concurrency ?? Math.max(2, 16)
+    }
+    
+    setProgressCallback(callback: ProgressCallback): void {
+        this.onProgress = callback
+    }
+    
+    async scanDirectory(path: string): Promise<MusicFile[]> {
+        // Complex logic hidden here...
+    }
+}
+\end{lstlisting}
+
+\begin{itemize}
+    \item \textbf{Encapsulation}: The \inlinecode{private} keyword hides internal state (\inlinecode{queue}, \inlinecode{completedCount}, \inlinecode{isScanning}) from outside code
+    \item \textbf{Abstraction}: You just call \inlinecode{scanDirectory(path)} --- the complex parallel worker logic is hidden
+    \item You don't need to know that internally it creates multiple workers, manages a job queue, and tracks progress
+\end{itemize}
+
+\subsubsection{Class with Worker Pool Pattern: FingerprintWorkerPool}
+
+The \filepath{fingerprintWorkerPool.ts} demonstrates a more complex class:
+
+\begin{lstlisting}[language=TypeScript, title=electron/fingerprintWorkerPool.ts (simplified)]
+class FingerprintWorkerPool {
+    private workerCount: number
+    private slots: WorkerSlot[]    // Each slot is one worker
+    private queue: QueuedJob[] = []
+    private isProcessing: boolean = false
+    
+    // Private helper - outside code can't call this
+    private getAvailableSlot(): WorkerSlot | null {
+        return this.slots.find(slot => !slot.busy) || null
+    }
+    
+    // Private - manages job processing internally
+    private async processJob(slot: WorkerSlot, job: QueuedJob) {
+        // Complex processing logic...
+    }
+    
+    // PUBLIC: Simple interface for users
+    async processAll(filePaths: string[]): Promise<FingerprintJobResult[]> {
+        // Internally manages parallel workers, but user just awaits results
+    }
+    
+    getStatus(): PoolStatus {
+        return { workerCount: this.workerCount, ... }
+    }
+}
+\end{lstlisting}
+
+\begin{figure}[ht!]
+\centering
+\begin{tikzpicture}[
+    box/.style={draw, rounded corners, minimum width=5cm, align=center, font=\small},
+    hidden/.style={fill=red!10},
+    public/.style={fill=green!10}
+]
+    \node[box, hidden, minimum height=2.5cm] (hidden) at (0, 0) {};
+    \node[above=0cm of hidden, font=\bfseries] {FingerprintWorkerPool};
+    \node[font=\scriptsize, gray] at (0, 0.7) {private workerCount};
+    \node[font=\scriptsize, gray] at (0, 0.3) {private slots[]};
+    \node[font=\scriptsize, gray] at (0, -0.1) {private queue[]};
+    \node[font=\scriptsize, gray] at (0, -0.5) {private processJob()};
+    \node[font=\scriptsize, gray] at (0, -0.9) {private getAvailableSlot()};
+    
+    \node[box, public, minimum height=1.2cm, below=0.5cm of hidden] (public) {};
+    \node[font=\small] at (0, -2.5) {processAll(files)};
+    \node[font=\small] at (0, -2.9) {getStatus()};
+    
+    \draw[<-, thick, green!60!black] (public.east) -- ++(1.5, 0) node[right] {Your code calls these};
+\end{tikzpicture}
+\caption{Real Encapsulation: FingerprintWorkerPool}
+\label{fig:real_encapsulation}
+\end{figure}
+
+\subsubsection{Interfaces in the Codebase}
+
+This app uses many interfaces. Here are some real ones:
+
+\begin{lstlisting}[language=TypeScript, title=Real Interfaces from the Codebase]
+// From electron/musicScanner.ts
+export interface MusicFile {
+    path: string
+    name: string
+    extension: string
+    size: number
+    dateAdded: number
+    metadata?: {
+        title?: string
+        artist?: string
+        album?: string
+        duration?: number
+        albumArt?: string
+    }
+}
+
+// From electron/settings.ts
+export interface AppSettings {
+    musicFolderPath: string | null
+    scanSubfolders: boolean
+    workerCount: number
+    visualizerType: 'bars' | 'wave' | 'circular'
+}
+
+// From electron/youtubeDownloader.ts
+export interface DownloadProgress {
+    percent: number
+    downloadedBytes: number
+    totalBytes: number
+    speed: string
+}
+\end{lstlisting}
+
+These interfaces ensure:
+\begin{itemize}
+    \item Every \inlinecode{MusicFile} has the same shape throughout the app
+    \item Settings always have the expected properties
+    \item Download progress reports are consistent
+\end{itemize}
+
+\subsubsection{Singleton Pattern}
+
+Both worker pool classes use the \textbf{Singleton Pattern} --- ensuring only one instance exists:
+
+\begin{lstlisting}[language=TypeScript, title=Singleton Pattern]
+// Only ONE instance of the scanner exists
+let scannerInstance: ParallelMetadataScanner | null = null
+
+export function getParallelScanner(): ParallelMetadataScanner {
+    if (!scannerInstance) {
+        scannerInstance = new ParallelMetadataScanner()
+    }
+    return scannerInstance  // Always returns the SAME instance
+}
+\end{lstlisting}
+
+\begin{tipbox}
+\textbf{Why Singleton?} We only want one worker pool managing scans. If we created multiple pools, they'd compete for CPU resources and create chaos. The singleton ensures controlled, coordinated processing.
+\end{tipbox}
+
+\subsubsection{OOP in React: Custom Hooks}
+
+While React uses functions, not classes, the \textbf{spirit of OOP} appears in custom hooks:
+
+\begin{lstlisting}[language=TypeScript, title=src/hooks/useAudioPlayer.ts (concept)]
+function useAudioPlayer() {
+    // "Private" state - not directly accessible
+    const [currentSong, setCurrentSong] = useState(null)
+    const [isPlaying, setIsPlaying] = useState(false)
+    const howlRef = useRef(null)  // Internal Howler instance
+    
+    // "Public" methods returned to caller
+    const play = () => { ... }
+    const pause = () => { ... }
+    const next = () => { ... }
+    const setVolume = (v) => { ... }
+    
+    // Return only what components need
+    return { currentSong, isPlaying, play, pause, next, setVolume }
+}
+\end{lstlisting}
+
+This is \textbf{encapsulation} in functional form:
+\begin{itemize}
+    \item Internal state (\inlinecode{howlRef}) is hidden
+    \item Components only see simple functions (\inlinecode{play}, \inlinecode{pause})
+    \item The complex Howler.js audio management is abstracted away
+\end{itemize}
+
+%------------------------------------------------------------------------------
+% TYPESCRIPT SECTION
+%------------------------------------------------------------------------------
+\section{Understanding TypeScript}
+
+This project is written entirely in \techterm{TypeScript} instead of plain JavaScript. This section explains what TypeScript is, why we use it, and where you'll see it throughout the codebase.
+
+\subsection{TypeScript 101: The Absolute Basics}
+
+\begin{infobox}
+\textbf{Never used TypeScript before?} This section is for you! We'll explain the core concept with simple analogies before showing any code.
+\end{infobox}
+
+\subsubsection{The Problem TypeScript Solves}
+
+Imagine you're ordering food at a restaurant. You tell the waiter:
+
+\begin{itemize}
+    \item ``I'd like the number 7'' --- The waiter knows exactly what to bring
+    \item ``I'd like something'' --- The waiter has no idea what you want
+\end{itemize}
+
+JavaScript is like the second situation. Functions accept ``something'' without knowing what that something should be. This causes bugs that only appear when the program runs.
+
+\textbf{TypeScript} is like the first situation. Every value has a \textbf{label} saying what it is, so mistakes are caught immediately.
+
+\subsubsection{A Simple Analogy: Labeled Boxes}
+
+Think of variables as boxes that hold values:
+
+\begin{table}[h!]
+\centering
+\begin{tabular}{@{}ccc@{}}
+\toprule
+\textbf{JavaScript} & \textbf{TypeScript} & \textbf{What's Inside} \\
+\midrule
+\fbox{???} & \fbox{string} & ``Hello World'' \\
+\fbox{???} & \fbox{number} & 42 \\
+\fbox{???} & \fbox{boolean} & true \\
+\fbox{???} & \fbox{MusicFile} & \{title, artist, path...\} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure}[ht!]
+\centering
+\begin{tikzpicture}[
+    box/.style={draw, minimum width=2cm, minimum height=1.2cm, align=center, font=\small},
+    label/.style={font=\scriptsize\bfseries, fill=white}
+]
+    % JavaScript side
+    \node[font=\bfseries] at (-2, 2) {JavaScript};
+    \node[box, fill=gray!20] (js1) at (-2, 0.8) {???};
+    \node[box, fill=gray!20] (js2) at (-2, -0.6) {???};
+    \node[below=0.1cm of js1, font=\scriptsize] {``Hello''};
+    \node[below=0.1cm of js2, font=\scriptsize] {42};
+    
+    % Arrow
+    \draw[->, ultra thick] (0, 0.1) -- (1.5, 0.1);
+    \node[above] at (0.75, 0.1) {\scriptsize Add Types};
+    
+    % TypeScript side
+    \node[font=\bfseries] at (4, 2) {TypeScript};
+    \node[box, fill=green!20] (ts1) at (4, 0.8) {string};
+    \node[box, fill=blue!20] (ts2) at (4, -0.6) {number};
+    \node[below=0.1cm of ts1, font=\scriptsize] {``Hello''};
+    \node[below=0.1cm of ts2, font=\scriptsize] {42};
+    
+    % Checkmarks
+    \node[right=0.3cm of ts1, font=\small, green!60!black] {\cmark};
+    \node[right=0.3cm of ts2, font=\small, green!60!black] {\cmark};
+\end{tikzpicture}
+\caption{JavaScript vs TypeScript: Unlabeled vs Labeled Boxes}
+\label{fig:labeled_boxes}
+\end{figure}
+
+In JavaScript, boxes have no labels --- you don't know what's inside until you open them. In TypeScript, every box is \textbf{labeled} with its contents. If you try to put a number in a string box, TypeScript stops you.
+
+\subsubsection{The Core Syntax: One Thing to Remember}
+
+The \textbf{colon (:)} means ``is a'':
+
+\begin{verbatim}
+  name: string       means    name IS A string
+  age: number        means    age IS A number
+  song: MusicFile    means    song IS A MusicFile
+\end{verbatim}
+
+That's it! When you see a colon followed by a word, it's just saying ``this variable/parameter is a [type]''.
+
+\subsubsection{Reading TypeScript Code}
+
+Here's how to read TypeScript if you've never seen it:
+
+\begin{lstlisting}[language=TypeScript, title=Reading TypeScript Out Loud]
+// Read this as: 
+// "name is a string, returns a string"
+function greet(name: string): string {
+  return "Hello, " + name;
+}
+
+// Read this as:
+// "song is a MusicFile"
+const song: MusicFile = getMusicFile();
+
+// Read this as:
+// "items is an array of strings"
+const items: string[] = ["rock", "pop", "jazz"];
+\end{lstlisting}
+
+\subsubsection{Why Bother?}
+
+\begin{table}[h!]
+\centering
+\begin{tabular}{@{}p{6cm}p{7.5cm}@{}}
+\toprule
+\textbf{Without Types (JavaScript)} & \textbf{With Types (TypeScript)} \\
+\midrule
+Bug appears when user clicks button & Bug appears while you're writing code \\
+Error message is cryptic: ``undefined is not a function'' & Error message is clear: ``Property 'title' does not exist'' \\
+You must remember what every function expects & Editor tells you what every function expects \\
+Refactoring is scary & Refactoring is safe --- compiler catches broken code \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{tipbox}
+\textbf{Bottom Line}: TypeScript is just JavaScript with labels. The labels help catch bugs before your program runs, and help your editor give you better autocomplete.
+\end{tipbox}
+
+\subsection{What is TypeScript? (Technical Details)}
+
+\techterm{TypeScript} is JavaScript with \textbf{type annotations}. It's a language created by Microsoft that compiles down to regular JavaScript.
+
+\begin{lstlisting}[language=TypeScript, title=Plain JavaScript (no types)]
+function greet(name) {
+  return "Hello, " + name;
+}
+greet(42);  // No error - but this is probably a bug!
+\end{lstlisting}
+
+\begin{lstlisting}[language=TypeScript, title=TypeScript (with types)]
+function greet(name: string): string {
+  return "Hello, " + name;
+}
+greet(42);  // ERROR: Argument of type 'number' is not 
+            // assignable to parameter of type 'string'
+\end{lstlisting}
+
+\begin{infobox}
+\textbf{Key Point}: TypeScript catches bugs \textbf{before} you run your code. The compiler tells you about type mismatches, missing properties, and other issues at build time rather than at runtime.
+\end{infobox}
+
+\subsection{Why TypeScript for This Project?}
+
+We chose TypeScript for several critical reasons:
+
+\begin{enumerate}
+    \item \textbf{IPC Type Safety} --- The communication between Main and Renderer processes involves complex data structures. TypeScript ensures both sides agree on the shape of data.
+    
+    \item \textbf{Large Codebase} --- With 50+ files across frontend and backend, TypeScript makes refactoring safe. Change a function signature and the compiler tells you every place that needs updating.
+    
+    \item \textbf{IDE Support} --- VS Code provides autocomplete, hover documentation, and inline error checking because it understands TypeScript types.
+    
+    \item \textbf{Self-Documenting Code} --- Types serve as documentation. When you see \inlinecode{file: MusicFile}, you immediately know what properties are available.
+\end{enumerate}
+
+\subsection{Where TypeScript is Used}
+
+TypeScript is used in \textbf{every part} of this application:
+
+\begin{figure}[ht!]
+\centering
+\begin{tikzpicture}[
+    node distance=0.8cm,
+    box/.style={draw, rounded corners, minimum width=5cm, minimum height=0.7cm, align=center, font=\small},
+    arrow/.style={->, thick, >=stealth}
+]
+    \node[box, fill=blue!10] (main) {Main Process (.ts files)\\electron/*.ts};
+    \node[box, fill=green!10, below=of main] (preload) {Preload Script\\electron/preload.ts};
+    \node[box, fill=yellow!15, below=of preload] (renderer) {Renderer Process (.tsx files)\\src/*.tsx (React components)};
+    \node[box, fill=purple!10, below=of renderer] (types) {Type Definitions\\src/types/electron.d.ts};
+    
+    \draw[arrow] (main) -- (preload);
+    \draw[arrow] (preload) -- (renderer);
+    \draw[arrow, dashed] (types) -- (renderer);
+    \draw[arrow, dashed] (types.west) -- ++(-1,0) |- (preload.west);
+\end{tikzpicture}
+\caption{TypeScript Usage Across the Application}
+\label{fig:typescript_usage}
+\end{figure}
+
+\subsection{File Extensions Explained}
+
+\begin{table}[h!]
+\centering
+\begin{tabular}{@{}p{2.5cm}p{4cm}p{7cm}@{}}
+\toprule
+\textbf{Extension} & \textbf{What it is} & \textbf{Where used} \\
+\midrule
+\inlinecode{.ts} & Pure TypeScript & Backend files in \filepath{electron/} \\
+\inlinecode{.tsx} & TypeScript + JSX & React components in \filepath{src/} \\
+\inlinecode{.d.ts} & Type declarations only & \filepath{src/types/electron.d.ts} (IPC types) \\
+\bottomrule
+\end{tabular}
+\caption{TypeScript File Extensions}
+\end{table}
+
+\subsection{Practical Example: MusicFile Interface}
+
+Here's a real example from our codebase. The \inlinecode{MusicFile} interface defines the shape of music file data:
+
+\begin{lstlisting}[language=TypeScript, title=electron/musicScanner.ts]
+export interface MusicFile {
+  path: string;
+  title: string;
+  artist: string;
+  album: string;
+  duration: number;        // in seconds
+  albumArt: string | null; // base64 or null
+  year?: number;           // optional
+}
+\end{lstlisting}
+
+Now anywhere in the app, when you have a variable of type \inlinecode{MusicFile}:
+
+\begin{lstlisting}[language=TypeScript, title=Benefits in React Component]
+function SongItem({ song }: { song: MusicFile }) {
+  // TypeScript knows ALL these properties exist:
+  console.log(song.path);     // OK
+  console.log(song.title);    // OK
+  console.log(song.artist);   // OK
+  console.log(song.albumArt); // OK (string | null)
+  console.log(song.year);     // OK (number | undefined)
+  
+  console.log(song.genre);    // ERROR: Property 'genre' 
+                              // does not exist on type 'MusicFile'
+}
+\end{lstlisting}
+
+\subsection{The electron.d.ts File}
+
+One of the most important TypeScript files is \filepath{src/types/electron.d.ts}. This file defines ALL the functions available on \inlinecode{window.electronAPI}:
+
+\begin{lstlisting}[language=TypeScript, title=src/types/electron.d.ts (simplified)]
+interface ElectronAPI {
+  // Music scanning
+  scanMusicFolder: (path: string) => Promise<MusicFile[]>;
+  selectMusicFolder: () => Promise<string | null>;
+  
+  // YouTube downloads
+  downloadYouTube: (url: string) => Promise<DownloadResult>;
+  onDownloadProgress: (callback: (progress: number) => void) => void;
+  
+  // Settings
+  getSettings: () => Promise<AppSettings>;
+  saveSettings: (settings: AppSettings) => Promise<void>;
+  
+  // ... 50+ more functions
+}
+
+declare global {
+  interface Window {
+    electronAPI: ElectronAPI;
+  }
+}
+\end{lstlisting}
+
+\begin{warningbox}
+\textbf{Important}: When you add a new IPC channel in \filepath{preload.ts}, you \textbf{must} also update \filepath{electron.d.ts} with the matching type definition. Otherwise, TypeScript will show an error when you try to call the function from React.
+\end{warningbox}
+
+\subsection{TypeScript Compilation}
+
+TypeScript files are \textbf{not} run directly. They are compiled to JavaScript:
+
+\begin{figure}[ht!]
+\centering
+\begin{tikzpicture}[
+    node distance=1.5cm,
+    box/.style={draw, rounded corners, minimum width=3cm, minimum height=0.8cm, align=center, font=\small},
+    arrow/.style={->, thick, >=stealth}
+]
+    \node[box, fill=blue!10] (ts) {.ts / .tsx\\(TypeScript)};
+    \node[box, fill=yellow!15, right=2cm of ts] (tsc) {tsc Compiler\\(TypeScript)};
+    \node[box, fill=green!10, right=2cm of tsc] (js) {.js\\(JavaScript)};
+    
+    \draw[arrow] (ts) -- (tsc);
+    \draw[arrow] (tsc) -- (js);
+    
+    \node[below=0.3cm of tsc, font=\scriptsize\itshape, text width=4cm, align=center] {Type checking happens here. Errors stop the build.};
+\end{tikzpicture}
+\caption{TypeScript Compilation Process}
+\label{fig:ts_compile}
+\end{figure}
+
+When you run \inlinecode{npm run dev} or \inlinecode{npm run build}:
+
+\begin{enumerate}
+    \item TypeScript compiler checks all \inlinecode{.ts} and \inlinecode{.tsx} files for errors
+    \item If no errors, it generates \inlinecode{.js} files
+    \item Vite bundles the JavaScript for the browser
+    \item Electron runs the compiled JavaScript
+\end{enumerate}
+
+\subsection{Quick TypeScript Syntax Reference}
+
+\begin{table}[h!]
+\centering
+\begin{tabular}{@{}p{5cm}p{8.5cm}@{}}
+\toprule
+\textbf{TypeScript Syntax} & \textbf{Meaning} \\
+\midrule
+\inlinecode{name: string} & Variable must be a string \\
+\inlinecode{count: number} & Variable must be a number \\
+\inlinecode{isActive: boolean} & Variable must be true/false \\
+\inlinecode{items: string[]} & Array of strings \\
+\inlinecode{file: MusicFile} & Variable must match MusicFile interface \\
+\inlinecode{data: string | null} & String OR null (union type) \\
+\inlinecode{year?: number} & Optional property (may be undefined) \\
+\inlinecode{Promise<MusicFile[]>} & Async function returning array of MusicFile \\
+\inlinecode{() => void} & Function that takes nothing, returns nothing \\
+\bottomrule
+\end{tabular}
+\caption{Common TypeScript Syntax Patterns}
+\end{table}
+
+\subsection{How Types Are Defined}
+
+There are two main ways to define custom types in TypeScript:
+
+\subsubsection{1. Using \texttt{interface} (Preferred for Objects)}
+
+\begin{tipbox}
+\textbf{Analogy: A Blueprint}
+
+An \inlinecode{interface} is like a \textbf{blueprint for a house}. It says: ``Every house must have a door, windows, and a roof.'' You can't build a house without these parts. Similarly, a \inlinecode{MusicFile} interface says: ``Every music file must have a path, title, artist...'' and you can't create one without those properties.
+\end{tipbox}
+
+\begin{figure}[ht!]
+\centering
+\begin{tikzpicture}[
+    blueprint/.style={draw, minimum width=4cm, minimum height=3cm, align=left, font=\small, fill=blue!5},
+    prop/.style={font=\small},
+    required/.style={font=\small, green!60!black},
+    optional/.style={font=\small\itshape, gray}
+]
+    % Blueprint box
+    \node[blueprint] (bp) at (0, 0) {};
+    \node[above=0cm of bp, font=\bfseries] {interface MusicFile};
+    
+    % Properties inside
+    \node[required] at (0, 0.8) {path: string \cmark};
+    \node[required] at (0, 0.3) {title: string \cmark};
+    \node[required] at (0, -0.2) {artist: string \cmark};
+    \node[required] at (0, -0.7) {duration: number \cmark};
+    \node[optional] at (0, -1.2) {year?: number (optional)};
+    
+    % Arrow to object
+    \draw[->, ultra thick] (2.5, 0) -- (4, 0);
+    \node[above] at (3.25, 0) {\scriptsize Must match!};
+    
+    % Actual object
+    \node[draw, minimum width=3.5cm, minimum height=2.5cm, align=left, fill=green!10, rounded corners] (obj) at (6.5, 0) {};
+    \node[above=0cm of obj, font=\bfseries] {const song: MusicFile};
+    \node[font=\small] at (6.5, 0.5) {path: ``/music/a.mp3''};
+    \node[font=\small] at (6.5, 0) {title: ``My Song''};
+    \node[font=\small] at (6.5, -0.5) {artist: ``Band''};
+    \node[font=\small] at (6.5, -1) {duration: 180};
+\end{tikzpicture}
+\caption{Interface as a Blueprint for Objects}
+\label{fig:interface_blueprint}
+\end{figure}
+
+An \inlinecode{interface} defines the shape of an object --- what properties it has and their types:
+
+\begin{lstlisting}[language=TypeScript, title=Defining an Interface]
+// Define the type
+interface MusicFile {
+  path: string;           // Required: must be a string
+  title: string;          // Required: must be a string
+  artist: string;         // Required: must be a string
+  duration: number;       // Required: must be a number
+  albumArt: string | null; // Required: string OR null
+  year?: number;          // Optional: may not exist
+}
+
+// Now use it - TypeScript enforces the shape
+const song: MusicFile = {
+  path: "/music/song.mp3",
+  title: "My Song",
+  artist: "Artist Name",
+  duration: 180,
+  albumArt: null
+  // year is optional, so we can omit it
+};
+\end{lstlisting}
+
+\subsubsection{2. Using \texttt{type} (For Unions, Aliases)}
+
+\begin{tipbox}
+\textbf{Analogy: Nicknames and Multiple Choice}
+
+A \inlinecode{type} is like giving something a \textbf{nickname}. Instead of saying ``text made of characters'' every time, you just say ``string.'' 
+
+A \textbf{union type} is like a multiple-choice question where you can only pick ONE answer. \inlinecode{'unscanned' | 'scanned-tagged'} means: ``Pick one: unscanned OR scanned-tagged. Nothing else is allowed.''
+\end{tipbox}
+
+A \inlinecode{type} alias can represent simple values, unions, or complex types:
+
+\begin{lstlisting}[language=TypeScript, title=Type Aliases]
+// Simple alias
+type FilePath = string;
+
+// Union type - can be ONE of these values
+type ScanStatus = 'unscanned' | 'scanned-tagged' | 'scanned-no-match';
+
+// Union of different types
+type ApiResult = MusicFile[] | null | Error;
+
+// Usage
+let status: ScanStatus = 'unscanned';    // OK
+status = 'invalid';  // ERROR: not in the union
+\end{lstlisting}
+
+\subsection{How Functions Define Return Types}
+
+\begin{tipbox}
+\textbf{Analogy: A Vending Machine}
+
+A function's return type is like the \textbf{label on a vending machine slot}. If the slot says ``Chips,'' you expect to get chips --- not soda. If a function says \inlinecode{: string}, it \textbf{must} give you a string. The compiler is like a quality control inspector making sure every machine delivers what it promises.
+\end{tipbox}
+
+\begin{figure}[ht!]
+\centering
+\begin{tikzpicture}[
+    slot/.style={draw, minimum width=2.5cm, minimum height=1.5cm, align=center, font=\small, rounded corners},
+    arrow/.style={->, thick, >=stealth}
+]
+    % Vending machine slots
+    \node[slot, fill=green!15] (slot1) at (0, 0) {getGreeting()\\: \textbf{string}};
+    \node[slot, fill=blue!15] (slot2) at (4, 0) {getDuration()\\: \textbf{number}};
+    
+    % Outputs
+    \node[below=1cm of slot1] (out1) {``Hello, World''};
+    \node[below=1cm of slot2] (out2) {180};
+    
+    \draw[arrow] (slot1) -- (out1);
+    \draw[arrow] (slot2) -- (out2);
+    
+    % Checkmarks
+    \node[right=0.1cm of out1, green!60!black] {\cmark};
+    \node[right=0.1cm of out2, green!60!black] {\cmark};
+    
+    % Wrong example
+    \node[slot, fill=red!15] (slot3) at (8, 0) {broken()\\: \textbf{string}};
+    \node[below=1cm of slot3] (out3) {42};
+    \draw[arrow, red] (slot3) -- (out3);
+    \node[right=0.1cm of out3, red] {\xmark};
+    \node[below=0.3cm of out3, font=\scriptsize, red] {Wrong type!};
+\end{tikzpicture}
+\caption{Functions Must Return What Their Type Promises}
+\label{fig:vending_machine}
+\end{figure}
+
+Every function can specify what type of value it returns. The compiler \textbf{enforces} that the function actually returns that type.
+
+\begin{lstlisting}[language=TypeScript, title=Function Return Types]
+// The `: string` after () means this function MUST return a string
+function getGreeting(name: string): string {
+  return "Hello, " + name;  // OK - returns string
+}
+
+// The `: number` means MUST return a number
+function calculateDuration(seconds: number): number {
+  return seconds / 60;  // OK - returns number
+}
+
+// What if you return the wrong type?
+function brokenExample(): string {
+  return 42;  // ERROR: Type 'number' is not assignable to type 'string'
+}
+\end{lstlisting}
+
+\subsection{Async Functions and Promise Types}
+
+\begin{tipbox}
+\textbf{Analogy: A Restaurant Ticket}
+
+A \inlinecode{Promise} is like the \textbf{numbered ticket you get at a restaurant}. You don't get your food immediately --- you get a ticket that \textbf{promises} food later. \inlinecode{Promise<MusicFile[]>} is like a ticket that says ``When ready, you'll receive: array of music files.'' The \inlinecode{await} keyword is like waiting at the counter until they call your number.
+\end{tipbox}
+
+\begin{figure}[ht!]
+\centering
+\begin{tikzpicture}[
+    ticket/.style={draw, minimum width=3cm, minimum height=1.5cm, align=center, font=\small, rounded corners, fill=yellow!20},
+    food/.style={draw, minimum width=3cm, minimum height=1cm, align=center, font=\small, rounded corners, fill=green!20},
+    arrow/.style={->, thick, >=stealth}
+]
+    % Order
+    \node[font=\bfseries] at (0, 2) {1. Call Function};
+    \node[draw, rounded corners, fill=blue!10] (call) at (0, 0.8) {scanFolder("/music")};
+    
+    % Ticket
+    \node[font=\bfseries] at (4.5, 2) {2. Get Promise};
+    \node[ticket] (ticket) at (4.5, 0.8) {Promise\\MusicFile[]};
+    \node[below=0.1cm of ticket, font=\scriptsize\itshape] {``Your order is being prepared''};
+    
+    % Await
+    \draw[arrow] (call) -- (ticket);
+    
+    % Food delivered
+    \node[font=\bfseries] at (9, 2) {3. await};
+    \node[food] (food) at (9, 0.8) {MusicFile[]};
+    \node[below=0.1cm of food, font=\scriptsize\itshape] {Actual data arrives};
+    
+    \draw[arrow] (ticket) -- node[above, font=\scriptsize] {wait...} (food);
+\end{tikzpicture}
+\caption{Promises: Order Now, Receive Later}
+\label{fig:promise_ticket}
+\end{figure}
+
+When a function is \inlinecode{async}, it automatically returns a \inlinecode{Promise}. You specify what the Promise resolves to:
+
+\begin{lstlisting}[language=TypeScript, title=Async Function Return Types]
+// Promise<MusicFile[]> means: this async function 
+// will eventually return an array of MusicFile objects
+async function scanFolder(path: string): Promise<MusicFile[]> {
+  const files = await readDirectory(path);
+  return files;  // Must be MusicFile[]
+}
+
+// Promise<void> means: returns nothing (but still async)
+async function saveSettings(settings: AppSettings): Promise<void> {
+  await writeFile('settings.json', settings);
+  // No return statement needed
+}
+
+// Usage - TypeScript knows the resolved type
+const songs = await scanFolder("/music");
+// TypeScript knows: songs is MusicFile[]
+console.log(songs[0].title);  // Autocomplete works!
+\end{lstlisting}
+
+\subsection{How the Compiler Determines Types}
+
+\begin{tipbox}
+\textbf{Analogy: A Smart Assistant}
+
+Type inference is like having a \textbf{smart assistant} who watches what you do. If you write \inlinecode{const age = 25}, the assistant thinks: ``They put a number in there, so 'age' must be a number.'' You don't have to explicitly say \inlinecode{const age: number = 25} --- the assistant figures it out. But if you later try to do \inlinecode{age = "old"}, the assistant says: ``Wait, you said age was a number!''
+\end{tipbox}
+
+TypeScript uses \textbf{type inference} --- it can often figure out types automatically:
+
+\begin{lstlisting}[language=TypeScript, title=Type Inference]
+// TypeScript INFERS these types automatically:
+const name = "John";       // TypeScript knows: string
+const count = 42;          // TypeScript knows: number
+const items = ["a", "b"];  // TypeScript knows: string[]
+
+// Function return type is inferred from the return statement
+function double(n: number) {
+  return n * 2;  // TypeScript infers return type: number
+}
+
+// But explicit types are BETTER for documentation:
+function double(n: number): number {
+  return n * 2;
+}
+\end{lstlisting}
+
+\subsection{How Types Flow Through the Application}
+
+\begin{tipbox}
+\textbf{Analogy: Package Delivery}
+
+Think of types flowing through the app like a \textbf{package delivery system}. The backend (warehouse) packs a box labeled ``MusicFile[].'' The preload script (shipping company) promises to deliver ``MusicFile[].'' The frontend (customer) receives a box and knows exactly what's inside because the label matches all the way through. If someone mislabels a box along the way, the system catches it before delivery.
+\end{tipbox}
+
+Here's the complete flow of how a type defined in the backend reaches the frontend:
+
+\begin{figure}[ht!]
+\centering
+\begin{tikzpicture}[
+    node distance=0.6cm,
+    box/.style={draw, rounded corners, minimum width=6cm, minimum height=0.7cm, align=center, font=\small},
+    code/.style={draw, rectangle, fill=gray!5, minimum width=6cm, align=left, font=\ttfamily\tiny},
+    arrow/.style={->, thick, >=stealth}
+]
+    % Step 1
+    \node[box, fill=blue!10] (define) {1. Define type in backend};
+    \node[code, below=0.3cm of define] (def_code) {interface MusicFile \{ title: string; ... \}};
+    
+    % Step 2
+    \node[box, fill=yellow!15, below=0.6cm of def_code] (handler) {2. Use type in IPC handler return};
+    \node[code, below=0.3cm of handler] (handler_code) {ipcMain.handle('scan', async (): Promise<MusicFile[]>};
+    
+    % Step 3
+    \node[box, fill=orange!15, below=0.6cm of handler_code] (dts) {3. Declare same type in electron.d.ts};
+    \node[code, below=0.3cm of dts] (dts_code) {scanMusicFolder: () => Promise<MusicFile[]>};
+    
+    % Step 4
+    \node[box, fill=green!10, below=0.6cm of dts_code] (use) {4. Frontend receives correctly typed data};
+    \node[code, below=0.3cm of use] (use_code) {const files = await electronAPI.scanMusicFolder()};
+    
+    \draw[arrow] (define) -- (def_code);
+    \draw[arrow] (def_code) -- (handler);
+    \draw[arrow] (handler) -- (handler_code);
+    \draw[arrow] (handler_code) -- (dts);
+    \draw[arrow] (dts) -- (dts_code);
+    \draw[arrow] (dts_code) -- (use);
+    \draw[arrow] (use) -- (use_code);
+\end{tikzpicture}
+\caption{Type Flow from Backend to Frontend}
+\label{fig:type_flow}
+\end{figure}
+
+\subsection{Real Example: Complete Type Chain}
+
+Here's how types connect across files in this project:
+
+\textbf{Step 1: Define the type} (\filepath{electron/musicScanner.ts})
+\begin{lstlisting}[language=TypeScript]
+export interface MusicFile {
+  path: string;
+  title: string;
+  artist: string;
+  album: string;
+  duration: number;
+  albumArt: string | null;
+}
+\end{lstlisting}
+
+\textbf{Step 2: Use in handler} (\filepath{electron/ipc/modules/musicHandlers.ts})
+\begin{lstlisting}[language=TypeScript]
+import { MusicFile } from '../../musicScanner';
+
+ipcMain.handle('scan-music-folder', 
+  async (event, folderPath: string): Promise<MusicFile[]> => {
+    const files = await scanMusicFolder(folderPath);
+    return files;  // TypeScript checks this is MusicFile[]
+  }
+);
+\end{lstlisting}
+
+\textbf{Step 3: Declare for frontend} (\filepath{src/types/electron.d.ts})
+\begin{lstlisting}[language=TypeScript]
+interface MusicFile {
+  path: string;
+  title: string;
+  artist: string;
+  album: string;
+  duration: number;
+  albumArt: string | null;
+}
+
+interface ElectronAPI {
+  scanMusicFolder: (path: string) => Promise<MusicFile[]>;
+}
+\end{lstlisting}
+
+\textbf{Step 4: Use in React} (\filepath{src/App.tsx})
+\begin{lstlisting}[language=TypeScript]
+const [songs, setSongs] = useState<MusicFile[]>([]);
+
+const handleScan = async () => {
+  const files = await window.electronAPI.scanMusicFolder('/music');
+  // TypeScript knows: files is MusicFile[]
+  setSongs(files);
+  
+  // Autocomplete works for all properties:
+  files.forEach(f => console.log(f.title, f.artist));
+};
+\end{lstlisting}
+
+\begin{warningbox}
+\textbf{The type must match in all places!} If you add a new property to \inlinecode{MusicFile} in the backend, you must also add it to \filepath{electron.d.ts}. Otherwise, the frontend won't know about it, and TypeScript will show an error if you try to access it.
+\end{warningbox}
+
+\subsection{What Happens When Types Don't Match}
+
+\begin{tipbox}
+\textbf{Analogy: Spell Check for Code}
+
+Type checking is like \textbf{spell check in a word processor}, but for code logic. Just as spell check underlines ``teh'' because it's not a real word, TypeScript underlines \inlinecode{song.genre} because \inlinecode{genre} isn't a real property. You fix it before hitting ``send'' (running the app), not after the recipient (user) complains.
+\end{tipbox}
+
+TypeScript prevents bugs by catching mismatches at compile time:
+
+\begin{lstlisting}[language=TypeScript, title=TypeScript Catching Errors]
+// ERROR 1: Missing required property
+const song: MusicFile = {
+  path: "/music/song.mp3",
+  title: "My Song"
+  // ERROR: Property 'artist' is missing
+};
+
+// ERROR 2: Wrong property type
+const song2: MusicFile = {
+  path: "/music/song.mp3",
+  title: "My Song",
+  artist: "Artist",
+  duration: "3:00",  // ERROR: string not assignable to number
+  albumArt: null
+};
+
+// ERROR 3: Accessing non-existent property
+console.log(song.genre);  // ERROR: Property 'genre' does not exist
+
+// ERROR 4: Calling function with wrong argument type
+scanMusicFolder(42);  // ERROR: number is not assignable to string
+\end{lstlisting}
+
+\begin{tipbox}
+\textbf{Summary}: Types act as a contract between different parts of your code. The compiler is the enforcer --- it checks that everyone follows the contract at build time, before your code ever runs.
 \end{tipbox}
 
 \section{File Map: What Does What?}
@@ -5768,6 +6925,1615 @@ interface ContextMenuItem {
 \inlinecode{isProcessing} & \inlinecode{boolean} & Processing state \\
 \bottomrule
 \end{tabular}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% PART V: FILE REFERENCE
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\part{File Reference}
+
+This part provides detailed documentation for every file in the \filepath{electron/} and \filepath{src/} folders. Each file is explained with its purpose and all exported functions.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% CHAPTER: ELECTRON BACKEND REFERENCE
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\chapter{Electron Backend Reference}
+\label{ch:electronreference}
+
+This section documents all files in the \filepath{electron/} folder (the Main Process / Node.js backend).
+
+%------------------------------------------------------------------------------
+\section{electron/main.ts}
+\label{sec:mainfile}
+
+\textbf{Purpose:} The entry point for the Electron main process. Initializes the application.
+
+\subsection{What it does}
+\begin{itemize}
+    \item Removes the default menu bar
+    \item Registers all IPC handlers
+    \item Sets up window event handlers
+    \item Registers keyboard shortcuts (F12, Ctrl+Shift+I for dev tools)
+    \item Initializes the metadata cache database
+    \item Creates the main window and system tray
+\end{itemize}
+
+\subsection{Flow}
+\begin{lstlisting}
+app.whenReady() 
+    -> initializeDatabase()
+    -> createWindow()
+    -> createTray()
+\end{lstlisting}
+
+\textbf{No exported functions} - this is the entry point.
+
+%------------------------------------------------------------------------------
+\section{electron/window.ts}
+\label{sec:windowfile}
+
+\textbf{Purpose:} Creates and manages the main application window.
+
+\subsection{Exported Functions}
+
+\begin{longtable}{@{}p{4.5cm}p{3cm}p{3cm}p{4cm}@{}}
+\toprule
+\textbf{Function} & \textbf{Parameters} & \textbf{Returns} & \textbf{Description} \\
+\midrule
+\endhead
+\inlinecode{createWindow()} & none & \inlinecode{BrowserWindow} & Creates the main app window with custom settings \\
+\inlinecode{setupWindowEvents()} & none & \inlinecode{void} & Sets up window lifecycle events \\
+\bottomrule
+\caption{window.ts Exports}
+\end{longtable}
+
+\subsection{Window Configuration}
+\begin{itemize}
+    \item \textbf{Size:} 820\texttimes720 (minimum), resizable
+    \item \textbf{Frame:} Hidden (custom title bar)
+    \item \textbf{Background:} \inlinecode{\#0d1117}
+    \item \textbf{Preload:} preload.mjs
+    \item \textbf{Dev tools:} Enabled
+\end{itemize}
+
+%------------------------------------------------------------------------------
+\section{electron/preload.ts}
+\label{sec:preloadfile}
+
+\textbf{Purpose:} The secure bridge between main process and renderer. Exposes a typed \inlinecode{electronAPI} to the React frontend.
+
+\subsection{Exposed API Methods (via window.electronAPI)}
+
+\subsubsection{Music Scanning}
+\begin{tabular}{@{}p{6cm}p{8cm}@{}}
+\inlinecode{scanMusicFolder(path, options)} & Scans a folder for music files with metadata \\
+\inlinecode{selectMusicFolder()} & Opens folder picker dialog \\
+\inlinecode{readSingleFileMetadata(path)} & Reads metadata for one file \\
+\end{tabular}
+
+\subsubsection{Settings}
+\begin{tabular}{@{}p{6cm}p{8cm}@{}}
+\inlinecode{getSettings()} & Gets stored app settings \\
+\inlinecode{saveSettings(settings)} & Saves app settings \\
+\inlinecode{selectDownloadFolder()} & Opens folder picker for downloads \\
+\end{tabular}
+
+\subsubsection{Binaries}
+\begin{tabular}{@{}p{6cm}p{8cm}@{}}
+\inlinecode{getBinaryStatuses()} & Checks installation status of all binaries \\
+\inlinecode{installYtdlp()} & Downloads and installs yt-dlp \\
+\inlinecode{installFpcalc()} & Downloads and installs fpcalc \\
+\inlinecode{installWhisper()} & Downloads and installs whisper.cpp \\
+\inlinecode{getPlatformInfo()} & Returns OS platform and architecture \\
+\end{tabular}
+
+\subsubsection{Playback Control}
+\begin{tabular}{@{}p{6cm}p{8cm}@{}}
+\inlinecode{onTrayPlayPause(callback)} & Listens for tray play/pause commands \\
+\inlinecode{sendPlaybackState(isPlaying)} & Updates tray with playback state \\
+\end{tabular}
+
+\subsubsection{Window Control}
+\begin{tabular}{@{}p{6cm}p{8cm}@{}}
+\inlinecode{minimizeWindow()} & Minimizes the window \\
+\inlinecode{maximizeWindow()} & Toggles maximize/restore \\
+\inlinecode{closeWindow()} & Closes the window \\
+\inlinecode{onWindowStateChanged(callback)} & Listens for maximize/restore events \\
+\end{tabular}
+
+\subsubsection{YouTube Download}
+\begin{tabular}{@{}p{6cm}p{8cm}@{}}
+\inlinecode{downloadYouTube(url, outputPath)} & Downloads audio from YouTube \\
+\inlinecode{onDownloadProgress(callback)} & Listens for download progress \\
+\inlinecode{onBinaryDownloadProgress(callback)} & Listens for yt-dlp download progress \\
+\inlinecode{onDownloadTitle(callback)} & Receives video title \\
+\end{tabular}
+
+\subsubsection{API Calls}
+\begin{tabular}{@{}p{6cm}p{8cm}@{}}
+\inlinecode{lookupAcoustid(fp, duration)} & Queries AcoustID for song match \\
+\inlinecode{lookupMusicBrainz(mbid)} & Gets recording data from MusicBrainz \\
+\inlinecode{downloadImage(url, filePath)} & Downloads an image to disk \\
+\inlinecode{downloadImageWithFallback(urls, path)} & Downloads with fallback URLs \\
+\end{tabular}
+
+\subsubsection{Fingerprinting}
+\begin{tabular}{@{}p{6cm}p{8cm}@{}}
+\inlinecode{fingerprintEnsureReady()} & Downloads fpcalc if needed \\
+\inlinecode{generateFingerprint(filePath)} & Generates audio fingerprint \\
+\inlinecode{generateFingerprintsBatch(paths)} & Batch fingerprinting (parallel) \\
+\inlinecode{fingerprintGetPoolInfo()} & Gets worker pool status \\
+\inlinecode{onFingerprintBatchProgress(cb)} & Listens for batch progress \\
+\end{tabular}
+
+\subsubsection{Cache}
+\begin{tabular}{@{}p{6cm}p{8cm}@{}}
+\inlinecode{cacheGetFileStatus(filePath)} & Checks if file was scanned \\
+\inlinecode{cacheMarkFileScanned(...)} & Records scan result in database \\
+\inlinecode{cacheGetBatchStatus(filePaths)} & Batch status check \\
+\inlinecode{cacheGetUnscannedFiles(paths)} & Filters to unscanned files \\
+\inlinecode{cacheGetStatistics()} & Gets scan counts \\
+\end{tabular}
+
+\subsubsection{Playlists}
+\begin{tabular}{@{}p{6cm}p{8cm}@{}}
+\inlinecode{playlistGetAll()} & Gets all playlists \\
+\inlinecode{playlistCreate(name, description)} & Creates a new playlist \\
+\inlinecode{playlistDelete(id)} & Deletes a playlist \\
+\inlinecode{playlistAddSongs(id, filePaths)} & Adds songs to playlist \\
+\inlinecode{playlistRemoveSong(id, filePath)} & Removes a song \\
+\inlinecode{playlistGetSongPaths(id)} & Gets song paths in playlist \\
+\inlinecode{playlistRename(id, newName)} & Renames a playlist \\
+\end{tabular}
+
+\subsubsection{Lyrics}
+\begin{tabular}{@{}p{6cm}p{8cm}@{}}
+\inlinecode{generateLyrics(audioPath)} & Generates lyrics from audio \\
+\inlinecode{onLyricsProgress(callback)} & Listens for progress updates \\
+\end{tabular}
+
+\subsubsection{File Watcher}
+\begin{tabular}{@{}p{6cm}p{8cm}@{}}
+\inlinecode{fileWatcherStart(folderPath)} & Starts watching a folder \\
+\inlinecode{fileWatcherStop()} & Stops watching \\
+\inlinecode{onFileWatcherEvent(callback)} & Listens for file changes \\
+\end{tabular}
+
+%------------------------------------------------------------------------------
+\section{electron/tray.ts}
+\label{sec:trayfile}
+
+\textbf{Purpose:} Creates and manages the system tray icon with context menu.
+
+\subsection{Exported Functions}
+
+\begin{longtable}{@{}p{4.5cm}p{3cm}p{3cm}p{4cm}@{}}
+\toprule
+\textbf{Function} & \textbf{Parameters} & \textbf{Returns} & \textbf{Description} \\
+\midrule
+\endhead
+\inlinecode{createTray()} & none & \inlinecode{Tray} & Creates the tray icon with context menu \\
+\inlinecode{updateTrayMenu()} & none & \inlinecode{void} & Refreshes the tray menu \\
+\inlinecode{updatePlaybackState(playing)} & \inlinecode{boolean} & \inlinecode{void} & Updates Play/Pause label \\
+\inlinecode{updateWindowVisibility(visible)} & \inlinecode{boolean} & \inlinecode{void} & Updates Show/Hide label \\
+\inlinecode{getTray()} & none & \inlinecode{Tray|null} & Gets the tray instance \\
+\bottomrule
+\caption{tray.ts Exports}
+\end{longtable}
+
+\subsection{Tray Menu Items}
+\begin{itemize}
+    \item \textbf{Show/Hide} - Toggles window visibility
+    \item \textbf{Play/Pause} - Sends command to renderer
+    \item \textbf{Quit} - Exits the application
+\end{itemize}
+
+%------------------------------------------------------------------------------
+\section{electron/musicScanner.ts}
+\label{sec:musicscannerfile}
+
+\textbf{Purpose:} Scans directories for music files and extracts ID3 metadata.
+
+\subsection{Exported Functions}
+
+\begin{longtable}{@{}p{5cm}p{3cm}p{5cm}@{}}
+\toprule
+\textbf{Function} & \textbf{Returns} & \textbf{Description} \\
+\midrule
+\endhead
+\inlinecode{scanMusicFiles(directoryPath)} & \inlinecode{Promise<MusicFile[]>} & Recursively scans directory for music files \\
+\inlinecode{readSingleFileMetadata(filePath)} & \inlinecode{Promise<MusicFile|null>} & Reads metadata for a single file \\
+\bottomrule
+\caption{musicScanner.ts Exports}
+\end{longtable}
+
+\subsection{MusicFile Interface}
+
+\begin{lstlisting}[language=TypeScript]
+interface MusicFile {
+  path: string           // Full file path
+  name: string           // Filename
+  extension: string      // e.g., ".mp3"
+  size: number           // Bytes
+  dateAdded?: number     // Modification timestamp
+  metadata?: {
+    title?: string
+    artist?: string
+    album?: string
+    albumArtist?: string
+    genre?: string[]
+    year?: number
+    track?: { no: number; of: number }
+    disk?: { no: number; of: number }
+    duration?: number
+    albumArt?: string    // Base64 data URL
+  }
+}
+\end{lstlisting}
+
+\subsection{Supported Extensions}
+\inlinecode{.mp3}, \inlinecode{.flac}, \inlinecode{.wav}, \inlinecode{.m4a}, \inlinecode{.aac}, \inlinecode{.ogg}, \inlinecode{.opus}, \inlinecode{.wma}, \inlinecode{.aiff}, \inlinecode{.mp4}, \inlinecode{.m4p}, \inlinecode{.amr}
+
+%------------------------------------------------------------------------------
+\section{electron/youtubeDownloader.ts}
+\label{sec:youtubedownloaderfile}
+
+\textbf{Purpose:} Downloads audio from YouTube using yt-dlp. Auto-downloads the binary if needed.
+
+\subsection{Exported Functions}
+
+\begin{longtable}{@{}p{5cm}p{5cm}p{4cm}@{}}
+\toprule
+\textbf{Function} & \textbf{Returns} & \textbf{Description} \\
+\midrule
+\endhead
+\inlinecode{getYtDlpWrap(onProgress?)} & \inlinecode{Promise<YTDlpWrap>} & Gets or initializes yt-dlp-wrap \\
+\inlinecode{downloadYouTubeAudio(options)} & \inlinecode{Promise<\{success, filePath?, error?, title?\}>} & Downloads audio from YouTube \\
+\inlinecode{getVideoTitle(url, ytDlp)} & \inlinecode{Promise<string>} & Fetches video title before download \\
+\inlinecode{checkBinaryVersion(path, onProgress?)} & \inlinecode{Promise<\{isUpToDate, versions\}>} & Checks if yt-dlp is up to date \\
+\inlinecode{downloadBinaryWithProgress(path, onProgress?)} & \inlinecode{Promise<void>} & Downloads yt-dlp binary \\
+\inlinecode{getInstalledVersion(path)} & \inlinecode{Promise<string|null>} & Gets installed yt-dlp version \\
+\inlinecode{getLatestVersion()} & \inlinecode{Promise<string|null>} & Gets latest version from GitHub \\
+\inlinecode{getAssetNameForPlatform()} & \inlinecode{string|null} & Returns correct binary name for OS \\
+\bottomrule
+\caption{youtubeDownloader.ts Exports}
+\end{longtable}
+
+\subsection{DownloadOptions Interface}
+\begin{lstlisting}[language=TypeScript]
+interface DownloadOptions {
+  url: string
+  outputPath: string
+  onProgress?: (progress: DownloadProgress) => void
+  onBinaryProgress?: (progress: BinaryDownloadProgress) => void
+  onTitleReceived?: (title: string) => void
+}
+\end{lstlisting}
+
+%------------------------------------------------------------------------------
+\section{electron/binaryManager.ts}
+\label{sec:binarymanagerfile}
+
+\textbf{Purpose:} Checks installation status of all managed binaries (yt-dlp, fpcalc, whisper).
+
+\subsection{Exported Functions}
+
+\begin{longtable}{@{}p{5cm}p{5cm}p{4cm}@{}}
+\toprule
+\textbf{Function} & \textbf{Returns} & \textbf{Description} \\
+\midrule
+\endhead
+\inlinecode{getYtDlpStatus()} & \inlinecode{Promise<BinaryStatus>} & Gets status of yt-dlp binary \\
+\inlinecode{getFpcalcStatus()} & \inlinecode{Promise<BinaryStatus>} & Gets status of fpcalc binary \\
+\inlinecode{getWhisperStatus()} & \inlinecode{Promise<BinaryStatus>} & Gets status of whisper.cpp binary \\
+\inlinecode{getAllBinaryStatuses()} & \inlinecode{Promise<BinaryStatus[]>} & Gets status for all binaries \\
+\bottomrule
+\caption{binaryManager.ts Exports}
+\end{longtable}
+
+\subsection{BinaryStatus Interface}
+\begin{lstlisting}[language=TypeScript]
+interface BinaryStatus {
+  name: string
+  installed: boolean
+  version: string | null
+  path: string | null
+  latestVersion: string | null
+  needsUpdate: boolean
+}
+\end{lstlisting}
+
+%------------------------------------------------------------------------------
+\section{electron/fpcalcManager.ts}
+\label{sec:fpcalcmanagerfile}
+
+\textbf{Purpose:} Manages the fpcalc (Chromaprint) binary for audio fingerprinting.
+
+\subsection{Exported Functions}
+
+\begin{longtable}{@{}p{5.5cm}p{5cm}p{4cm}@{}}
+\toprule
+\textbf{Function} & \textbf{Returns} & \textbf{Description} \\
+\midrule
+\endhead
+\inlinecode{getFpcalcPath()} & \inlinecode{string} & Gets the fpcalc binary path \\
+\inlinecode{isFpcalcInstalled()} & \inlinecode{Promise<boolean>} & Checks if fpcalc is installed \\
+\inlinecode{downloadFpcalc(onProgress?)} & \inlinecode{Promise<boolean>} & Downloads and extracts fpcalc \\
+\inlinecode{ensureFpcalc(onProgress?)} & \inlinecode{Promise<boolean>} & Downloads if not installed \\
+\inlinecode{generateFingerprintWithFpcalc(path)} & \inlinecode{Promise<FingerprintResult|null>} & Generates fingerprint \\
+\bottomrule
+\caption{fpcalcManager.ts Exports}
+\end{longtable}
+
+\subsection{FingerprintResult Interface}
+\begin{lstlisting}[language=TypeScript]
+interface FingerprintResult {
+  fingerprint: string
+  duration: number
+}
+\end{lstlisting}
+
+%------------------------------------------------------------------------------
+\section{electron/whisperManager.ts}
+\label{sec:whispermanagerfile}
+
+\textbf{Purpose:} Manages the Whisper.cpp binary and models for audio transcription.
+
+\subsection{Exported Functions}
+
+\begin{longtable}{@{}p{5.5cm}p{5cm}p{4cm}@{}}
+\toprule
+\textbf{Function} & \textbf{Returns} & \textbf{Description} \\
+\midrule
+\endhead
+\inlinecode{getWhisperPath()} & \inlinecode{string} & Gets whisper binary path \\
+\inlinecode{getWhisperModelPath()} & \inlinecode{string} & Gets current model path \\
+\inlinecode{isWhisperInstalled()} & \inlinecode{Promise<boolean>} & Checks if whisper is ready \\
+\inlinecode{getWhisperVersion()} & \inlinecode{Promise<string|null>} & Gets whisper version \\
+\inlinecode{downloadWhisper(onProgress?)} & \inlinecode{Promise<boolean>} & Downloads whisper + model \\
+\inlinecode{ensureWhisper(onProgress?)} & \inlinecode{Promise<boolean>} & Downloads if not installed \\
+\inlinecode{transcribeWithWhisper(path, opts?)} & \inlinecode{Promise<TranscriptionResult|null>} & Transcribes audio \\
+\inlinecode{getSelectedModel()} & \inlinecode{WhisperModel} & Gets current model config \\
+\inlinecode{setSelectedModelId(id)} & \inlinecode{void} & Sets model selection \\
+\bottomrule
+\caption{whisperManager.ts Exports}
+\end{longtable}
+
+\subsection{Available Models}
+\begin{tabular}{@{}p{3cm}p{2.5cm}p{3cm}p{5cm}@{}}
+\toprule
+\textbf{Model ID} & \textbf{Size} & \textbf{Name} & \textbf{Description} \\
+\midrule
+\inlinecode{tiny.en} & 75 MB & Tiny (English) & Fastest, lowest accuracy \\
+\inlinecode{base.en} & 142 MB & Base (English) & Fast, good accuracy \\
+\inlinecode{small.en} & 466 MB & Small (English) & Balanced (default) \\
+\inlinecode{medium.en} & 1.5 GB & Medium (English) & High accuracy, slower \\
+\inlinecode{large-v3-turbo} & 1.6 GB & Large (Multilingual) & Best accuracy, slowest \\
+\bottomrule
+\end{tabular}
+
+%------------------------------------------------------------------------------
+\section{electron/fingerprintWorkerPool.ts}
+\label{sec:fingerprintworkerpoolfile}
+
+\textbf{Purpose:} Manages parallel fpcalc processes using a slot-based worker pool.
+
+\subsection{Exported Functions}
+
+\begin{longtable}{@{}p{5.5cm}p{5cm}p{4cm}@{}}
+\toprule
+\textbf{Function} & \textbf{Returns} & \textbf{Description} \\
+\midrule
+\endhead
+\inlinecode{getFingerprintPool(count?)} & \inlinecode{FingerprintWorkerPool} & Gets singleton pool \\
+\inlinecode{generateFingerprintsParallel(paths, onProgress?)} & \inlinecode{Promise<FingerprintJobResult[]>} & Parallel fingerprinting \\
+\inlinecode{getCPUCount()} & \inlinecode{number} & Gets CPU core count \\
+\inlinecode{getDefaultWorkerCount()} & \inlinecode{number} & Gets default worker count \\
+\bottomrule
+\caption{fingerprintWorkerPool.ts Exports}
+\end{longtable}
+
+\subsection{FingerprintWorkerPool Class Methods}
+\begin{itemize}
+    \item \inlinecode{setProgressCallback(callback)} - Set progress callback
+    \item \inlinecode{enqueue(filePath, index)} - Add file to queue
+    \item \inlinecode{processAll(filePaths)} - Process multiple files in parallel
+    \item \inlinecode{getStatus()} - Get pool status
+    \item \inlinecode{clearQueue()} - Clear pending jobs
+\end{itemize}
+
+%------------------------------------------------------------------------------
+\section{electron/metadataCache.ts}
+\label{sec:metadatacachefile}
+
+\textbf{Purpose:} Uses SQLite to track which files have been scanned/fingerprinted.
+
+\subsection{Exported Functions}
+
+\begin{longtable}{@{}p{5cm}p{4.5cm}p{4.5cm}@{}}
+\toprule
+\textbf{Function} & \textbf{Returns} & \textbf{Description} \\
+\midrule
+\endhead
+\inlinecode{initializeDatabase()} & \inlinecode{Database} & Opens/creates database \\
+\inlinecode{closeDatabase()} & \inlinecode{void} & Closes connection \\
+\inlinecode{getFileScanStatus(path)} & \inlinecode{ScanStatusType} & Checks if file was scanned \\
+\inlinecode{isFileScanned(path)} & \inlinecode{boolean} & Returns true if scanned \\
+\inlinecode{markFileScanned(path, mbid, hasMetadata)} & \inlinecode{boolean} & Records scan result \\
+\inlinecode{getBatchScanStatus(paths)} & \inlinecode{Map<string, ScanStatusType>} & Batch status check \\
+\inlinecode{getUnscannedFiles(paths)} & \inlinecode{string[]} & Filters to unscanned \\
+\inlinecode{getScanStatistics()} & \inlinecode{\{total, withMetadata, withoutMetadata\}} & Gets scan counts \\
+\inlinecode{cleanupOrphanedEntries()} & \inlinecode{number} & Removes deleted files \\
+\inlinecode{getCachedEntry(path)} & \inlinecode{FileScanStatus|null} & Gets cached entry \\
+\inlinecode{clearCache()} & \inlinecode{void} & Clears entire cache \\
+\bottomrule
+\caption{metadataCache.ts Exports}
+\end{longtable}
+
+\subsection{ScanStatusType}
+\begin{lstlisting}[language=TypeScript]
+type ScanStatusType = 'unscanned' | 'scanned-tagged' | 'scanned-no-match' | 'file-changed'
+\end{lstlisting}
+
+%------------------------------------------------------------------------------
+\section{electron/playlistDatabase.ts}
+\label{sec:playlistdatabasefile}
+
+\textbf{Purpose:} Uses SQLite to store and manage playlists and their songs.
+
+\subsection{Exported Functions}
+
+\begin{longtable}{@{}p{6cm}p{4cm}p{4cm}@{}}
+\toprule
+\textbf{Function} & \textbf{Returns} & \textbf{Description} \\
+\midrule
+\endhead
+\inlinecode{initializePlaylistDatabase()} & \inlinecode{Database} & Opens/creates database \\
+\inlinecode{closePlaylistDatabase()} & \inlinecode{void} & Closes connection \\
+\inlinecode{createPlaylist(name, desc?)} & \inlinecode{Playlist|null} & Creates new playlist \\
+\inlinecode{deletePlaylist(id)} & \inlinecode{boolean} & Deletes playlist + songs \\
+\inlinecode{renamePlaylist(id, name)} & \inlinecode{boolean} & Renames playlist \\
+\inlinecode{updatePlaylistDescription(id, desc)} & \inlinecode{boolean} & Updates description \\
+\inlinecode{updatePlaylistCoverArt(id, path)} & \inlinecode{boolean} & Sets cover art \\
+\inlinecode{getAllPlaylists()} & \inlinecode{Playlist[]} & Gets all with song counts \\
+\inlinecode{getPlaylistById(id)} & \inlinecode{Playlist|null} & Gets single playlist \\
+\inlinecode{getPlaylistSongPaths(id)} & \inlinecode{string[]} & Gets ordered paths \\
+\inlinecode{addSongsToPlaylist(id, paths)} & \inlinecode{\{added, alreadyInPlaylist\}} & Adds songs \\
+\inlinecode{removeSongFromPlaylist(id, path)} & \inlinecode{boolean} & Removes song \\
+\inlinecode{reorderPlaylistSongs(id, order)} & \inlinecode{boolean} & Reorders (drag-drop) \\
+\inlinecode{isSongInPlaylist(id, path)} & \inlinecode{boolean} & Checks membership \\
+\inlinecode{getPlaylistsContainingSong(path)} & \inlinecode{Playlist[]} & Finds playlists \\
+\inlinecode{cleanupMissingSongs()} & \inlinecode{number} & Removes deleted files \\
+\bottomrule
+\caption{playlistDatabase.ts Exports}
+\end{longtable}
+
+%------------------------------------------------------------------------------
+\section{electron/settings.ts}
+\label{sec:settingsfile}
+
+\textbf{Purpose:} Persists user settings to a JSON config file.
+
+\subsection{Exported Functions}
+
+\begin{longtable}{@{}p{5cm}p{4cm}p{5cm}@{}}
+\toprule
+\textbf{Function} & \textbf{Returns} & \textbf{Description} \\
+\midrule
+\endhead
+\inlinecode{getStoredSettings()} & \inlinecode{AppSettings} & Gets stored settings \\
+\inlinecode{saveSettings(settings)} & \inlinecode{void} & Saves settings to file \\
+\inlinecode{getStoredMusicFolder()} & \inlinecode{string|null} & Gets music folder path \\
+\inlinecode{getStoredDownloadFolder()} & \inlinecode{string|null} & Gets download folder path \\
+\bottomrule
+\caption{settings.ts Exports}
+\end{longtable}
+
+\subsection{AppSettings Interface}
+\begin{lstlisting}[language=TypeScript]
+interface AppSettings {
+  musicFolderPath: string | null
+  downloadFolderPath: string | null
+  scanSubfolders: boolean
+}
+\end{lstlisting}
+
+%------------------------------------------------------------------------------
+\section{electron/fileWatcher.ts}
+\label{sec:filewatcherfile}
+
+\textbf{Purpose:} Watches the music folder for changes and notifies the renderer.
+
+\subsection{Exported Functions}
+
+\begin{longtable}{@{}p{4.5cm}p{5cm}p{4.5cm}@{}}
+\toprule
+\textbf{Function} & \textbf{Returns} & \textbf{Description} \\
+\midrule
+\endhead
+\inlinecode{startWatching(folderPath)} & \inlinecode{\{success, error?\}} & Starts watching folder \\
+\inlinecode{stopWatching()} & \inlinecode{void} & Stops watching \\
+\inlinecode{isWatching()} & \inlinecode{boolean} & Check if watching \\
+\inlinecode{getWatchPath()} & \inlinecode{string|null} & Gets watched path \\
+\inlinecode{ignoreFile(filePath)} & \inlinecode{void} & Temporarily ignores a file \\
+\bottomrule
+\caption{fileWatcher.ts Exports}
+\end{longtable}
+
+%------------------------------------------------------------------------------
+\section{electron/parallelMetadataScanner.ts}
+\label{sec:parallelmetadatascannerfile}
+
+\textbf{Purpose:} Uses parallel processing to scan music file metadata across multiple workers.
+
+\subsection{Exported Functions}
+
+\begin{longtable}{@{}p{4.5cm}p{5cm}p{4.5cm}@{}}
+\toprule
+\textbf{Function} & \textbf{Returns} & \textbf{Description} \\
+\midrule
+\endhead
+\inlinecode{getParallelScanner()} & \inlinecode{ParallelMetadataScanner} & Gets singleton scanner \\
+\bottomrule
+\caption{parallelMetadataScanner.ts Exports}
+\end{longtable}
+
+\subsection{ParallelMetadataScanner Class Methods}
+\begin{itemize}
+    \item \inlinecode{setProgressCallback(callback)} - Set progress callback
+    \item \inlinecode{getPoolInfo()} - Get worker pool info
+    \item \inlinecode{discoverFiles(path, scanSubfolders?)} - Find all music files
+    \item \inlinecode{scanAll(files)} - Scan all files in parallel
+    \item \inlinecode{scanDirectory(path, scanSubfolders?)} - Full scan operation
+\end{itemize}
+
+%------------------------------------------------------------------------------
+\section{electron/ipc/handlers.ts}
+\label{sec:ipchandlersfile}
+
+\textbf{Purpose:} Main IPC registration file that imports and registers all handler modules.
+
+\subsection{Exported Functions}
+
+\begin{lstlisting}[language=TypeScript]
+export function registerIpcHandlers() {
+  registerMusicHandlers()
+  registerApiHandlers()
+  registerYoutubeHandlers()
+  registerSystemHandlers()
+  registerCacheHandlers()
+  registerFingerprintHandlers()
+  registerPlaylistHandlers()
+  registerWatchHandlers()
+  registerLyricsHandlers()
+}
+\end{lstlisting}
+
+%------------------------------------------------------------------------------
+\section{IPC Handler Modules}
+\label{sec:ipcmodules}
+
+Located in \filepath{electron/ipc/modules/}:
+
+\subsection{musicHandlers.ts}
+\textbf{Registers handlers for:}
+\begin{itemize}
+    \item \inlinecode{scan-music-folder} - Scans a directory for music files
+    \item \inlinecode{select-music-folder} - Opens OS folder picker
+    \item \inlinecode{read-single-file-metadata} - Reads metadata for specific file
+    \item \inlinecode{read-file-buffer} - Reads file content into buffer
+    \item \inlinecode{write-cover-art} - Embeds image as cover art
+    \item \inlinecode{write-metadata} - Writes ID3/Vorbis tags
+\end{itemize}
+
+\subsection{apiHandlers.ts}
+\textbf{Registers handlers for:}
+\begin{itemize}
+    \item \inlinecode{lookup-acoustid} - AcoustID fingerprint lookup
+    \item \inlinecode{lookup-musicbrainz} - MusicBrainz metadata lookup
+    \item \inlinecode{download-image} - Downloads image to disk
+    \item \inlinecode{download-image-with-fallback} - Downloads with fallback URLs
+\end{itemize}
+
+\subsection{youtubeHandlers.ts}
+\textbf{Registers handlers for:}
+\begin{itemize}
+    \item \inlinecode{download-youtube} - Downloads audio from YouTube
+    \item \inlinecode{get-binary-statuses} - Gets all binary statuses
+    \item \inlinecode{install-ytdlp} - Installs yt-dlp binary
+    \item \inlinecode{install-fpcalc} - Installs fpcalc binary
+    \item \inlinecode{install-whisper} - Installs whisper binary
+    \item \inlinecode{get-whisper-models} - Gets available whisper models
+    \item \inlinecode{get-selected-whisper-model} - Gets current model
+    \item \inlinecode{set-whisper-model} - Sets model selection
+\end{itemize}
+
+\subsection{systemHandlers.ts}
+\textbf{Registers handlers for:}
+\begin{itemize}
+    \item \inlinecode{window-minimize} - Minimizes window
+    \item \inlinecode{window-maximize} - Toggles maximize
+    \item \inlinecode{window-close} - Closes window
+    \item \inlinecode{get-settings} - Gets app settings
+    \item \inlinecode{save-settings} - Saves app settings
+    \item \inlinecode{select-download-folder} - Opens folder picker
+    \item \inlinecode{get-platform-info} - Gets platform/arch info
+\end{itemize}
+
+\subsection{cacheHandlers.ts}
+\textbf{Registers handlers for:}
+\begin{itemize}
+    \item \inlinecode{cache-get-file-status} - Get scan status for file
+    \item \inlinecode{cache-mark-file-scanned} - Mark file as scanned
+    \item \inlinecode{cache-get-batch-status} - Batch status check
+    \item \inlinecode{cache-get-unscanned-files} - Get unscanned files
+    \item \inlinecode{cache-get-statistics} - Get scan statistics
+    \item \inlinecode{cache-get-entry} - Get cached entry
+    \item \inlinecode{cache-cleanup-orphaned} - Remove orphaned entries
+    \item \inlinecode{cache-clear} - Clear entire cache
+\end{itemize}
+
+\subsection{fingerprintHandlers.ts}
+\textbf{Registers handlers for:}
+\begin{itemize}
+    \item \inlinecode{fingerprint-check-ready} - Check if fpcalc is ready
+    \item \inlinecode{fingerprint-ensure-ready} - Ensure fpcalc is installed
+    \item \inlinecode{generate-fingerprint} - Generate single fingerprint
+    \item \inlinecode{generate-fingerprints-batch} - Parallel batch fingerprinting
+    \item \inlinecode{fingerprint-get-pool-info} - Get worker pool info
+\end{itemize}
+
+\subsection{playlistHandlers.ts}
+\textbf{Registers handlers for:}
+\begin{itemize}
+    \item \inlinecode{playlist-create} - Create new playlist
+    \item \inlinecode{playlist-delete} - Delete playlist
+    \item \inlinecode{playlist-rename} - Rename playlist
+    \item \inlinecode{playlist-get-all} - Get all playlists
+    \item \inlinecode{playlist-add-songs} - Add songs to playlist
+    \item \inlinecode{playlist-remove-song} - Remove song from playlist
+    \item \inlinecode{playlist-get-songs} - Get playlist songs
+    \item \inlinecode{playlist-reorder-songs} - Reorder songs
+    \item \inlinecode{playlist-cleanup-missing} - Clean up missing songs
+\end{itemize}
+
+\subsection{lyricsHandlers.ts}
+\textbf{Registers handlers for:}
+\begin{itemize}
+    \item \inlinecode{generate-lyrics} - Generate lyrics via vocal isolation + transcription
+    \item Progress is sent via \inlinecode{lyrics-progress} event
+\end{itemize}
+
+\subsection{watchHandlers.ts}
+\textbf{Registers handlers for:}
+\begin{itemize}
+    \item \inlinecode{file-watcher-start} - Start watching a folder
+    \item \inlinecode{file-watcher-stop} - Stop watching
+    \item \inlinecode{file-watcher-status} - Get watcher status
+    \item \inlinecode{file-watcher-ignore} - Temporarily ignore a file
+\end{itemize}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% CHAPTER: REACT FRONTEND REFERENCE
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\chapter{React Frontend Reference}
+\label{ch:srcreference}
+
+This section documents all files in the \filepath{src/} folder (the Renderer Process / React frontend).
+
+%------------------------------------------------------------------------------
+\section{Entry Points}
+\label{sec:srcentry}
+
+\subsection{src/main.tsx}
+\textbf{Purpose:} React entry point that mounts the app to the DOM.
+
+\begin{lstlisting}[language=TypeScript]
+import React from 'react'
+import ReactDOM from 'react-dom/client'
+import App from './App'
+import './index.css'
+
+ReactDOM.createRoot(document.getElementById('root')!).render(
+  <React.StrictMode>
+    <App />
+  </React.StrictMode>
+)
+\end{lstlisting}
+
+\subsection{src/App.tsx}
+\textbf{Purpose:} The main application shell that coordinates all hooks and components.
+
+\textbf{Imports all hooks:}
+\begin{itemize}
+    \item \inlinecode{useAudioPlayer} - Playback management
+    \item \inlinecode{useMusicLibrary} - Library state
+    \item \inlinecode{usePlaylists} - Playlist management
+    \item \inlinecode{useSongScanner} - Batch scanning
+\end{itemize}
+
+\textbf{Renders all major components:}
+TitleBar, Sidebar, SongList, PlaybackBar, Settings, CreatePlaylistModal, BatchScanProgress, NotificationToast, DownloadNotification, LyricsPanel
+
+%------------------------------------------------------------------------------
+\section{Custom Hooks}
+\label{sec:srchooks}
+
+Located in \filepath{src/hooks/}:
+
+\subsection{useAudioPlayer.ts}
+\textbf{Purpose:} Manages audio playback using Howler.js.
+
+\begin{longtable}{@{}p{4cm}p{5cm}p{5cm}@{}}
+\toprule
+\textbf{Return Property} & \textbf{Type} & \textbf{Description} \\
+\midrule
+\endhead
+\inlinecode{currentSound} & \inlinecode{Howl|null} & Current Howl instance \\
+\inlinecode{playingIndex} & \inlinecode{number|null} & Currently playing song index \\
+\inlinecode{isPlaying} & \inlinecode{boolean} & Playback state \\
+\inlinecode{currentTime} & \inlinecode{number} & Current position (seconds) \\
+\inlinecode{duration} & \inlinecode{number} & Total duration (seconds) \\
+\inlinecode{volume} & \inlinecode{number} & Volume (0-1) \\
+\inlinecode{shuffle} & \inlinecode{boolean} & Shuffle mode \\
+\inlinecode{repeatMode} & \inlinecode{RepeatMode} & none/all/one \\
+\inlinecode{playSong(file, index)} & function & Plays a song \\
+\inlinecode{togglePlayPause()} & function & Toggles play/pause \\
+\inlinecode{playNext(auto?)} & function & Plays next song \\
+\inlinecode{playPrevious()} & function & Plays previous song \\
+\inlinecode{seek(time)} & function & Seeks to position \\
+\inlinecode{setVolume(vol)} & function & Sets volume \\
+\inlinecode{toggleShuffle()} & function & Toggles shuffle \\
+\inlinecode{cycleRepeatMode()} & function & Cycles repeat mode \\
+\bottomrule
+\caption{useAudioPlayer Return Values}
+\end{longtable}
+
+\textbf{RepeatMode:} \inlinecode{'none' | 'all' | 'one'}
+
+\subsection{useMusicLibrary.ts}
+\textbf{Purpose:} Manages music library state with automatic file system watching.
+
+\begin{longtable}{@{}p{4cm}p{5cm}p{5cm}@{}}
+\toprule
+\textbf{Return Property} & \textbf{Type} & \textbf{Description} \\
+\midrule
+\endhead
+\inlinecode{musicFiles} & \inlinecode{MusicFile[]} & All music files \\
+\inlinecode{sortedMusicFiles} & \inlinecode{MusicFile[]} & Sorted music files \\
+\inlinecode{loading} & \inlinecode{boolean} & Loading state \\
+\inlinecode{error} & \inlinecode{string|null} & Error message \\
+\inlinecode{selectedFolder} & \inlinecode{string|null} & Current folder path \\
+\inlinecode{sortBy} & \inlinecode{SortOption} & Current sort option \\
+\inlinecode{isWatching} & \inlinecode{boolean} & File watcher active \\
+\inlinecode{setSortBy(option)} & function & Sets sort option \\
+\inlinecode{handleSelectFolder()} & function & Opens folder picker \\
+\inlinecode{scanFolder(path)} & function & Scans a folder \\
+\inlinecode{updateSingleFile(path)} & function & Refreshes single file \\
+\bottomrule
+\caption{useMusicLibrary Return Values}
+\end{longtable}
+
+\subsection{usePlaylists.ts}
+\textbf{Purpose:} Manages playlist state and CRUD operations.
+
+\begin{longtable}{@{}p{4.5cm}p{4.5cm}p{5cm}@{}}
+\toprule
+\textbf{Return Property} & \textbf{Type} & \textbf{Description} \\
+\midrule
+\endhead
+\inlinecode{playlists} & \inlinecode{Playlist[]} & All playlists \\
+\inlinecode{activePlaylist} & \inlinecode{PlaylistWithSongs|null} & Currently active playlist \\
+\inlinecode{loading} & \inlinecode{boolean} & Loading state \\
+\inlinecode{createPlaylist(name, desc?)} & function & Creates new playlist \\
+\inlinecode{deletePlaylist(id)} & function & Deletes playlist \\
+\inlinecode{renamePlaylist(id, name)} & function & Renames playlist \\
+\inlinecode{addSongsToPlaylist(id, paths)} & function & Adds songs \\
+\inlinecode{removeSongFromPlaylist(id, path)} & function & Removes song \\
+\inlinecode{loadPlaylist(id)} & function & Loads playlist with songs \\
+\inlinecode{clearActivePlaylist()} & function & Clears active playlist \\
+\inlinecode{refreshPlaylists()} & function & Reloads all playlists \\
+\bottomrule
+\caption{usePlaylists Return Values}
+\end{longtable}
+
+\subsection{useSongScanner.ts}
+\textbf{Purpose:} Handles batch scanning with fingerprinting and API lookups.
+
+\begin{longtable}{@{}p{4cm}p{5cm}p{5cm}@{}}
+\toprule
+\textbf{Return Property} & \textbf{Type} & \textbf{Description} \\
+\midrule
+\endhead
+\inlinecode{isScanning} & \inlinecode{boolean} & Any scan active \\
+\inlinecode{batchProgress} & \inlinecode{BatchScanProgress} & Current progress \\
+\inlinecode{scanSong(file)} & function & Scans single song \\
+\inlinecode{scanBatch(files)} & function & Scans multiple songs \\
+\inlinecode{cancelBatchScan()} & function & Cancels batch \\
+\bottomrule
+\caption{useSongScanner Return Values}
+\end{longtable}
+
+\textbf{Scan Pipeline:}
+\begin{enumerate}
+    \item Generate fingerprint (local fpcalc binary)
+    \item Query AcoustID API (rate limited: 3 calls/sec)
+    \item Query MusicBrainz API (rate limited: 1 call/sec)
+    \item Download cover art from Cover Art Archive
+    \item Write metadata to file using taglib-wasm
+\end{enumerate}
+
+%------------------------------------------------------------------------------
+\section{Services}
+\label{sec:srcservices}
+
+Located in \filepath{src/services/}:
+
+\subsection{acoustid.ts}
+\textbf{Purpose:} AcoustID API client for fingerprint lookups.
+
+\begin{lstlisting}[language=TypeScript]
+export interface AcoustIDResultData {
+  mbid: string
+  title?: string
+  artist?: string
+}
+
+export async function lookupFingerprint(
+  fingerprint: string,
+  duration: number
+): Promise<AcoustIDResultData | null>
+\end{lstlisting}
+
+\subsection{musicbrainz.ts}
+\textbf{Purpose:} MusicBrainz API client for metadata lookups.
+
+\begin{longtable}{@{}p{4.5cm}p{5cm}p{4.5cm}@{}}
+\toprule
+\textbf{Function} & \textbf{Returns} & \textbf{Description} \\
+\midrule
+\endhead
+\inlinecode{lookupRecording(mbid)} & \inlinecode{Promise<MusicBrainzRecording|null>} & Fetches recording metadata \\
+\inlinecode{getCoverArtUrl(releaseMbid)} & \inlinecode{string} & Gets cover art URL \\
+\inlinecode{getCoverArtUrls(releases, rgId?)} & \inlinecode{string[]} & Gets fallback URLs \\
+\inlinecode{pickBestRelease(releases)} & \inlinecode{MusicBrainzRelease|null} & Selects original release \\
+\bottomrule
+\caption{musicbrainz.ts Exports}
+\end{longtable}
+
+\subsection{fingerprint.ts}
+\textbf{Purpose:} Fingerprint generation via IPC to Main Process.
+
+\begin{longtable}{@{}p{5cm}p{4.5cm}p{4.5cm}@{}}
+\toprule
+\textbf{Function} & \textbf{Returns} & \textbf{Description} \\
+\midrule
+\endhead
+\inlinecode{ensureFpcalcReady()} & \inlinecode{Promise<boolean>} & Ensures fpcalc is ready \\
+\inlinecode{generateFingerprint(filePath)} & \inlinecode{Promise<string|null>} & Single fingerprint \\
+\inlinecode{generateFingerprintsBatch(paths, onProgress?)} & \inlinecode{Promise<BatchFingerprintResult[]>} & Parallel batch \\
+\inlinecode{resetFingerprintErrors()} & \inlinecode{void} & Resets error counter \\
+\bottomrule
+\caption{fingerprint.ts Exports}
+\end{longtable}
+
+%------------------------------------------------------------------------------
+\section{Utilities}
+\label{sec:srcutils}
+
+Located in \filepath{src/utils/}:
+
+\subsection{colorExtractor.ts}
+\textbf{Purpose:} Extracts dominant colors from album art for dynamic UI theming.
+
+\begin{lstlisting}[language=TypeScript]
+interface ExtractedColors {
+  primary: string    // Most dominant color
+  secondary: string  // Second most dominant
+  accent: string     // Third most dominant
+  background: string // Fourth (for backgrounds)
+}
+
+export async function extractColorsFromImage(imageUrl: string): Promise<ExtractedColors>
+\end{lstlisting}
+
+\subsection{rateLimiter.ts}
+\textbf{Purpose:} Provides delays between API calls to respect rate limits.
+
+\begin{tabular}{@{}p{5cm}p{4cm}p{5cm}@{}}
+\toprule
+\textbf{Function} & \textbf{Delay} & \textbf{Purpose} \\
+\midrule
+\inlinecode{waitForAcoustID()} & 500ms & AcoustID limit: 3 req/sec \\
+\inlinecode{waitForMusicBrainz()} & 1100ms & MusicBrainz limit: 1 req/sec \\
+\inlinecode{waitForCoverArt()} & 1100ms & Cover Art Archive \\
+\inlinecode{waitBetweenSongs()} & 500ms & Between songs in batch \\
+\bottomrule
+\end{tabular}
+
+\subsection{sortMusicFiles.ts}
+\textbf{Purpose:} Sorting utilities for music library.
+
+\begin{lstlisting}[language=TypeScript]
+type SortOption = 'title' | 'artist' | 'track' | 'dateAdded'
+
+export function sortMusicFiles(files: MusicFile[], sortBy: SortOption): MusicFile[]
+\end{lstlisting}
+
+\subsection{pathResolver.ts}
+\textbf{Purpose:} Converts file paths to \inlinecode{file://} URLs for audio playback.
+
+\begin{lstlisting}[language=TypeScript]
+export function pathToFileURL(filePath: string): string
+// Windows: C:\Users\song.mp3 -> file:///C:/Users/song.mp3
+// macOS/Linux: /Users/song.mp3 -> file:///Users/song.mp3
+\end{lstlisting}
+
+%------------------------------------------------------------------------------
+\section{Type Definitions}
+\label{sec:srctypes}
+
+Located in \filepath{src/types/}:
+
+\subsection{electron.d.ts}
+\textbf{Purpose:} TypeScript definitions for the \inlinecode{window.electronAPI} interface.
+
+Defines all IPC API method signatures, request/response types, and global augmentation.
+
+\subsection{playlist.ts}
+\textbf{Purpose:} Playlist-specific type definitions.
+
+\begin{lstlisting}[language=TypeScript]
+interface Playlist {
+  id: number
+  name: string
+  description: string | null
+  coverArtPath: string | null
+  songCount: number
+  totalDuration: number
+  createdAt: number
+  updatedAt: number
+}
+
+interface PlaylistWithSongs extends Playlist {
+  songs: MusicFile[]
+}
+\end{lstlisting}
+
+%------------------------------------------------------------------------------
+\section{Component Directory Structure}
+\label{sec:srccomponents}
+
+Located in \filepath{src/components/}:
+
+\begin{tabular}{@{}p{4cm}p{6cm}p{4cm}@{}}
+\toprule
+\textbf{Folder} & \textbf{Components} & \textbf{Purpose} \\
+\midrule
+\filepath{common/} & AudioVisualizer, ContextMenu, NotificationToast & Reusable UI primitives \\
+\filepath{layout/} & TitleBar, Sidebar, PlaybackBar & App structure \\
+\filepath{library/} & SongList, BatchScanProgress & Music library feature \\
+\filepath{playlists/} & PlaylistList, CreatePlaylistModal & Playlist feature \\
+\filepath{lyrics/} & LyricsPanel & AI lyrics generation \\
+\filepath{settings/} & Settings & Settings modal \\
+\filepath{download/} & DownloadButton, DownloadNotification & YouTube download \\
+\bottomrule
+\end{tabular}
+
+%------------------------------------------------------------------------------
+\section{Additional Type Definitions}
+\label{sec:srcadditionaltypes}
+
+\subsection{electron/electron-env.d.ts}
+\textbf{Purpose:} Vite/Electron environment type definitions for the main process.
+
+Declares environment variables like \inlinecode{VITE\_DEV\_SERVER\_URL} used by the build system.
+
+\subsection{src/types/vite-env.d.ts}
+\textbf{Purpose:} Vite client-side type definitions for the renderer process.
+
+References \inlinecode{vite/client} for hot module replacement and import.meta types.
+
+%------------------------------------------------------------------------------
+\section{Asset Exports}
+\label{sec:srcassets}
+
+\subsection{src/assets/icons/index.ts}
+\textbf{Purpose:} Central export file for all SVG icons used in the application.
+
+Exports named SVG components for:
+\begin{itemize}
+    \item Window controls: \inlinecode{MinimizeIcon}, \inlinecode{MaximizeIcon}, \inlinecode{CloseIcon}
+    \item Playback: \inlinecode{PlayIcon}, \inlinecode{PauseIcon}, \inlinecode{NextIcon}, \inlinecode{PrevIcon}
+    \item Features: \inlinecode{ShuffleIcon}, \inlinecode{RepeatIcon}, \inlinecode{VolumeIcon}
+    \item Library: \inlinecode{MusicIcon}, \inlinecode{FolderIcon}, \inlinecode{SearchIcon}
+    \item Actions: \inlinecode{SettingsIcon}, \inlinecode{DownloadIcon}, \inlinecode{ScanIcon}
+\end{itemize}
+
+%------------------------------------------------------------------------------
+\section{Individual Component Details}
+\label{sec:srccomponentdetails}
+
+\subsection{Layout Components}
+
+\subsubsection{TitleBar (components/layout/TitleBar/)}
+\begin{tabular}{@{}p{4cm}p{10cm}@{}}
+\textbf{Purpose} & Custom window title bar with traffic light controls \\
+\textbf{Features} & Frameless window controls, app logo, window drag area, macOS traffic light positioning \\
+\textbf{State} & \inlinecode{isMaximized} - tracks window state \\
+\textbf{IPC Calls} & \inlinecode{minimizeWindow}, \inlinecode{maximizeWindow}, \inlinecode{closeWindow} \\
+\end{tabular}
+
+\subsubsection{Sidebar (components/layout/Sidebar/)}
+\begin{tabular}{@{}p{4cm}p{10cm}@{}}
+\textbf{Purpose} & Navigation sidebar with library and playlists \\
+\textbf{Features} & "All Songs" button, playlist list, create playlist button, settings button \\
+\textbf{Props} & \inlinecode{playlists}, \inlinecode{activePlaylistId}, \inlinecode{onPlaylistClick}, \inlinecode{onCreateClick}, \inlinecode{onSettingsClick} \\
+\end{tabular}
+
+\subsubsection{PlaybackBar (components/layout/PlaybackBar/)}
+\begin{tabular}{@{}p{4cm}p{10cm}@{}}
+\textbf{Purpose} & Bottom playback control bar \\
+\textbf{Features} & Album art, song info, progress bar, play/pause, prev/next, shuffle, repeat, volume, lyrics button \\
+\textbf{Key Props} & All \inlinecode{useAudioPlayer} return values, current song metadata \\
+\textbf{Includes} & AudioVisualizer component \\
+\end{tabular}
+
+\subsection{Library Components}
+
+\subsubsection{SongList (components/library/SongList/)}
+\begin{tabular}{@{}p{4cm}p{10cm}@{}}
+\textbf{Purpose} & Main song list with virtualized scrolling \\
+\textbf{Features} & Column headers (title, artist, album, duration), sort controls, context menu, scan status indicators \\
+\textbf{Performance} & Uses react-window for virtualization (handles 10,000+ songs) \\
+\textbf{Context Menu} & Play, Add to Playlist, Scan Song, Show in Explorer \\
+\end{tabular}
+
+\subsubsection{BatchScanProgress (components/library/BatchScanProgress/)}
+\begin{tabular}{@{}p{4cm}p{10cm}@{}}
+\textbf{Purpose} & Modal showing batch scan progress \\
+\textbf{Features} & Progress bar, current song name, API phase indicator, cancel button \\
+\textbf{API Phases} & acoustid $\rightarrow$ musicbrainz $\rightarrow$ coverart $\rightarrow$ writing \\
+\end{tabular}
+
+\subsection{Common Components}
+
+\subsubsection{AudioVisualizer (components/common/AudioVisualizer/)}
+\begin{tabular}{@{}p{4cm}p{10cm}@{}}
+\textbf{Purpose} & Real-time audio frequency visualization \\
+\textbf{Technology} & Web Audio API + Canvas \\
+\textbf{Props} & \inlinecode{isPlaying}, \inlinecode{audioElement} (Howl instance) \\
+\textbf{Visualization} & Bar-style frequency spectrum with gradient colors \\
+\end{tabular}
+
+\subsubsection{ContextMenu (components/common/ContextMenu/)}
+\begin{tabular}{@{}p{4cm}p{10cm}@{}}
+\textbf{Purpose} & Right-click context menu \\
+\textbf{Features} & Dynamic positioning, keyboard navigation, nested submenus \\
+\textbf{Props} & \inlinecode{x}, \inlinecode{y}, \inlinecode{items[]}, \inlinecode{onClose} \\
+\end{tabular}
+
+\subsubsection{NotificationToast (components/common/NotificationToast/)}
+\begin{tabular}{@{}p{4cm}p{10cm}@{}}
+\textbf{Purpose} & Toast notification system \\
+\textbf{Types} & success (green), error (red), warning (yellow), info (blue) \\
+\textbf{Props} & \inlinecode{message}, \inlinecode{type}, \inlinecode{isVisible}, \inlinecode{duration}, \inlinecode{onClose} \\
+\end{tabular}
+
+\subsection{Download Components}
+
+\subsubsection{DownloadButton (components/download/DownloadButton/)}
+\begin{tabular}{@{}p{4cm}p{10cm}@{}}
+\textbf{Purpose} & YouTube URL input and download trigger \\
+\textbf{Features} & URL validation, paste detection, loading spinner \\
+\end{tabular}
+
+\subsubsection{DownloadNotification (components/download/DownloadNotification/)}
+\begin{tabular}{@{}p{4cm}p{10cm}@{}}
+\textbf{Purpose} & Shows download progress for YouTube downloads \\
+\textbf{Features} & Progress bar, video title, download speed, ETA \\
+\end{tabular}
+
+\subsection{Playlist Components}
+
+\subsubsection{PlaylistList (components/playlists/PlaylistList.tsx)}
+\begin{tabular}{@{}p{4cm}p{10cm}@{}}
+\textbf{Purpose} & Displays list of playlists in sidebar \\
+\textbf{Features} & Click to load, right-click context menu (rename, delete) \\
+\end{tabular}
+
+\subsubsection{CreatePlaylistModal (components/playlists/CreatePlaylistModal.tsx)}
+\begin{tabular}{@{}p{4cm}p{10cm}@{}}
+\textbf{Purpose} & Modal for creating new playlists \\
+\textbf{Fields} & Name (required), Description (optional) \\
+\end{tabular}
+
+\subsection{Settings Component}
+
+\subsubsection{Settings (components/settings/Settings/)}
+\begin{tabular}{@{}p{4cm}p{10cm}@{}}
+\textbf{Purpose} & Application settings modal \\
+\textbf{Sections} & Music folder, Download folder, Scan subfolders toggle, Binary status (yt-dlp, fpcalc, whisper), Whisper model selector \\
+\textbf{Features} & Folder pickers, binary install buttons, status indicators \\
+\end{tabular}
+
+\subsection{Lyrics Component}
+
+\subsubsection{LyricsPanel (components/lyrics/LyricsPanel/)}
+\begin{tabular}{@{}p{4cm}p{10cm}@{}}
+\textbf{Purpose} & AI-generated lyrics display panel \\
+\textbf{Features} & Slide-out panel, generation progress, lyrics display with scroll \\
+\textbf{Pipeline} & FFmpeg vocal isolation $\rightarrow$ Whisper transcription \\
+\end{tabular}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% CHAPTER: COMPLEX LOGIC DIAGRAMS
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\chapter{Complex Logic Diagrams}
+\label{ch:complex_logic}
+
+This chapter provides visual explanations for the most complex logic areas of the application.
+
+\begin{infobox}
+\textbf{Why Diagrams?} Complex logic is hard to understand from code alone. These diagrams show the ``flow'' of decisions and data, making it easier to understand what happens and when.
+\end{infobox}
+
+%------------------------------------------------------------------------------
+% 1. AUDIO PLAYER STATE MACHINE
+%------------------------------------------------------------------------------
+\section{Audio Player State Machine}
+
+\begin{tipbox}
+\textbf{Analogy: A Smart Jukebox}
+
+The audio player is like a \textbf{smart jukebox} with three modes:
+\begin{itemize}
+    \item \textbf{OFF} --- Play songs in order, stop at the end
+    \item \textbf{ALL} --- Play all songs, then start over from the beginning
+    \item \textbf{ONE} --- Keep playing the same song forever (like a broken record!)
+\end{itemize}
+The shuffle feature adds a ``memory'' so the jukebox remembers what it just played and can go back.
+\end{tipbox}
+
+The \filepath{useAudioPlayer} hook manages playback with shuffle history, repeat modes, and OS integration.
+
+\subsection{Repeat Mode Cycle}
+
+\begin{figure}[ht!]
+\centering
+\begin{tikzpicture}[
+    node distance=2.5cm,
+    state/.style={draw, ellipse, minimum width=2.2cm, minimum height=1cm, align=center, font=\small},
+    arrow/.style={->, thick, >=stealth}
+]
+    \node[state, fill=gray!10] (off) {OFF\\No Repeat};
+    \node[state, fill=blue!10, right=of off] (all) {ALL\\Repeat Queue};
+    \node[state, fill=green!10, right=of all] (one) {ONE\\Repeat Song};
+    
+    \draw[arrow] (off) to[bend left=25] node[above, font=\scriptsize] {Click} (all);
+    \draw[arrow] (all) to[bend left=25] node[above, font=\scriptsize] {Click} (one);
+    \draw[arrow] (one) to[bend left=50] node[below, font=\scriptsize] {Click} (off);
+\end{tikzpicture}
+\caption{Repeat Mode State Cycle}
+\label{fig:repeat_mode}
+\end{figure}
+
+\subsection{Shuffle with History}
+
+\begin{figure}[ht!]
+\centering
+\begin{tikzpicture}[
+    node distance=0.8cm,
+    box/.style={draw, rounded corners, minimum width=5cm, minimum height=0.6cm, align=center, font=\small},
+    arrow/.style={->, thick, >=stealth}
+]
+    \node[box, fill=blue!10] (play) {Play Song};
+    \node[box, fill=yellow!15, below=of play] (record) {Record to History Stack};
+    \node[box, fill=gray!10, below=of record] (next) {User clicks Next};
+    \node[box, fill=orange!15, below=of next] (random) {Pick Random (excluding current)};
+    \node[box, fill=blue!10, below=of random] (play2) {Play New Song};
+    
+    \node[box, fill=green!10, right=3cm of record] (prev) {User clicks Previous};
+    \node[box, fill=green!10, below=of prev] (pop) {Pop from History Stack};
+    \node[box, fill=blue!10, below=of pop] (playprev) {Play Previous Song};
+    
+    \draw[arrow] (play) -- (record);
+    \draw[arrow] (record) -- (next);
+    \draw[arrow] (next) -- (random);
+    \draw[arrow] (random) -- (play2);
+    
+    \draw[arrow] (record) -- (prev);
+    \draw[arrow] (prev) -- (pop);
+    \draw[arrow] (pop) -- (playprev);
+\end{tikzpicture}
+\caption{Shuffle Mode with History Stack for Back Navigation}
+\label{fig:shuffle_history}
+\end{figure}
+
+\subsection{Howler.js Lifecycle}
+
+\begin{figure}[ht!]
+\centering
+\begin{tikzpicture}[
+    node distance=1.2cm,
+    state/.style={draw, rounded corners, minimum width=2.5cm, minimum height=0.7cm, align=center, font=\small},
+    arrow/.style={->, thick, >=stealth}
+]
+    \node[state, fill=gray!10] (idle) {Idle};
+    \node[state, fill=blue!10, right=2cm of idle] (loading) {Loading};
+    \node[state, fill=green!10, right=2cm of loading] (playing) {Playing};
+    \node[state, fill=yellow!15, below=of playing] (paused) {Paused};
+    \node[state, fill=orange!15, left=2cm of paused] (ended) {Ended};
+    \node[state, fill=red!10, below=of loading] (error) {Error};
+    
+    \draw[arrow] (idle) -- node[above, font=\scriptsize] {new Howl()} (loading);
+    \draw[arrow] (loading) -- node[above, font=\scriptsize] {onload} (playing);
+    \draw[arrow] (loading) -- node[left, font=\scriptsize] {onerror} (error);
+    \draw[arrow] (playing) -- node[right, font=\scriptsize] {pause()} (paused);
+    \draw[arrow] (paused) -- node[left, font=\scriptsize] {play()} (playing);
+    \draw[arrow] (playing) -- node[above, font=\scriptsize] {onend} (ended);
+    \draw[arrow] (ended) -- node[above, font=\scriptsize] {playNext()} (idle);
+    \draw[arrow] (error) -- node[below, font=\scriptsize] {retry} (idle);
+\end{tikzpicture}
+\caption{Howler.js Audio Lifecycle States}
+\label{fig:howler_lifecycle}
+\end{figure}
+
+%------------------------------------------------------------------------------
+% 2. BATCH SCAN PIPELINE
+%------------------------------------------------------------------------------
+\section{Batch Scan Pipeline}
+
+\begin{tipbox}
+\textbf{Analogy: A Factory Assembly Line}
+
+Think of batch scanning like a \textbf{factory assembly line}:
+\begin{enumerate}
+    \item \textbf{Intake} --- Songs enter the line (filter unscanned files)
+    \item \textbf{ID Station} --- Each song gets fingerprinted (like a barcode)
+    \item \textbf{Lookup Station} --- The barcode is checked against a database
+    \item \textbf{Packaging} --- Cover art and metadata are attached
+    \item \textbf{Output} --- Song leaves with complete information
+\end{enumerate}
+The line has \textbf{speed limits} (rate limiting) to avoid overwhelming the lookup database with too many requests at once.
+\end{tipbox}
+
+The \filepath{useSongScanner} hook orchestrates multi-phase song identification with rate limiting.
+
+\begin{figure}[ht!]
+\centering
+\begin{tikzpicture}[
+    node distance=0.7cm,
+    phase/.style={draw, rounded corners, minimum width=4.5cm, minimum height=0.6cm, align=center, font=\small},
+    decision/.style={draw, diamond, aspect=2, fill=yellow!15, font=\small, inner sep=1pt},
+    arrow/.style={->, thick, >=stealth}
+]
+    \node[phase, fill=blue!10] (start) {Start Batch Scan};
+    \node[phase, fill=gray!10, below=of start] (filter) {Filter: Unscanned + Changed Files};
+    \node[phase, fill=orange!15, below=of filter] (fp) {Phase 1: Generate Fingerprint};
+    \node[decision, below=of fp] (fpok) {OK?};
+    \node[phase, fill=blue!10, below=of fpok] (acoustid) {Phase 2: Query AcoustID (500ms delay)};
+    \node[decision, below=of acoustid] (match) {Match?};
+    \node[phase, fill=green!10, below=of match] (mb) {Phase 3: Query MusicBrainz (1100ms)};
+    \node[phase, fill=purple!10, below=of mb] (cover) {Phase 4: Download Cover Art (1100ms)};
+    \node[phase, fill=successcolor!20, below=of cover] (tag) {Phase 5: Write Tags (taglib-wasm)};
+    \node[phase, fill=blue!10, below=of tag] (cache) {Mark Scanned in Cache};
+    \node[phase, fill=green!20, below=of cache] (update) {Update UI In-Place};
+    
+    \node[phase, fill=red!10, right=2.5cm of fpok] (skip) {Skip File};
+    \node[phase, fill=yellow!15, right=2.5cm of match] (nomatch) {Mark: No Match};
+    
+    \draw[arrow] (start) -- (filter);
+    \draw[arrow] (filter) -- (fp);
+    \draw[arrow] (fp) -- (fpok);
+    \draw[arrow] (fpok) -- node[right, font=\scriptsize] {Yes} (acoustid);
+    \draw[arrow] (fpok) -- node[above, font=\scriptsize] {No} (skip);
+    \draw[arrow] (acoustid) -- (match);
+    \draw[arrow] (match) -- node[right, font=\scriptsize] {Yes} (mb);
+    \draw[arrow] (match) -- node[above, font=\scriptsize] {No} (nomatch);
+    \draw[arrow] (mb) -- (cover);
+    \draw[arrow] (cover) -- (tag);
+    \draw[arrow] (tag) -- (cache);
+    \draw[arrow] (cache) -- (update);
+    \draw[arrow] (skip) |- (update);
+    \draw[arrow] (nomatch) |- (cache);
+\end{tikzpicture}
+\caption{Batch Scan Pipeline with Rate-Limited API Phases}
+\label{fig:batch_scan_pipeline}
+\end{figure}
+
+%------------------------------------------------------------------------------
+% 3. METADATA CACHE STATE MACHINE
+%------------------------------------------------------------------------------
+\section{Metadata Cache State Machine}
+
+\begin{tipbox}
+\textbf{Analogy: A Library Card Catalog}
+
+The metadata cache is like a \textbf{library's card catalog}:
+\begin{itemize}
+    \item Each book (song) has a card with its location and info
+    \item If a book is new, it has no card yet (UNSCANNED)
+    \item Once cataloged, the card shows if info was found (TAGGED) or not (NO MATCH)
+    \item If someone modifies a book, the old card is outdated (FILE CHANGED) and needs re-cataloging
+\end{itemize}
+This prevents re-reading every book each time you open the library!
+\end{tipbox}
+
+The \filepath{metadataCache.ts} tracks file scan status using SHA256 hashes for change detection.
+
+\begin{figure}[ht!]
+\centering
+\begin{tikzpicture}[
+    node distance=2cm,
+    state/.style={draw, ellipse, minimum width=2.5cm, minimum height=1cm, align=center, font=\small},
+    arrow/.style={->, thick, >=stealth}
+]
+    % Arrange in a cleaner layout: top row and bottom row
+    \node[state, fill=gray!10] (unscanned) {UNSCANNED\\New file};
+    \node[state, fill=green!10, right=3.5cm of unscanned] (tagged) {SCANNED\\TAGGED};
+    \node[state, fill=yellow!15, below=2cm of tagged] (nomatch) {SCANNED\\NO MATCH};
+    \node[state, fill=orange!15, below=2cm of unscanned] (changed) {FILE CHANGED};
+    
+    % Arrows - now no crossings
+    \draw[arrow] (unscanned) -- node[above, font=\scriptsize] {Match found} (tagged);
+    \draw[arrow] (unscanned) -- node[left, font=\scriptsize] {No match} (changed);
+    \draw[arrow] (tagged) -- node[right, font=\scriptsize] {File modified} (nomatch);
+    \draw[arrow] (nomatch) -- node[below, font=\scriptsize] {Re-scan} (changed);
+    \draw[arrow] (changed) -- node[left, font=\scriptsize] {Start scan} (unscanned);
+\end{tikzpicture}
+\caption{Metadata Cache File Status State Machine}
+\label{fig:cache_states}
+\end{figure}
+
+\subsection{Hash-Based Change Detection}
+
+\begin{figure}[ht!]
+\centering
+\begin{tikzpicture}[
+    node distance=0.8cm,
+    box/.style={draw, rounded corners, minimum width=5cm, minimum height=0.6cm, align=center, font=\small},
+    arrow/.style={->, thick, >=stealth}
+]
+    \node[box, fill=blue!10] (file) {Audio File};
+    \node[box, fill=gray!10, below=of file] (read) {Read: path + size + mtime};
+    \node[box, fill=yellow!15, below=of read] (hash) {SHA256 Hash};
+    \node[box, fill=orange!15, below=of hash] (compare) {Compare with Cached Hash};
+    \node[box, fill=green!10, below left=1cm and 0.5cm of compare] (same) {Same = Skip Scan};
+    \node[box, fill=red!10, below right=1cm and 0.5cm of compare] (diff) {Different = Re-scan};
+    
+    \draw[arrow] (file) -- (read);
+    \draw[arrow] (read) -- (hash);
+    \draw[arrow] (hash) -- (compare);
+    \draw[arrow] (compare) -- (same);
+    \draw[arrow] (compare) -- (diff);
+\end{tikzpicture}
+\caption{File Change Detection via Hash Comparison}
+\label{fig:hash_detection}
+\end{figure}
+
+%------------------------------------------------------------------------------
+% 4. WHISPER TRANSCRIPTION PIPELINE
+%------------------------------------------------------------------------------
+\section{AI Lyrics Transcription Pipeline}
+
+\begin{tipbox}
+\textbf{Analogy: A Professional Translator}
+
+The lyrics pipeline is like hiring a \textbf{professional translator}:
+\begin{enumerate}
+    \item First, check if the translator is available (is Whisper installed?)
+    \item Prepare the document by removing noise (FFmpeg extracts vocals)
+    \item Format it correctly for the translator (convert to 16kHz WAV)
+    \item The translator does their work (Whisper transcribes audio to text)
+    \item Clean up the translation (parse and display)
+\end{enumerate}
+Different model sizes are like different translators: ``tiny'' is fast but makes mistakes, ``large'' is slow but more accurate.
+\end{tipbox}
+
+The \filepath{whisperManager.ts} orchestrates AI-powered lyrics generation.
+
+\begin{figure}[ht!]
+\centering
+\begin{tikzpicture}[
+    node distance=0.7cm,
+    box/.style={draw, rounded corners, minimum width=5cm, minimum height=0.6cm, align=center, font=\small},
+    decision/.style={draw, diamond, aspect=2, fill=yellow!15, font=\small, inner sep=1pt},
+    arrow/.style={->, thick, >=stealth}
+]
+    \node[box, fill=blue!10] (click) {User Clicks Generate Lyrics};
+    \node[decision, below=of click] (installed) {Whisper Installed?};
+    \node[box, fill=orange!15, right=2.5cm of installed] (download) {Download Binary + Model};
+    \node[box, fill=gray!10, below=of installed] (model) {Load Selected Model};
+    \node[box, fill=purple!10, below=of model] (ffmpeg) {FFmpeg: Extract Vocals};
+    \node[box, fill=blue!10, below=of ffmpeg] (convert) {Convert to 16kHz WAV};
+    \node[box, fill=green!10, below=of convert] (whisper) {Whisper.cpp Transcribe};
+    \node[box, fill=yellow!15, below=of whisper] (parse) {Parse Output Text};
+    \node[box, fill=successcolor!20, below=of parse] (display) {Display Lyrics in Panel};
+    
+    \draw[arrow] (click) -- (installed);
+    \draw[arrow] (installed) -- node[above, font=\scriptsize] {No} (download);
+    \draw[arrow] (installed) -- node[right, font=\scriptsize] {Yes} (model);
+    \draw[arrow] (download) |- (model);
+    \draw[arrow] (model) -- (ffmpeg);
+    \draw[arrow] (ffmpeg) -- (convert);
+    \draw[arrow] (convert) -- (whisper);
+    \draw[arrow] (whisper) -- (parse);
+    \draw[arrow] (parse) -- (display);
+    
+    \node[right=0.5cm of whisper, text width=3cm, font=\scriptsize, align=left] {Model Sizes:\\tiny: 75MB, 30s\\small: 466MB, 2min\\medium: 1.5GB, 5min};
+\end{tikzpicture}
+\caption{AI Lyrics Generation Pipeline}
+\label{fig:whisper_pipeline}
+\end{figure}
+
+\subsection{Platform-Specific Binary Handling}
+
+\begin{figure}[ht!]
+\centering
+\begin{tikzpicture}[
+    node distance=1.2cm,
+    box/.style={draw, rounded corners, minimum width=3.5cm, minimum height=0.7cm, align=center, font=\small},
+    decision/.style={draw, diamond, aspect=2.5, fill=yellow!15, font=\small},
+    arrow/.style={->, thick, >=stealth}
+]
+    \node[decision] (platform) {Platform?};
+    \node[box, fill=blue!10, below left=1.5cm and 1cm of platform] (win) {Windows};
+    \node[box, fill=gray!10, below=of platform] (mac) {macOS};
+    \node[box, fill=orange!15, below right=1.5cm and 1cm of platform] (linux) {Linux};
+    
+    \node[box, fill=green!10, below=of win] (winbin) {Download from\\GitHub Release};
+    \node[box, fill=green!10, below=of mac] (macbin) {Use System Whisper\\(brew install)};
+    \node[box, fill=green!10, below=of linux] (linbin) {Use System Whisper\\(apt install)};
+    
+    \draw[arrow] (platform) -- (win);
+    \draw[arrow] (platform) -- (mac);
+    \draw[arrow] (platform) -- (linux);
+    \draw[arrow] (win) -- (winbin);
+    \draw[arrow] (mac) -- (macbin);
+    \draw[arrow] (linux) -- (linbin);
+\end{tikzpicture}
+\caption{Platform-Specific Whisper Binary Handling}
+\label{fig:whisper_platform}
+\end{figure}
+
+%------------------------------------------------------------------------------
+% 5. YOUTUBE DOWNLOADER FLOW
+%------------------------------------------------------------------------------
+\section{YouTube Downloader Flow}
+
+The \filepath{youtubeDownloader.ts} manages binary bootstrapping and download orchestration.
+
+\begin{figure}[ht!]
+\centering
+\begin{tikzpicture}[
+    node distance=0.7cm,
+    box/.style={draw, rounded corners, minimum width=5cm, minimum height=0.6cm, align=center, font=\small},
+    decision/.style={draw, diamond, aspect=2, fill=yellow!15, font=\small, inner sep=1pt},
+    arrow/.style={->, thick, >=stealth}
+]
+    \node[box, fill=blue!10] (start) {Download Request};
+    \node[decision, below=of start] (binary) {yt-dlp Exists?};
+    \node[box, fill=orange!15, right=2.5cm of binary] (download) {Download from GitHub};
+    \node[decision, below=of binary] (version) {Version Current?};
+    \node[box, fill=yellow!15, right=2.5cm of version] (update) {Update Binary};
+    \node[decision, below=of version] (cooldown) {10s Cooldown OK?};
+    \node[box, fill=red!10, right=2.5cm of cooldown] (wait) {Wait for Cooldown};
+    \node[box, fill=green!10, below=of cooldown] (fetch) {Fetch Video Title};
+    \node[box, fill=blue!10, below=of fetch] (exec) {Execute yt-dlp};
+    \node[box, fill=purple!10, below=of exec] (progress) {Stream Progress Events};
+    \node[box, fill=successcolor!20, below=of progress] (done) {Move to Music Folder};
+    
+    \draw[arrow] (start) -- (binary);
+    \draw[arrow] (binary) -- node[above, font=\scriptsize] {No} (download);
+    \draw[arrow] (binary) -- node[right, font=\scriptsize] {Yes} (version);
+    \draw[arrow] (download) |- (version);
+    \draw[arrow] (version) -- node[above, font=\scriptsize] {No} (update);
+    \draw[arrow] (version) -- node[right, font=\scriptsize] {Yes} (cooldown);
+    \draw[arrow] (update) |- (cooldown);
+    \draw[arrow] (cooldown) -- node[above, font=\scriptsize] {No} (wait);
+    \draw[arrow] (cooldown) -- node[right, font=\scriptsize] {Yes} (fetch);
+    \draw[arrow] (wait) |- (fetch);
+    \draw[arrow] (fetch) -- (exec);
+    \draw[arrow] (exec) -- (progress);
+    \draw[arrow] (progress) -- (done);
+\end{tikzpicture}
+\caption{YouTube Download Flow with Binary Management}
+\label{fig:youtube_flow}
+\end{figure}
+
+\subsection{Platform Asset Selection}
+
+\begin{figure}[ht!]
+\centering
+\begin{tikzpicture}[
+    node distance=0.5cm,
+    box/.style={draw, rounded corners, minimum width=4cm, align=center, font=\scriptsize, fill=gray!5}
+]
+    \node[box] at (0,0) {win32-x64: yt-dlp.exe};
+    \node[box] at (0,-0.7) {win32-arm64: yt-dlp.exe};
+    \node[box] at (0,-1.4) {darwin-x64: yt-dlp\_macos};
+    \node[box] at (0,-2.1) {darwin-arm64: yt-dlp\_macos};
+    \node[box] at (0,-2.8) {linux-x64: yt-dlp\_linux};
+    \node[box] at (0,-3.5) {linux-arm64: yt-dlp\_linux\_aarch64};
+\end{tikzpicture}
+\caption{yt-dlp Binary Selection by Platform and Architecture}
+\label{fig:ytdlp_assets}
+\end{figure}
+
+%------------------------------------------------------------------------------
+% 6. FINGERPRINT WORKER POOL
+%------------------------------------------------------------------------------
+\section{Fingerprint Worker Pool}
+
+The \filepath{fingerprint.ts} uses parallel workers for batch fingerprinting.
+
+\begin{figure}[ht!]
+\centering
+\begin{tikzpicture}[
+    node distance=1cm,
+    queue/.style={draw, minimum width=3cm, minimum height=2cm, align=center, font=\small},
+    worker/.style={draw, circle, minimum size=1.2cm, fill=blue!10, font=\scriptsize},
+    arrow/.style={->, thick, >=stealth}
+]
+    % Task Queue
+    \node[queue, fill=yellow!10] (queue) {Task Queue\\(File Paths)};
+    
+    % Workers
+    \node[worker, right=2cm of queue] (w1) {W1};
+    \node[worker, below=0.3cm of w1] (w2) {W2};
+    \node[worker, below=0.3cm of w2] (w3) {W3};
+    \node[worker, below=0.3cm of w3] (w4) {W4};
+    
+    % fpcalc
+    \node[draw, rounded corners, fill=green!10, minimum width=2cm, minimum height=1.2cm, right=1.5cm of w2, align=center] (fpcalc) {fpcalc\\Binary};
+    
+    % Results
+    \node[queue, fill=successcolor!10, right=1.5cm of fpcalc, align=center] (results) {Results\\(Fingerprints)};
+    
+    % Arrows
+    \draw[arrow] (queue) -- (w1);
+    \draw[arrow] (queue) -- (w2);
+    \draw[arrow] (queue) -- (w3);
+    \draw[arrow] (queue) -- (w4);
+    
+    \draw[arrow] (w1) -- (fpcalc);
+    \draw[arrow] (w2) -- (fpcalc);
+    \draw[arrow] (w3) -- (fpcalc);
+    \draw[arrow] (w4) -- (fpcalc);
+    
+    \draw[arrow] (fpcalc) -- (results);
+    
+    % Labels
+    \node[below=0.3cm of queue, font=\scriptsize\itshape] {Main Process};
+    \node[below=0.3cm of w4, font=\scriptsize\itshape] {Parallel Workers};
+\end{tikzpicture}
+\caption{Parallel Fingerprint Worker Pool Architecture}
+\label{fig:fingerprint_pool}
+\end{figure}
+
+\subsection{Circuit Breaker Pattern}
+
+\begin{figure}[ht!]
+\centering
+\begin{tikzpicture}[
+    node distance=2.5cm,
+    state/.style={draw, ellipse, minimum width=2.5cm, minimum height=1cm, align=center, font=\small},
+    arrow/.style={->, thick, >=stealth}
+]
+    \node[state, fill=green!10] (normal) {NORMAL\\errors = 0};
+    \node[state, fill=yellow!15, right=of normal] (warning) {WARNING\\errors 1-4};
+    \node[state, fill=red!10, right=of warning] (broken) {BROKEN\\errors >= 5};
+    
+    \draw[arrow] (normal) to[bend left=20] node[above, font=\scriptsize] {Error} (warning);
+    \draw[arrow] (warning) to[bend left=20] node[above, font=\scriptsize] {More errors} (broken);
+    \draw[arrow] (warning) to[bend left=20] node[below, font=\scriptsize] {Success} (normal);
+    \draw[arrow] (broken) to[bend left=40] node[below, font=\scriptsize] {Reset (new session)} (normal);
+    
+    \node[below=0.5cm of warning, font=\scriptsize\itshape, text width=8cm, align=center] {Circuit breaker stops fingerprinting after 5 consecutive errors to prevent wasted API calls};
+\end{tikzpicture}
+\caption{Fingerprint Circuit Breaker Pattern}
+\label{fig:circuit_breaker_fp}
+\end{figure}
 
 %------------------------------------------------------------------------------
 % END DOCUMENT

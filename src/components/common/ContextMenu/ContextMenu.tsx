@@ -93,7 +93,7 @@ export function ContextMenu({ x, y, items, onClose }: ContextMenuProps) {
                     >
                         {item.icon && (
                             <span className="context-menu-icon">
-                                {item.icon.includes('.svg') ? (
+                                {item.icon.includes('.svg') || item.icon.startsWith('data:image/svg') || item.icon.startsWith('/') ? (
                                     <img src={item.icon} alt="" className="context-menu-icon-img" />
                                 ) : (
                                     item.icon

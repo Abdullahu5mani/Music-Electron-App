@@ -36,9 +36,9 @@ export function createWindow(): BrowserWindow {
   console.log('[Window] APP_ROOT:', process.env.APP_ROOT)
 
   win = new BrowserWindow({
-    width: 820,           // Default width
+    width: 1228,          // Default width
     height: 720,          // Default height
-    minWidth: 820,        // Minimum width
+    minWidth: 1228,       // Minimum width
     minHeight: 720,       // Minimum height
     frame: false,         // Remove default frame for custom titlebar
     // macOS-specific: use hiddenInset to show traffic lights with custom titlebar
