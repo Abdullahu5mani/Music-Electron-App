@@ -16,7 +16,7 @@
 \usepackage{textcomp}
 \usepackage{graphicx}
 \usepackage{xcolor}
-\usepackage{hyperref}
+\usepackage[plainpages=false, pdfpagelabels, hypertexnames=false]{hyperref}
 \usepackage{listings}
 \usepackage{booktabs}
 \usepackage{longtable}
@@ -32,7 +32,12 @@
 \usepackage{fontawesome5}
 \usepackage{tikz}
 \usepackage{pifont}
-\usetikzlibrary{shapes.geometric, arrows, arrows.meta, positioning, calc, fit, backgrounds}
+\usetikzlibrary{shapes.geometric, shapes.misc, arrows, arrows.meta, positioning, calc, fit, backgrounds}
+
+% Suppress overfull/underfull hbox warnings in log
+\usepackage{silence}
+\WarningFilter{latex}{Overfull}
+\WarningFilter{latex}{Underfull}
 
 %------------------------------------------------------------------------------
 % COLORS
@@ -75,9 +80,10 @@
 %------------------------------------------------------------------------------
 \lstset{
     backgroundcolor=\color{codebackground},
-    basicstyle=\ttfamily\small,
-    breakatwhitespace=false,
+    basicstyle=\ttfamily\footnotesize,
+    breakatwhitespace=true,
     breaklines=true,
+    breakautoindent=true,
     captionpos=b,
     frame=single,
     framerule=0.5pt,
@@ -91,7 +97,9 @@
     xleftmargin=0.5em,
     xrightmargin=0.5em,
     aboveskip=1em,
-    belowskip=1em
+    belowskip=1em,
+    columns=flexible,
+    postbreak=\mbox{\textcolor{gray}{$\hookrightarrow$}\space}
 }
 
 \lstdefinelanguage{TypeScript}{
@@ -161,6 +169,28 @@
 \titleformat{\subsection}
     {\normalfont\large\bfseries\color{sectioncolor}}
     {\thesubsection}{1em}{}
+
+%------------------------------------------------------------------------------
+% FIX OVERFULL/UNDERFULL HBOX WARNINGS
+%------------------------------------------------------------------------------
+% Suppress overfull hbox warnings by setting very high tolerances
+\hbadness=99999
+\vbadness=99999
+\tolerance=9999
+\emergencystretch=10em
+\hfuzz=\maxdimen
+\vfuzz=\maxdimen
+\widowpenalty=10000
+\clubpenalty=10000
+\sloppy
+
+% Allow line breaks in inline code
+\lstset{
+    breaklines=true,
+    breakatwhitespace=true,
+    breakautoindent=true,
+    postbreak=\mbox{\textcolor{gray}{$\hookrightarrow$}\space},
+}
 
 %------------------------------------------------------------------------------
 % DOCUMENT BEGIN
@@ -238,7 +268,7 @@ Think of Electron like a \textbf{theater production}:
 
 Think of this app as having two separate programs running at the same time:
 
-\begin{table}[h!]
+\begin{table}[ht!]
 \centering
 \begin{tabular}{@{}p{2cm}p{2.5cm}p{7cm}p{2.5cm}@{}}
 \toprule
@@ -461,7 +491,7 @@ const handleScanFolder = async () => {
 
 Electron provides two ways to communicate:
 
-\begin{table}[h!]
+\begin{table}[ht!]
 \centering
 \begin{tabular}{@{}p{3cm}p{4cm}p{6cm}@{}}
 \toprule
@@ -713,7 +743,7 @@ If you tell a dog to ``speak,'' it barks. If you tell a cat to ``speak,'' it meo
 
 \subsection{OOP Summary Table}
 
-\begin{table}[h!]
+\begin{table}[ht!]
 \centering
 \begin{tabular}{@{}p{3cm}p{4cm}p{6.5cm}@{}}
 \toprule
@@ -951,7 +981,7 @@ JavaScript is like the second situation. Functions accept ``something'' without 
 
 Think of variables as boxes that hold values:
 
-\begin{table}[h!]
+\begin{table}[ht!]
 \centering
 \begin{tabular}{@{}ccc@{}}
 \toprule
@@ -1033,7 +1063,7 @@ const items: string[] = ["rock", "pop", "jazz"];
 
 \subsubsection{Why Bother?}
 
-\begin{table}[h!]
+\begin{table}[ht!]
 \centering
 \begin{tabular}{@{}p{6cm}p{7.5cm}@{}}
 \toprule
@@ -1115,7 +1145,7 @@ TypeScript is used in \textbf{every part} of this application:
 
 \subsection{File Extensions Explained}
 
-\begin{table}[h!]
+\begin{table}[ht!]
 \centering
 \begin{tabular}{@{}p{2.5cm}p{4cm}p{7cm}@{}}
 \toprule
@@ -1228,7 +1258,7 @@ When you run \inlinecode{npm run dev} or \inlinecode{npm run build}:
 
 \subsection{Quick TypeScript Syntax Reference}
 
-\begin{table}[h!]
+\begin{table}[ht!]
 \centering
 \begin{tabular}{@{}p{5cm}p{8.5cm}@{}}
 \toprule
@@ -1669,7 +1699,7 @@ scanMusicFolder(42);  // ERROR: number is not assignable to string
 
 Located in \filepath{electron/ipc/modules/}:
 
-\begin{table}[h!]
+\begin{table}[ht!]
 \centering
 \begin{tabular}{@{}p{4cm}p{8cm}@{}}
 \toprule
@@ -2557,7 +2587,7 @@ playlistHandlers & \inlinecode{playlist-create} & invoke & Create a new playlist
 
 API calls are rate-limited to respect external service limits.
 
-\begin{table}[h!]
+\begin{table}[ht!]
 \centering
 \begin{tabular}{@{}p{3cm}p{4cm}p{3.5cm}p{3.5cm}@{}}
 \toprule
@@ -2814,7 +2844,7 @@ The application uses two distinct worker pool systems to maximize CPU utilizatio
 
 \section{Worker Pool Systems}
 
-\begin{table}[h!]
+\begin{table}[ht!]
 \centering
 \begin{tabular}{@{}p{4cm}p{5cm}p{5cm}@{}}
 \toprule
@@ -2839,7 +2869,7 @@ FingerprintWorkerPool & Audio fingerprinting & 15 concurrent fpcalc \\
 
 \section{Key Storage Locations}
 
-\begin{table}[h!]
+\begin{table}[ht!]
 \centering
 \begin{tabular}{@{}p{4cm}p{5cm}p{5cm}@{}}
 \toprule
@@ -2892,7 +2922,7 @@ Metadata & Embedded in audio files (ID3/Vorbis) & Permanent \\
 
 \subsection{yt-dlp Binary --- Full Cross-Platform Support}
 
-\begin{table}[h!]
+\begin{table}[ht!]
 \centering
 \begin{tabular}{@{}p{3cm}p{4cm}p{3.5cm}p{3.5cm}@{}}
 \toprule
@@ -2911,7 +2941,7 @@ Linux & ARM64 & \filepath{yt-dlp\_linux\_arm64} & \cmark\ Supported \\
 
 \subsection{fpcalc Binary --- Partial ARM64 Support}
 
-\begin{table}[h!]
+\begin{table}[ht!]
 \centering
 \begin{tabular}{@{}p{3cm}p{4cm}p{3.5cm}p{3.5cm}@{}}
 \toprule
@@ -2934,7 +2964,7 @@ Chromaprint (fpcalc) project doesn't publish ARM64 builds for Windows or Linux. 
 
 \section{Feature Availability by Platform}
 
-\begin{table}[h!]
+\begin{table}[ht!]
 \centering
 \begin{tabular}{@{}p{3cm}p{4cm}p{3.5cm}p{3.5cm}@{}}
 \toprule
@@ -2983,7 +3013,7 @@ A canvas-based real-time audio spectrum analyzer.
 
 \textbf{Visualization Modes:}
 
-\begin{table}[h!]
+\begin{table}[ht!]
 \centering
 \begin{tabular}{@{}p{5cm}p{9cm}@{}}
 \toprule
@@ -3007,7 +3037,7 @@ A canvas-based real-time audio spectrum analyzer.
 
 \section{Enhanced Sidebar}
 
-\begin{table}[h!]
+\begin{table}[ht!]
 \centering
 \begin{tabular}{@{}p{5cm}p{9cm}@{}}
 \toprule
@@ -3076,7 +3106,7 @@ if (picture.data.length > MAX_ALBUM_ART_SIZE) {
 
 \section{Notification Types}
 
-\begin{table}[h!]
+\begin{table}[ht!]
 \centering
 \begin{tabular}{@{}p{3cm}p{4cm}p{3.5cm}p{3.5cm}@{}}
 \toprule
@@ -3108,7 +3138,7 @@ if (picture.data.length > MAX_ALBUM_ART_SIZE) {
 
 \section{The Big Picture: Your App is Like a Restaurant}
 
-\begin{table}[h!]
+\begin{table}[ht!]
 \centering
 \begin{tabular}{@{}p{4cm}p{5cm}p{5cm}@{}}
 \toprule
@@ -3191,7 +3221,7 @@ CREATE TABLE metadata_cache (
 \end{lstlisting}
 
 \textbf{Scan Status Types:}
-\begin{table}[h!]
+\begin{table}[ht!]
 \centering
 \begin{tabular}{@{}p{4cm}p{5cm}p{5cm}@{}}
 \toprule
@@ -3251,7 +3281,7 @@ The app includes AI-powered lyrics transcription using Whisper.cpp:
 
 \section{Available Whisper Models}
 
-\begin{table}[h!]
+\begin{table}[ht!]
 \centering
 \begin{tabular}{@{}p{2.5cm}p{3cm}p{3cm}p{3cm}p{2.5cm}@{}}
 \toprule
@@ -3295,7 +3325,7 @@ The app includes AI-powered lyrics transcription using Whisper.cpp:
 
 \section{usePlaylists Hook Functions}
 
-\begin{table}[h!]
+\begin{table}[ht!]
 \centering
 \begin{tabular}{@{}p{5cm}p{9cm}@{}}
 \toprule
@@ -3325,7 +3355,7 @@ Manages audio playback using Howler.js with shuffle, repeat, and history.
 
 \subsection{Return Values}
 
-\begin{table}[h!]
+\begin{table}[ht!]
 \centering
 \begin{tabular}{@{}p{4cm}p{5cm}p{5cm}@{}}
 \toprule
@@ -3560,7 +3590,7 @@ The app includes \textbf{39 custom SVG icons} in \filepath{src/assets/icons/}.
 
 \section{Icons by Category}
 
-\begin{table}[h!]
+\begin{table}[ht!]
 \centering
 \begin{tabular}{@{}p{5cm}p{9cm}@{}}
 \toprule
@@ -3603,7 +3633,7 @@ Services handle API/IPC communication in \filepath{src/services/}.
 
 Queries AcoustID database to identify songs by audio fingerprint.
 
-\begin{table}[h!]
+\begin{table}[ht!]
 \centering
 \begin{tabular}{@{}p{5cm}p{9cm}@{}}
 \toprule
@@ -3619,7 +3649,7 @@ Queries AcoustID database to identify songs by audio fingerprint.
 
 Queries MusicBrainz for detailed metadata and cover art URLs.
 
-\begin{table}[h!]
+\begin{table}[ht!]
 \centering
 \begin{tabular}{@{}p{5cm}p{9cm}@{}}
 \toprule
@@ -3646,7 +3676,7 @@ Queries MusicBrainz for detailed metadata and cover art URLs.
 
 Generates fingerprints via fpcalc binary (IPC to Main Process).
 
-\begin{table}[h!]
+\begin{table}[ht!]
 \centering
 \begin{tabular}{@{}p{5cm}p{9cm}@{}}
 \toprule
@@ -3693,7 +3723,7 @@ const colors = await extractColorsFromImage(albumArt)
 
 Converts paths to \inlinecode{file://} URLs cross-platform.
 
-\begin{table}[h!]
+\begin{table}[ht!]
 \centering
 \begin{tabular}{@{}p{4cm}p{5cm}p{5cm}@{}}
 \toprule
@@ -3710,7 +3740,7 @@ macOS/Linux & \inlinecode{/Users/song.mp3} & \inlinecode{file:///Users/song.mp3}
 
 Sorting helpers for music library.
 
-\begin{table}[h!]
+\begin{table}[ht!]
 \centering
 \begin{tabular}{@{}p{5cm}p{9cm}@{}}
 \toprule
@@ -3924,7 +3954,7 @@ For each fingerprint (rate-limited):
 \chapter{Keyboard Shortcuts}
 \label{ch:keyboard}
 
-\begin{table}[h!]
+\begin{table}[ht!]
 \centering
 \begin{tabular}{@{}p{5cm}p{9cm}@{}}
 \toprule
@@ -3954,7 +3984,7 @@ Main application component that orchestrates all features.
 
 \section{State Management}
 
-\begin{table}[h!]
+\begin{table}[ht!]
 \centering
 \begin{tabular}{@{}p{4cm}p{5cm}p{5cm}@{}}
 \toprule
@@ -4060,7 +4090,7 @@ During development, Electron shows security warnings. This section explains them
 
 \section{Summary}
 
-\begin{table}[h!]
+\begin{table}[ht!]
 \centering
 \begin{tabular}{@{}p{3cm}p{4cm}p{3.5cm}p{3.5cm}@{}}
 \toprule
@@ -4215,7 +4245,7 @@ When user clicks ``Install'' in Settings for Whisper.cpp:
 
 \section{Error Handling}
 
-\begin{table}[h!]
+\begin{table}[ht!]
 \centering
 \begin{tabular}{@{}p{4cm}p{5cm}p{5cm}@{}}
 \toprule
@@ -4294,7 +4324,7 @@ Uses Node.js \inlinecode{fs.watch()} with debouncing to prevent duplicate events
 \chapter{Playlist Error Handling}
 \label{ch:playlisterrors}
 
-\begin{table}[h!]
+\begin{table}[ht!]
 \centering
 \begin{tabular}{@{}p{5cm}p{9cm}@{}}
 \toprule
@@ -4331,7 +4361,7 @@ Premium design for seek bar and volume slider.
 
 \section{Design Comparison}
 
-\begin{table}[h!]
+\begin{table}[ht!]
 \centering
 \begin{tabular}{@{}p{4cm}p{5cm}p{5cm}@{}}
 \toprule
@@ -4433,7 +4463,7 @@ analyser.connect(Howler.ctx.destination)
 
 \section{Visualization Modes}
 
-\begin{table}[h!]
+\begin{table}[ht!]
 \centering
 \begin{tabular}{@{}p{5cm}p{9cm}@{}}
 \toprule
@@ -4512,7 +4542,7 @@ Full-page settings panel.
 
 Understanding the distinction between \filepath{services/} and \filepath{utils/}.
 
-\begin{table}[h!]
+\begin{table}[ht!]
 \centering
 \begin{tabular}{@{}p{4cm}p{5cm}p{5cm}@{}}
 \toprule
@@ -4538,7 +4568,7 @@ Feature-based organization pattern.
 
 \section{Folder Breakdown}
 
-\begin{table}[h!]
+\begin{table}[ht!]
 \centering
 \begin{tabular}{@{}p{5cm}p{9cm}@{}}
 \toprule
@@ -4586,7 +4616,7 @@ Timing benchmarks for scan operations.
 
 \section{Library Size Scaling}
 
-\begin{table}[h!]
+\begin{table}[ht!]
 \centering
 \begin{tabular}{@{}p{3cm}p{4cm}p{3.5cm}p{3.5cm}@{}}
 \toprule
@@ -4605,7 +4635,7 @@ Timing benchmarks for scan operations.
 
 \section{CPU Core Scaling}
 
-\begin{table}[h!]
+\begin{table}[ht!]
 \centering
 \begin{tabular}{@{}p{3cm}p{4cm}p{3.5cm}p{3.5cm}@{}}
 \toprule
@@ -4688,7 +4718,7 @@ Real-time file system monitoring.
 
 \section{Event Types}
 
-\begin{table}[h!]
+\begin{table}[ht!]
 \centering
 \begin{tabular}{@{}p{4cm}p{5cm}p{5cm}@{}}
 \toprule
@@ -4713,7 +4743,7 @@ Real-time file system monitoring.
 
 \section{Platform Support}
 
-\begin{table}[h!]
+\begin{table}[ht!]
 \centering
 \begin{tabular}{@{}p{4cm}p{5cm}p{5cm}@{}}
 \toprule
@@ -4744,7 +4774,7 @@ Linux & Partial & May not work on all systems \\
 
 Backend core modules and their responsibilities.
 
-\begin{table}[h!]
+\begin{table}[ht!]
 \centering
 \begin{tabular}{@{}p{5cm}p{9cm}@{}}
 \toprule
@@ -4869,7 +4899,7 @@ win = new BrowserWindow({
 
 API exposed via \inlinecode{contextBridge.exposeInMainWorld('electronAPI', ...)}.
 
-\section{INVOKE (Request $\rightarrow$ Response)}
+\section{INVOKE (Request \texorpdfstring{$\rightarrow$}{->} Response)}
 
 \begin{tabular}{@{}l@{}}
 \inlinecode{scanMusicFolder()} \\
@@ -4890,7 +4920,7 @@ API exposed via \inlinecode{contextBridge.exposeInMainWorld('electronAPI', ...)}
 \inlinecode{closeWindow()} \\
 \end{tabular}
 
-\section{LISTENERS (Main $\rightarrow$ Renderer)}
+\section{LISTENERS (Main \texorpdfstring{$\rightarrow$}{->} Renderer)}
 
 \begin{tabular}{@{}l@{}}
 \inlinecode{onDownloadProgress()} \\
@@ -4941,7 +4971,7 @@ function generateFileHash(filePath: string): string {
 
 \section{Scan Status Types}
 
-\begin{table}[h!]
+\begin{table}[ht!]
 \centering
 \begin{tabular}{@{}p{4cm}p{5cm}p{5cm}@{}}
 \toprule
@@ -4976,7 +5006,7 @@ function generateFileHash(filePath: string): string {
 
 Where different data types are stored.
 
-\begin{table}[h!]
+\begin{table}[ht!]
 \centering
 \begin{tabular}{@{}p{4cm}p{5cm}p{5cm}@{}}
 \toprule
@@ -5190,7 +5220,7 @@ Managing external binaries for audio processing.
 
 \section{Binary Overview}
 
-\begin{table}[h!]
+\begin{table}[ht!]
 \centering
 \begin{tabular}{@{}p{3cm}p{4cm}p{3.5cm}p{3.5cm}@{}}
 \toprule
@@ -5349,7 +5379,7 @@ Algorithm to find original release over compilations.
 
 \section{Scoring Criteria}
 
-\begin{table}[h!]
+\begin{table}[ht!]
 \centering
 \begin{tabular}{@{}p{5cm}p{9cm}@{}}
 \toprule
@@ -5423,7 +5453,7 @@ type SortOption = 'title' | 'artist' | 'track' | 'dateAdded'
 
 \section{Sort Behaviors}
 
-\begin{table}[h!]
+\begin{table}[ht!]
 \centering
 \begin{tabular}{@{}p{3cm}p{4cm}p{3.5cm}p{3.5cm}@{}}
 \toprule
@@ -5464,7 +5494,7 @@ News of the World - Track 2
 
 All functions in \filepath{playlistDatabase.ts}.
 
-\begin{table}[h!]
+\begin{table}[ht!]
 \centering
 \begin{tabular}{@{}p{5cm}p{9cm}@{}}
 \toprule
@@ -5549,7 +5579,7 @@ API delay utilities in \filepath{rateLimiter.ts}.
 
 \section{Delay Values}
 
-\begin{table}[h!]
+\begin{table}[ht!]
 \centering
 \begin{tabular}{@{}p{4cm}p{5cm}p{5cm}@{}}
 \toprule
@@ -5673,7 +5703,7 @@ Main song list with sorting and context menu.
 
 \section{Props}
 
-\begin{table}[h!]
+\begin{table}[ht!]
 \centering
 \begin{tabular}{@{}p{4cm}p{5cm}p{5cm}@{}}
 \toprule
@@ -5898,7 +5928,7 @@ function pathToFileURL(filePath: string): string
 
 \section{Platform Handling}
 
-\begin{table}[h!]
+\begin{table}[ht!]
 \centering
 \begin{tabular}{@{}p{4cm}p{5cm}p{5cm}@{}}
 \toprule
@@ -5961,7 +5991,7 @@ Rate limiter constants in \filepath{rateLimiter.ts}.
 
 \section{Official Limits vs App Delays}
 
-\begin{table}[h!]
+\begin{table}[ht!]
 \centering
 \begin{tabular}{@{}p{4cm}p{5cm}p{5cm}@{}}
 \toprule
@@ -5995,7 +6025,7 @@ const API_DELAYS = {
 
 Real-world analogies for React hooks.
 
-\begin{table}[h!]
+\begin{table}[ht!]
 \centering
 \begin{tabular}{@{}p{4cm}p{5cm}p{5cm}@{}}
 \toprule
@@ -6052,7 +6082,7 @@ NotificationToast & Announcement & Pop-up notifications \\
 
 Restaurant analogies for backend files.
 
-\begin{table}[h!]
+\begin{table}[ht!]
 \centering
 \begin{tabular}{@{}p{4cm}p{5cm}p{5cm}@{}}
 \toprule
@@ -6083,7 +6113,7 @@ settings.ts & Preferences Notepad & Saves settings \\
 
 IPC handlers as specialized kitchen chefs.
 
-\begin{table}[h!]
+\begin{table}[ht!]
 \centering
 \begin{tabular}{@{}p{4cm}p{5cm}p{5cm}@{}}
 \toprule
@@ -6144,7 +6174,7 @@ Navigation panel showing playlists, artists, albums.
 
 \section{Props}
 
-\begin{table}[h!]
+\begin{table}[ht!]
 \centering
 \begin{tabular}{@{}p{4cm}p{5cm}p{5cm}@{}}
 \toprule
@@ -6172,7 +6202,7 @@ Electron security warnings explained.
 
 \section{Warning Overview}
 
-\begin{table}[h!]
+\begin{table}[ht!]
 \centering
 \begin{tabular}{@{}p{3cm}p{4cm}p{3.5cm}p{3.5cm}@{}}
 \toprule
@@ -6245,7 +6275,7 @@ Bottom playback controls with visualizer.
 
 \section{Props}
 
-\begin{table}[h!]
+\begin{table}[ht!]
 \centering
 \begin{tabular}{@{}p{4cm}p{5cm}p{5cm}@{}}
 \toprule
@@ -6286,7 +6316,7 @@ Bottom playback controls with visualizer.
 
 Feature-based component organization.
 
-\begin{table}[h!]
+\begin{table}[ht!]
 \centering
 \begin{tabular}{@{}p{4cm}p{5cm}p{5cm}@{}}
 \toprule
@@ -6312,7 +6342,7 @@ download/ & YouTube download & DownloadButton, Notification \\
 
 Source folder organization.
 
-\begin{table}[h!]
+\begin{table}[ht!]
 \centering
 \begin{tabular}{@{}p{5cm}p{9cm}@{}}
 \toprule
@@ -6339,7 +6369,7 @@ Worker pool configuration for metadata parsing.
 
 \section{Worker Pool Configuration}
 
-\begin{table}[h!]
+\begin{table}[ht!]
 \centering
 \begin{tabular}{@{}p{5cm}p{9cm}@{}}
 \toprule
@@ -6402,7 +6432,7 @@ Fingerprinting is CPU-intensive audio processing, not just reading metadata tags
 
 API services as phone operators.
 
-\begin{table}[h!]
+\begin{table}[ht!]
 \centering
 \begin{tabular}{@{}p{4cm}p{5cm}p{5cm}@{}}
 \toprule
@@ -6424,7 +6454,7 @@ fingerprint.ts & Fingerprint Generator & Create audio IDs via backend \\
 
 Utility modules as helper tools.
 
-\begin{table}[h!]
+\begin{table}[ht!]
 \centering
 \begin{tabular}{@{}p{4cm}p{5cm}p{5cm}@{}}
 \toprule
@@ -6493,7 +6523,7 @@ import { useSongScanner } from './hooks/useSongScanner'
 
 Understanding the distinction.
 
-\begin{table}[h!]
+\begin{table}[ht!]
 \centering
 \begin{tabular}{@{}p{4cm}p{5cm}p{5cm}@{}}
 \toprule
@@ -6517,7 +6547,7 @@ Testability & Requires mocking & Easily unit tested \\
 
 Methods of the parallel scanner class.
 
-\begin{table}[h!]
+\begin{table}[ht!]
 \centering
 \begin{tabular}{@{}p{5cm}p{9cm}@{}}
 \toprule
@@ -6549,7 +6579,7 @@ Methods of the parallel scanner class.
 
 Methods of the fingerprint worker pool.
 
-\begin{table}[h!]
+\begin{table}[ht!]
 \centering
 \begin{tabular}{@{}p{5cm}p{9cm}@{}}
 \toprule
@@ -6607,7 +6637,7 @@ Approximate lines of code per file.
 
 \section{Main Process Files}
 
-\begin{table}[h!]
+\begin{table}[ht!]
 \centering
 \begin{tabular}{@{}p{3cm}p{4cm}p{3.5cm}p{3.5cm}@{}}
 \toprule
@@ -6631,7 +6661,7 @@ youtubeDownloader.ts & \textasciitilde250 & YouTube download \\
 
 \section{Renderer Process Files}
 
-\begin{table}[h!]
+\begin{table}[ht!]
 \centering
 \begin{tabular}{@{}p{3cm}p{4cm}p{3.5cm}p{3.5cm}@{}}
 \toprule
@@ -8534,6 +8564,372 @@ The \filepath{fingerprint.ts} uses parallel workers for batch fingerprinting.
 \caption{Fingerprint Circuit Breaker Pattern}
 \label{fig:circuit_breaker_fp}
 \end{figure}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% CHAPTER: COMPLETE IPC REFERENCE
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\chapter{Complete IPC Channel Reference}
+\label{ch:ipc_reference}
+
+This chapter provides an extremely detailed reference of every IPC channel in the application, organized by handler module. Each section shows what channels are exposed, what they do, and how they connect to other parts of the system.
+
+\begin{infobox}
+\textbf{How to Read This Chapter}: Each handler module exposes multiple IPC channels. For each channel, we show:
+\begin{itemize}
+    \item \textbf{Channel Name}: The string used in \inlinecode{ipcMain.handle('channel-name')}
+    \item \textbf{Parameters}: What the frontend sends
+    \item \textbf{Returns}: What the backend sends back
+    \item \textbf{Dependencies}: What other modules/APIs it calls
+\end{itemize}
+\end{infobox}
+
+%------------------------------------------------------------------------------
+\section{Music Handlers (musicHandlers.ts)}
+
+\begin{figure}[ht!]
+\centering
+\begin{tikzpicture}[
+    handler/.style={draw, rounded corners, minimum width=3.5cm, minimum height=0.8cm, align=center, fill=blue!10, font=\small},
+    dep/.style={draw, rounded corners, minimum width=2.5cm, minimum height=0.6cm, align=center, fill=gray!10, font=\scriptsize},
+    arrow/.style={->, thick, >=stealth}
+]
+    % Handler box
+    \node[draw, rounded corners, minimum width=10cm, minimum height=4cm, fill=blue!5] (box) at (0, 0) {};
+    \node[above=0cm of box, font=\bfseries] {musicHandlers.ts};
+    
+    % Channels
+    \node[handler] (scan) at (-2.5, 1) {scan-music-folder};
+    \node[handler] (select) at (2.5, 1) {select-music-folder};
+    \node[handler] (read) at (-2.5, 0) {read-single-file-metadata};
+    \node[handler] (write) at (2.5, 0) {write-metadata};
+    \node[handler] (cover) at (-2.5, -1) {write-cover-art};
+    \node[handler] (buffer) at (2.5, -1) {read-file-buffer};
+    
+    % Dependencies
+    \node[dep] (scanner) at (-5, -2.5) {ParallelMetadataScanner};
+    \node[dep] (dialog) at (0, -2.5) {Electron Dialog};
+    \node[dep] (fs) at (5, -2.5) {Node fs};
+    
+    \draw[arrow] (scan) -- (scanner);
+    \draw[arrow] (select) -- (dialog);
+    \draw[arrow] (write) -- (fs);
+\end{tikzpicture}
+\caption{Music Handlers IPC Architecture}
+\label{fig:music_handlers}
+\end{figure}
+
+\subsection{Channel: scan-music-folder}
+\begin{tabular}{@{}p{3cm}p{11cm}@{}}
+\textbf{Purpose} & Scans a directory for music files using parallel processing \\
+\textbf{Parameters} & \inlinecode{folderPath: string} --- Path to scan \\
+\textbf{Returns} & \inlinecode{MusicFile[]} --- Array of parsed music files with metadata \\
+\textbf{Dependencies} & \filepath{parallelMetadataScanner.ts} --- Uses worker pool for parallel parsing \\
+\textbf{Exposed As} & \inlinecode{window.electronAPI.scanMusicFolder(path)} \\
+\end{tabular}
+
+\subsection{Channel: select-music-folder}
+\begin{tabular}{@{}p{3cm}p{11cm}@{}}
+\textbf{Purpose} & Opens OS folder picker dialog \\
+\textbf{Parameters} & None \\
+\textbf{Returns} & \inlinecode{string | null} --- Selected folder path or null if cancelled \\
+\textbf{Dependencies} & \inlinecode{Electron.dialog.showOpenDialog()} \\
+\end{tabular}
+
+\subsection{Channel: write-metadata}
+\begin{tabular}{@{}p{3cm}p{11cm}@{}}
+\textbf{Purpose} & Writes ID3/Vorbis tags to audio file \\
+\textbf{Parameters} & \inlinecode{filePath: string, metadata: AudioMetadata} \\
+\textbf{Returns} & \inlinecode{\{success: boolean, error?: string\}} \\
+\textbf{Dependencies} & \inlinecode{node-taglib-sharp} library \\
+\end{tabular}
+
+%------------------------------------------------------------------------------
+\section{Fingerprint Handlers (fingerprintHandlers.ts)}
+
+\begin{figure}[ht!]
+\centering
+\begin{tikzpicture}[
+    handler/.style={draw, rounded corners, minimum width=4cm, minimum height=0.7cm, align=center, fill=green!10, font=\small},
+    dep/.style={draw, rounded corners, minimum width=2.5cm, minimum height=0.6cm, align=center, fill=gray!10, font=\scriptsize},
+    arrow/.style={->, thick, >=stealth}
+]
+    % Handler box
+    \node[draw, rounded corners, minimum width=11cm, minimum height=3cm, fill=green!5] (box) at (0, 0) {};
+    \node[above=0cm of box, font=\bfseries] {fingerprintHandlers.ts};
+    
+    % Channels
+    \node[handler] (check) at (-3, 0.6) {fingerprint-check-ready};
+    \node[handler] (ensure) at (3, 0.6) {fingerprint-ensure-ready};
+    \node[handler] (single) at (-3, -0.3) {generate-fingerprint};
+    \node[handler] (batch) at (3, -0.3) {generate-fingerprints-batch};
+    
+    % Dependencies
+    \node[dep] (fpcalc) at (-4, -2) {fpcalcManager};
+    \node[dep] (pool) at (0, -2) {FingerprintWorkerPool};
+    \node[dep] (binary) at (4, -2) {fpcalc binary};
+    
+    \draw[arrow] (single) -- (fpcalc);
+    \draw[arrow] (batch) -- (pool);
+    \draw[arrow] (fpcalc) -- (binary);
+    \draw[arrow] (pool) -- (binary);
+\end{tikzpicture}
+\caption{Fingerprint Handlers Flow}
+\label{fig:fingerprint_handlers}
+\end{figure}
+
+\subsection{Channel: generate-fingerprints-batch}
+\begin{tabular}{@{}p{3cm}p{11cm}@{}}
+\textbf{Purpose} & Generate fingerprints for multiple files in PARALLEL \\
+\textbf{Parameters} & \inlinecode{filePaths: string[]} --- Array of file paths \\
+\textbf{Returns} & \inlinecode{\{results: FingerprintResult[], stats: BatchStats\}} \\
+\textbf{Dependencies} & \filepath{fingerprintWorkerPool.ts} --- Uses (CPU-1) concurrent workers \\
+\textbf{Events Emitted} & \inlinecode{fingerprint-batch-progress} --- Real-time progress updates \\
+\end{tabular}
+
+\begin{lstlisting}[language=TypeScript, title=Batch Fingerprint Usage]
+// Frontend calls batch API
+const result = await window.electronAPI.generateFingerprintsBatch(filePaths);
+
+// Listen for progress events
+window.electronAPI.onFingerprintProgress((progress) => {
+  console.log(`${progress.completed}/${progress.total} - Worker ${progress.workerId}`);
+});
+\end{lstlisting}
+
+%------------------------------------------------------------------------------
+\section{API Handlers (apiHandlers.ts)}
+
+\begin{figure}[ht!]
+\centering
+\begin{tikzpicture}[
+    handler/.style={draw, rounded corners, minimum width=3.5cm, minimum height=0.7cm, align=center, fill=purple!10, font=\small},
+    api/.style={draw, rounded corners, minimum width=2.5cm, minimum height=0.6cm, align=center, fill=orange!15, font=\scriptsize},
+    arrow/.style={->, thick, >=stealth}
+]
+    % Handler box
+    \node[draw, rounded corners, minimum width=10cm, minimum height=2.5cm, fill=purple!5] (box) at (0, 0) {};
+    \node[above=0cm of box, font=\bfseries] {apiHandlers.ts};
+    
+    % Channels
+    \node[handler] (acoustid) at (-2.5, 0.4) {lookup-acoustid};
+    \node[handler] (mb) at (2.5, 0.4) {lookup-musicbrainz};
+    \node[handler] (img) at (-2.5, -0.5) {download-image};
+    \node[handler] (imgf) at (2.5, -0.5) {download-image-with-fallback};
+    
+    % External APIs
+    \node[api] (acid) at (-4, -2) {AcoustID API};
+    \node[api] (mbapi) at (0, -2) {MusicBrainz API};
+    \node[api] (caa) at (4, -2) {Cover Art Archive};
+    
+    \draw[arrow] (acoustid) -- (acid);
+    \draw[arrow] (mb) -- (mbapi);
+    \draw[arrow] (imgf) -- (caa);
+\end{tikzpicture}
+\caption{External API Handlers}
+\label{fig:api_handlers}
+\end{figure}
+
+\subsection{Channel: lookup-acoustid}
+\begin{tabular}{@{}p{3cm}p{11cm}@{}}
+\textbf{Purpose} & Look up song by audio fingerprint \\
+\textbf{Parameters} & \inlinecode{fingerprint: string, duration: number} \\
+\textbf{Returns} & \inlinecode{\{mbid: string, title: string, artist: string\} | null} \\
+\textbf{Rate Limit} & 3 requests/second \\
+\textbf{Min Score} & Rejects matches below 70\% confidence \\
+\end{tabular}
+
+\subsection{Channel: lookup-musicbrainz}
+\begin{tabular}{@{}p{3cm}p{11cm}@{}}
+\textbf{Purpose} & Fetch full metadata using MusicBrainz Recording ID (MBID) \\
+\textbf{Parameters} & \inlinecode{mbid: string} --- Recording ID from AcoustID \\
+\textbf{Returns} & Full recording object with artists, releases, release-groups \\
+\textbf{Rate Limit} & 1 request/second (MusicBrainz policy) \\
+\end{tabular}
+
+%------------------------------------------------------------------------------
+\section{Cache Handlers (cacheHandlers.ts)}
+
+\begin{figure}[ht!]
+\centering
+\begin{tikzpicture}[
+    handler/.style={draw, rounded corners, minimum width=3.5cm, minimum height=0.6cm, align=center, fill=yellow!15, font=\scriptsize},
+    arrow/.style={->, thick, >=stealth}
+]
+    % Handler box
+    \node[draw, rounded corners, minimum width=11cm, minimum height=3.5cm, fill=yellow!5] (box) at (0, 0) {};
+    \node[above=0cm of box, font=\bfseries] {cacheHandlers.ts};
+    
+    % Channels (2 columns)
+    \node[handler] (status) at (-3, 1) {cache-get-file-status};
+    \node[handler] (mark) at (3, 1) {cache-mark-file-scanned};
+    \node[handler] (batch) at (-3, 0.2) {cache-get-batch-status};
+    \node[handler] (unscanned) at (3, 0.2) {cache-get-unscanned-files};
+    \node[handler] (stats) at (-3, -0.6) {cache-get-statistics};
+    \node[handler] (entry) at (3, -0.6) {cache-get-entry};
+    \node[handler] (clear) at (0, -1.4) {cache-clear};
+    
+    % SQLite
+    \node[draw, cylinder, shape border rotate=90, aspect=0.3, fill=gray!20, minimum height=1cm, minimum width=1.5cm] (db) at (0, -3) {};
+    \node[below=0.1cm of db, font=\scriptsize] {metadata-cache.db};
+    
+    \draw[arrow] (status) -- (db);
+    \draw[arrow] (mark) -- (db);
+    \draw[arrow] (batch) -- (db);
+\end{tikzpicture}
+\caption{Cache Handlers with SQLite Backend}
+\label{fig:cache_handlers}
+\end{figure}
+
+\subsection{All Cache Channels}
+\begin{tabular}{@{}p{4.5cm}p{9.5cm}@{}}
+\textbf{cache-get-file-status} & Returns scan status: 'unscanned' | 'scanned-tagged' | 'scanned-no-match' \\
+\textbf{cache-mark-file-scanned} & Marks file as scanned with optional MBID \\
+\textbf{cache-get-batch-status} & Get status for multiple files at once (efficient) \\
+\textbf{cache-get-unscanned-files} & Filter list to only unscanned files \\
+\textbf{cache-get-statistics} & Get counts: total scanned, with metadata, without metadata \\
+\textbf{cache-clear} & Clear entire cache (debug/reset) \\
+\end{tabular}
+
+%------------------------------------------------------------------------------
+\section{Lyrics Handlers (lyricsHandlers.ts)}
+
+\begin{figure}[ht!]
+\centering
+\begin{tikzpicture}[
+    step/.style={draw, rounded corners, minimum width=3cm, minimum height=0.7cm, align=center, font=\small},
+    arrow/.style={->, thick, >=stealth}
+]
+    \node[step, fill=blue!10] (song) at (0, 0) {Audio File};
+    \node[step, fill=purple!10] (ffmpeg) at (3.5, 0) {FFmpeg};
+    \node[step, fill=yellow!15] (wav) at (7, 0) {16kHz WAV};
+    \node[step, fill=green!10] (whisper) at (10.5, 0) {Whisper.cpp};
+    \node[step, fill=orange!15] (lyrics) at (14, 0) {Lyrics Text};
+    
+    \draw[arrow] (song) -- node[above, font=\scriptsize] {extract} (ffmpeg);
+    \draw[arrow] (ffmpeg) -- node[above, font=\scriptsize] {convert} (wav);
+    \draw[arrow] (wav) -- node[above, font=\scriptsize] {transcribe} (whisper);
+    \draw[arrow] (whisper) -- node[above, font=\scriptsize] {parse} (lyrics);
+\end{tikzpicture}
+\caption{Lyrics Generation Pipeline}
+\label{fig:lyrics_pipeline_ref}
+\end{figure}
+
+\subsection{Channel: generate-lyrics}
+\begin{tabular}{@{}p{3cm}p{11cm}@{}}
+\textbf{Purpose} & Generate lyrics from audio using AI transcription \\
+\textbf{Parameters} & \inlinecode{filePath: string} --- Path to audio file \\
+\textbf{Returns} & \inlinecode{\{success: boolean, lyrics?: string, error?: string\}} \\
+\textbf{Process} & FFmpeg extracts audio $\rightarrow$ Convert to 16kHz WAV $\rightarrow$ Whisper.cpp transcribes \\
+\textbf{Events} & \inlinecode{lyrics-progress} --- Step-by-step progress updates \\
+\end{tabular}
+
+%------------------------------------------------------------------------------
+\section{YouTube Handlers (youtubeHandlers.ts)}
+
+\begin{figure}[ht!]
+\centering
+\begin{tikzpicture}[
+    handler/.style={draw, rounded corners, minimum width=4cm, minimum height=0.7cm, align=center, fill=red!10, font=\small},
+    binary/.style={draw, rounded corners, minimum width=2cm, minimum height=0.6cm, align=center, fill=gray!15, font=\scriptsize},
+    arrow/.style={->, thick, >=stealth}
+]
+    % Handler box
+    \node[draw, rounded corners, minimum width=11cm, minimum height=3cm, fill=red!5] (box) at (0, 0) {};
+    \node[above=0cm of box, font=\bfseries] {youtubeHandlers.ts};
+    
+    % Channels
+    \node[handler] (download) at (-3, 0.5) {download-youtube};
+    \node[handler] (status) at (3, 0.5) {get-binary-status};
+    \node[handler] (install) at (-3, -0.4) {install-whisper};
+    \node[handler] (fpc) at (3, -0.4) {install-fpcalc};
+    
+    % Binaries
+    \node[binary] (ytdlp) at (-4, -2) {yt-dlp};
+    \node[binary] (ffmpeg) at (-1, -2) {ffmpeg};
+    \node[binary] (whisper) at (2, -2) {whisper.cpp};
+    \node[binary] (fpcbin) at (5, -2) {fpcalc};
+    
+    \draw[arrow] (download) -- (ytdlp);
+    \draw[arrow] (download) -- (ffmpeg);
+    \draw[arrow] (install) -- (whisper);
+    \draw[arrow] (fpc) -- (fpcbin);
+\end{tikzpicture}
+\caption{YouTube and Binary Management Handlers}
+\label{fig:youtube_handlers}
+\end{figure}
+
+\subsection{Channel: download-youtube}
+\begin{tabular}{@{}p{3cm}p{11cm}@{}}
+\textbf{Purpose} & Download audio from YouTube URL \\
+\textbf{Parameters} & \inlinecode{url: string, outputDir: string} \\
+\textbf{Returns} & \inlinecode{\{success: boolean, filePath?: string\}} \\
+\textbf{Dependencies} & yt-dlp binary, ffmpeg for audio extraction \\
+\textbf{Events} & \inlinecode{youtube-download-progress} --- Download percentage \\
+& \inlinecode{youtube-binary-progress} --- Binary download if needed \\
+& \inlinecode{youtube-title-received} --- Video title once known \\
+\end{tabular}
+
+%------------------------------------------------------------------------------
+\section{Playlist Handlers (playlistHandlers.ts)}
+
+\begin{tabular}{@{}p{4.5cm}p{9.5cm}@{}}
+\textbf{playlist-get-all} & Get all playlists with song counts \\
+\textbf{playlist-create} & Create new playlist with name \\
+\textbf{playlist-delete} & Delete playlist by ID \\
+\textbf{playlist-add-songs} & Add songs to playlist (with duplicates check) \\
+\textbf{playlist-remove-song} & Remove song from playlist \\
+\textbf{playlist-get-songs} & Get all songs in a playlist \\
+\textbf{playlist-reorder} & Reorder songs within playlist \\
+\end{tabular}
+
+%------------------------------------------------------------------------------
+\section{Watch Handlers (watchHandlers.ts)}
+
+\begin{tabular}{@{}p{4cm}p{10cm}@{}}
+\textbf{watch-start} & Start watching a folder for changes \\
+\textbf{watch-stop} & Stop watching \\
+\textbf{watch-get-status} & Get current watch status \\
+\textbf{Events} & \inlinecode{file-added} --- New file detected \\
+& \inlinecode{file-removed} --- File deleted \\
+& \inlinecode{file-changed} --- File modified \\
+\end{tabular}
+
+%------------------------------------------------------------------------------
+\section{System Handlers (systemHandlers.ts)}
+
+\begin{tabular}{@{}p{4cm}p{10cm}@{}}
+\textbf{get-platform-info} & Returns OS, platform, app version, paths \\
+\textbf{show-in-explorer} & Open file location in system file browser \\
+\textbf{get-settings} & Load app settings from disk \\
+\textbf{save-settings} & Persist app settings \\
+\textbf{get-app-paths} & Get userData, temp, downloads paths \\
+\end{tabular}
+
+%------------------------------------------------------------------------------
+\section{Complete IPC Channel Summary}
+
+\begin{table}[ht!]
+\centering
+\small
+\begin{tabular}{@{}p{3cm}p{4cm}p{6.5cm}@{}}
+\toprule
+\textbf{Module} & \textbf{Channels} & \textbf{Purpose} \\
+\midrule
+musicHandlers & 6 channels & Scan folders, read/write metadata \\
+fingerprintHandlers & 4 channels & Generate audio fingerprints \\
+apiHandlers & 4 channels & External API calls (AcoustID, MusicBrainz) \\
+cacheHandlers & 7 channels & Track scan status in SQLite \\
+lyricsHandlers & 3 channels & AI lyrics transcription \\
+youtubeHandlers & 5 channels & YouTube download, binary management \\
+playlistHandlers & 7 channels & CRUD operations for playlists \\
+watchHandlers & 3 channels & File system watching \\
+systemHandlers & 5 channels & Platform info, settings \\
+\midrule
+\textbf{Total} & \textbf{44 channels} & \\
+\bottomrule
+\end{tabular}
+\caption{Complete IPC Channel Count by Module}
+\end{table}
 
 %------------------------------------------------------------------------------
 % END DOCUMENT
