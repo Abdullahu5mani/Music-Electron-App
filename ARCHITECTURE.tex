@@ -34,11 +34,6 @@
 \usepackage{pifont}
 \usetikzlibrary{shapes.geometric, shapes.misc, arrows, arrows.meta, positioning, calc, fit, backgrounds}
 
-% Suppress overfull/underfull hbox warnings in log
-\usepackage{silence}
-\WarningFilter{latex}{Overfull}
-\WarningFilter{latex}{Underfull}
-
 %------------------------------------------------------------------------------
 % COLORS
 %------------------------------------------------------------------------------
@@ -621,16 +616,16 @@ An interface is like a \textbf{job description}. It lists what abilities are req
 \centering
 \begin{tikzpicture}[
     interface/.style={draw, rounded corners, minimum width=3.5cm, minimum height=1.5cm, align=center, fill=yellow!15},
-    impl/.style={draw, rounded corners, minimum width=3cm, minimum height=1.2cm, align=center},
+    impl/.style={draw, rounded corners, minimum width=2.8cm, minimum height=1.2cm, align=center, font=\small},
     arrow/.style={->, thick, >=stealth}
 ]
     % Interface
     \node[interface] (iface) at (0, 2) {interface Playable\\play(): void\\pause(): void};
     
-    % Implementations
-    \node[impl, fill=green!15] (music) at (-3, -0.5) {MusicPlayer\\implements Playable};
+    % Implementations - spaced further apart
+    \node[impl, fill=green!15] (music) at (-4.5, -0.5) {MusicPlayer\\implements Playable};
     \node[impl, fill=blue!15] (video) at (0, -0.5) {VideoPlayer\\implements Playable};
-    \node[impl, fill=purple!15] (podcast) at (3, -0.5) {PodcastPlayer\\implements Playable};
+    \node[impl, fill=purple!15] (podcast) at (4.5, -0.5) {PodcastPlayer\\implements Playable};
     
     \draw[arrow] (iface) -- (music);
     \draw[arrow] (iface) -- (video);
@@ -781,7 +776,9 @@ export class ParallelMetadataScanner {
     
     // PUBLIC: The only way to interact with this class
     constructor(concurrency?: number) {
-        this.numWorkers = concurrency ?? Math.max(2, 16)
+        const cpuCount = os.cpus().length;
+        // Leave 1 core for UI, min 2, max 16
+        this.numWorkers = concurrency ?? Math.max(2, Math.min(cpuCount - 1, 16));
     }
     
     setProgressCallback(callback: ProgressCallback): void {
@@ -1672,7 +1669,7 @@ scanMusicFolder(42);  // ERROR: number is not assignable to string
 
 \subsection{Electron Backend (Node.js)}
 
-\begin{longtable}{@{}p{4.5cm}p{10cm}@{}}
+\begin{longtable}{@{}p{4cm}p{9.5cm}@{}}
 \toprule
 \textbf{File} & \textbf{Purpose} \\
 \midrule
@@ -2206,6 +2203,20 @@ music-electron-app/
 \label{fig:youtube_pipeline}
 \end{figure}
 
+\begin{notebox}
+\textbf{Rate Limiting (youtubeDownloader.ts):}
+\begin{lstlisting}
+const DOWNLOAD_DELAY_MS = 10000; // 10 seconds
+
+// Enforce minimum delay between downloads
+const timeSinceLastDownload = Date.now() - lastDownloadTime;
+if (timeSinceLastDownload < DOWNLOAD_DELAY_MS) {
+  await sleep(DOWNLOAD_DELAY_MS - timeSinceLastDownload);
+}
+\end{lstlisting}
+This prevents hitting YouTube rate limits and potential IP blocks.
+\end{notebox}
+
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % CHAPTER 3: ARCHITECTURE
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -2261,6 +2272,493 @@ music-electron-app/
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \chapter{IPC Communication}
 \label{ch:ipc}
+
+IPC (Inter-Process Communication) is how Electron's two worlds talk to each other. This chapter explains it step-by-step for beginners.
+
+\section{What is IPC? (For Beginners)}
+
+\begin{tipbox}
+\textbf{Think of it like a phone call:}
+\begin{itemize}
+    \item The \textbf{Renderer} (React UI) wants to read files from disk
+    \item But React runs in a browser-like sandbox --- it \textbf{cannot} access the file system
+    \item So it must \textbf{ask} the Main Process to do it
+    \item IPC is the ``phone'' that connects them
+\end{itemize}
+\end{tipbox}
+
+\section{The Three Key Functions}
+
+\begin{figure}[ht!]
+\centering
+\begin{tikzpicture}[
+    box/.style={draw, rounded corners, minimum width=4cm, minimum height=1.5cm, align=center, font=\small},
+    arrow/.style={->, thick, >=stealth}
+]
+    % Three boxes
+    \node[box, fill=green!15] (renderer) at (0, 0) {\textbf{Renderer Process}\\(React UI)};
+    \node[box, fill=yellow!20] (preload) at (6, 0) {\textbf{Preload Script}\\(Bridge)};
+    \node[box, fill=blue!15] (main) at (12, 0) {\textbf{Main Process}\\(Node.js)};
+    
+    % Arrows with labels
+    \draw[arrow] (renderer) -- node[above, font=\footnotesize] {\inlinecode{window.electronAPI.xyz()}} (preload);
+    \draw[arrow] (preload) -- node[above, font=\footnotesize] {\inlinecode{ipcRenderer.invoke()}} (main);
+    \draw[arrow, dashed] (main) -- node[below, font=\footnotesize] {Response} (preload);
+    \draw[arrow, dashed] (preload) -- node[below, font=\footnotesize] {Promise Resolves} (renderer);
+\end{tikzpicture}
+\caption{IPC Communication Flow}
+\end{figure}
+
+\subsection{1. contextBridge.exposeInMainWorld() --- The Bridge Builder}
+
+\textbf{Location:} \filepath{preload.ts}
+
+This function \textbf{creates a safe API} that the Renderer can access.
+
+\begin{lstlisting}[language=TypeScript, title=preload.ts]
+import { contextBridge, ipcRenderer } from 'electron';
+
+// THIS creates window.electronAPI in the browser
+contextBridge.exposeInMainWorld('electronAPI', {
+  // Each method here becomes available to React
+  scanMusicFolder: (path) => ipcRenderer.invoke('scan-music-folder', path),
+  selectMusicFolder: () => ipcRenderer.invoke('select-music-folder'),
+});
+\end{lstlisting}
+
+\begin{notebox}
+\textbf{Why ``exposeInMainWorld''?}
+
+The name means: ``Expose these functions in the main JavaScript world (the browser window).'' After this call, \inlinecode{window.electronAPI} exists in React and can be called like any JavaScript object.
+\end{notebox}
+
+\subsection{2. ipcRenderer.invoke() --- The Request Sender}
+
+\textbf{Location:} \filepath{preload.ts} (inside the exposed methods)
+
+This function \textbf{sends a request} to the Main Process and \textbf{waits for a response}.
+
+\begin{lstlisting}[language=TypeScript]
+// Renderer (via preload) sends a request:
+const files = await ipcRenderer.invoke('scan-music-folder', '/path/to/music');
+// ^^ This waits until Main Process responds
+\end{lstlisting}
+
+\textbf{Key Points:}
+\begin{itemize}
+    \item \inlinecode{'scan-music-folder'} is the \textbf{channel name} (like a radio frequency)
+    \item \inlinecode{'/path/to/music'} is the \textbf{argument} being sent
+    \item Returns a \textbf{Promise} that resolves when Main responds
+\end{itemize}
+
+\subsection{3. ipcMain.handle() --- The Request Handler}
+
+\textbf{Location:} \filepath{electron/ipc/modules/*.ts}
+
+This function \textbf{listens for requests} on a channel and \textbf{processes them}.
+
+\begin{lstlisting}[language=TypeScript, title=musicHandlers.ts]
+import { ipcMain } from 'electron';
+
+// Register a handler for the 'scan-music-folder' channel
+ipcMain.handle('scan-music-folder', async (event, folderPath) => {
+  // This code runs in the Main Process (full Node.js access!)
+  const files = await scanDirectory(folderPath);
+  return files; // This becomes the Promise result in Renderer
+});
+\end{lstlisting}
+
+\section{Complete IPC Request Lifecycle}
+
+\begin{figure}[ht!]
+\centering
+\begin{tikzpicture}[
+    step/.style={draw, rounded corners, fill=blue!10, minimum width=3.5cm, minimum height=0.8cm, align=center, font=\small},
+    arrow/.style={->, thick, >=stealth}
+]
+    \node[step, fill=green!20] (s1) at (0, 0) {1. React calls \\\inlinecode{window.electronAPI.scan()}};
+    \node[step, fill=yellow!20] (s2) at (5.5, 0) {2. Preload calls\\\inlinecode{ipcRenderer.invoke()}};
+    \node[step, fill=blue!15] (s3) at (11, 0) {3. Main Process\\\inlinecode{ipcMain.handle()}};
+    
+    \node[step, fill=blue!15] (s4) at (11, -2) {4. Read files from disk\\Parse metadata};
+    \node[step, fill=yellow!20] (s5) at (5.5, -2) {5. Return result\\to preload};
+    \node[step, fill=green!20] (s6) at (0, -2) {6. Promise resolves\\React updates UI};
+    
+    \draw[arrow] (s1) -- (s2);
+    \draw[arrow] (s2) -- (s3);
+    \draw[arrow] (s3) -- (s4);
+    \draw[arrow] (s4) -- (s5);
+    \draw[arrow] (s5) -- (s6);
+\end{tikzpicture}
+\caption{Complete IPC Request Lifecycle}
+\end{figure}
+
+\section{invoke vs send: When to Use Which}
+
+\begin{table}[ht!]
+\centering
+\begin{tabular}{@{}p{4cm}p{5cm}p{5cm}@{}}
+\toprule
+\textbf{Method} & \textbf{ipcRenderer.invoke()} & \textbf{ipcRenderer.send()} \\
+\midrule
+\textbf{Pattern} & Request $\rightarrow$ Response & Fire \& Forget \\
+\textbf{Returns} & Promise (awaitable) & Nothing \\
+\textbf{Use When} & You need data back & Just notifying Main \\
+\textbf{Example} & Get list of songs & Notify playback started \\
+\textbf{Handler} & \inlinecode{ipcMain.handle()} & \inlinecode{ipcMain.on()} \\
+\bottomrule
+\end{tabular}
+\caption{invoke vs send Comparison}
+\end{table}
+
+\begin{lstlisting}[language=TypeScript, title=Examples in preload.ts]
+// INVOKE: Need response (which folder did user pick?)
+selectMusicFolder: () => ipcRenderer.invoke('select-music-folder'),
+
+// SEND: Fire-and-forget (just telling Main the state changed)
+sendPlaybackState: (isPlaying) => {
+  ipcRenderer.send('playback-state-changed', isPlaying);
+},
+\end{lstlisting}
+
+\section{Listening for Events from Main Process}
+
+Sometimes the Main Process needs to \textbf{push data to the Renderer} (e.g., download progress).
+
+\begin{lstlisting}[language=TypeScript, title=preload.ts]
+// Register a listener that calls a callback when Main sends an event
+onDownloadProgress: (callback) => {
+  const handler = (_event, progress) => callback(progress);
+  ipcRenderer.on('download-progress', handler);
+  // Return cleanup function
+  return () => ipcRenderer.removeListener('download-progress', handler);
+},
+\end{lstlisting}
+
+\begin{lstlisting}[language=TypeScript, title=youtubeHandlers.ts (Main Process)]
+// Main Process sends progress updates to Renderer
+window.webContents.send('download-progress', {
+  percentage: 50,
+  speed: '1.2 MB/s',
+  eta: '00:15'
+});
+\end{lstlisting}
+
+\section{IPC Channel Naming Convention}
+
+All channels use \textbf{kebab-case} with descriptive names:
+
+\begin{tabular}{@{}p{5cm}p{9cm}@{}}
+\inlinecode{scan-music-folder} & Action on noun \\
+\inlinecode{download-progress} & Event type \\
+\inlinecode{cache-get-file-status} & Module-action-target \\
+\inlinecode{playlist-add-songs} & Module-action-target \\
+\end{tabular}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% DETAILED IPC CALL TYPES
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{IPC Call Types: Complete Reference}
+
+This section covers \textbf{every type of IPC call} used in Electron with real examples from this codebase.
+
+\subsection{Type 1: Async Request/Response (invoke/handle)}
+
+\textbf{The most common pattern.} Renderer asks a question, Main answers.
+
+\begin{figure}[ht!]
+\centering
+\begin{tikzpicture}[
+    box/.style={draw, rounded corners, minimum width=2.5cm, minimum height=0.8cm, align=center, font=\small},
+    arrow/.style={->, thick, >=stealth}
+]
+    \node[box, fill=green!20] (r1) at (0, 0) {Renderer};
+    \node[box, fill=blue!20] (m1) at (8, 0) {Main};
+    
+    \draw[arrow] (r1) -- node[above, font=\footnotesize] {\inlinecode{ipcRenderer.invoke('select-folder')}} (m1);
+    \draw[arrow, dashed] (m1) -- node[below, font=\footnotesize] {\inlinecode{return '/path/to/folder'}} (r1);
+    
+    \node[font=\tiny, below=0.3cm of r1] {await resolves};
+    \node[font=\tiny, below=0.3cm of m1] {ipcMain.handle()};
+\end{tikzpicture}
+\caption{Async Request/Response Pattern}
+\end{figure}
+
+\textbf{Preload (Renderer Side):}
+\begin{lstlisting}[language=TypeScript]
+// Returns a Promise that resolves with the result
+selectMusicFolder: () => ipcRenderer.invoke('select-music-folder'),
+
+// Usage in React:
+const folder = await window.electronAPI.selectMusicFolder();
+// folder = '/Users/me/Music' or null
+\end{lstlisting}
+
+\textbf{Handler (Main Side):}
+\begin{lstlisting}[language=TypeScript]
+ipcMain.handle('select-music-folder', async () => {
+  const result = await dialog.showOpenDialog({
+    properties: ['openDirectory'],
+    title: 'Select Music Folder',
+  });
+  if (!result.canceled && result.filePaths.length > 0) {
+    return result.filePaths[0];  // <-- This becomes the Promise result
+  }
+  return null;
+});
+\end{lstlisting}
+
+\begin{tipbox}
+\textbf{Key Points:}
+\begin{itemize}
+    \item \inlinecode{invoke()} returns a \textbf{Promise} --- use \inlinecode{await} or \inlinecode{.then()}
+    \item \inlinecode{handle()} can be \textbf{async} --- use \inlinecode{async/await} inside
+    \item Whatever you \textbf{return} in \inlinecode{handle()} becomes the Promise result
+    \item If handler throws, Promise \textbf{rejects} with the error
+\end{itemize}
+\end{tipbox}
+
+\subsection{Type 2: Fire-and-Forget (send/on)}
+
+\textbf{No response needed.} Renderer notifies Main about something.
+
+\begin{figure}[ht!]
+\centering
+\begin{tikzpicture}[
+    box/.style={draw, rounded corners, minimum width=2.5cm, minimum height=0.8cm, align=center, font=\small},
+    arrow/.style={->, thick, >=stealth}
+]
+    \node[box, fill=green!20] (r1) at (0, 0) {Renderer};
+    \node[box, fill=blue!20] (m1) at (8, 0) {Main};
+    
+    \draw[arrow] (r1) -- node[above, font=\footnotesize] {\inlinecode{ipcRenderer.send('playback-state', true)}} (m1);
+    
+    \node[font=\tiny, below=0.3cm of r1] {continues immediately};
+    \node[font=\tiny, below=0.3cm of m1] {ipcMain.on()};
+\end{tikzpicture}
+\caption{Fire-and-Forget Pattern}
+\end{figure}
+
+\textbf{Preload:}
+\begin{lstlisting}[language=TypeScript]
+// No await needed - just fire and continue
+sendPlaybackState: (isPlaying: boolean) => {
+  ipcRenderer.send('playback-state-changed', isPlaying);
+},
+
+// Window controls - no response expected
+minimizeWindow: () => ipcRenderer.send('window-minimize'),
+maximizeWindow: () => ipcRenderer.send('window-maximize'),
+closeWindow: () => ipcRenderer.send('window-close'),
+\end{lstlisting}
+
+\textbf{Handler:}
+\begin{lstlisting}[language=TypeScript]
+// Use .on() instead of .handle() for fire-and-forget
+ipcMain.on('playback-state-changed', (_event, isPlaying: boolean) => {
+  // Update tray menu label
+  updatePlaybackState(isPlaying);
+  // No return value - nothing to send back
+});
+
+ipcMain.on('window-minimize', () => {
+  BrowserWindow.getFocusedWindow()?.minimize();
+});
+\end{lstlisting}
+
+\begin{notebox}
+\textbf{When to use Fire-and-Forget:}
+\begin{itemize}
+    \item Window controls (minimize, maximize, close)
+    \item Notifying Main about state changes (playback started/stopped)
+    \item Logging or analytics events
+    \item Any case where you don't need confirmation
+\end{itemize}
+\end{notebox}
+
+\subsection{Type 3: Event Listener (Main $\rightarrow$ Renderer Push)}
+
+\textbf{Main Process pushes updates to Renderer.} Used for progress updates, real-time events.
+
+\begin{figure}[ht!]
+\centering
+\begin{tikzpicture}[
+    box/.style={draw, rounded corners, minimum width=2.5cm, minimum height=0.8cm, align=center, font=\small},
+    arrow/.style={->, thick, >=stealth}
+]
+    \node[box, fill=blue!20] (m1) at (0, 0) {Main};
+    \node[box, fill=green!20] (r1) at (8, 0) {Renderer};
+    
+    \draw[arrow] (m1) -- node[above, font=\footnotesize] {\inlinecode{webContents.send('progress', 50)}} (r1);
+    \draw[arrow] ([yshift=-0.8cm]m1.east) -- node[above, font=\footnotesize] {\inlinecode{webContents.send('progress', 75)}} ([yshift=-0.8cm]r1.west);
+    \draw[arrow] ([yshift=-1.6cm]m1.east) -- node[above, font=\footnotesize] {\inlinecode{webContents.send('progress', 100)}} ([yshift=-1.6cm]r1.west);
+    
+    \node[font=\tiny, below=2cm of m1] {Multiple events over time};
+    \node[font=\tiny, below=2cm of r1] {ipcRenderer.on() callback};
+\end{tikzpicture}
+\caption{Event Listener Pattern (Main Pushes to Renderer)}
+\end{figure}
+
+\textbf{Preload (Register Listener):}
+\begin{lstlisting}[language=TypeScript]
+// Register a callback that fires whenever Main sends an event
+onDownloadProgress: (callback: (progress: any) => void) => {
+  const handler = (_event: any, progress: any) => callback(progress);
+  ipcRenderer.on('download-progress', handler);
+  
+  // Return cleanup function (important for React useEffect!)
+  return () => {
+    ipcRenderer.removeListener('download-progress', handler);
+  };
+},
+\end{lstlisting}
+
+\textbf{React Component:}
+\begin{lstlisting}[language=TypeScript]
+useEffect(() => {
+  // Subscribe to progress events
+  const cleanup = window.electronAPI.onDownloadProgress((progress) => {
+    setProgress(progress.percentage);
+    setSpeed(progress.speed);
+  });
+  
+  // Unsubscribe when component unmounts
+  return cleanup;
+}, []);
+\end{lstlisting}
+
+\textbf{Main Process (Send Events):}
+\begin{lstlisting}[language=TypeScript]
+// Inside youtubeHandlers.ts
+ytDlpProcess.stdout.on('data', (data) => {
+  const progress = parseProgress(data);
+  // Push progress to Renderer
+  window.webContents.send('download-progress', {
+    percentage: progress.percent,
+    speed: progress.speed,
+    eta: progress.eta
+  });
+});
+\end{lstlisting}
+
+\begin{tipbox}
+\textbf{Cleanup is Critical!}
+
+Always return a cleanup function and call it when the React component unmounts. Otherwise:
+\begin{itemize}
+    \item Memory leaks (handlers pile up)
+    \item Stale callbacks (old components still receiving events)
+    \item Multiple handlers for same event
+\end{itemize}
+\end{tipbox}
+
+\subsection{Type 4: Bidirectional Streaming}
+
+\textbf{Continuous back-and-forth.} Used for batch operations with progress.
+
+\begin{figure}[ht!]
+\centering
+\begin{tikzpicture}[
+    box/.style={draw, rounded corners, minimum width=2cm, minimum height=0.8cm, align=center, font=\small},
+    arrow/.style={->, thick, >=stealth}
+]
+    \node[box, fill=green!20] (r) at (0, 0) {Renderer};
+    \node[box, fill=blue!20] (m) at (8, 0) {Main};
+    
+    \draw[arrow] ([yshift=0.3cm]r.east) -- node[above, font=\footnotesize] {1. invoke('batch-scan', files)} ([yshift=0.3cm]m.west);
+    \draw[arrow, dotted] ([yshift=-0.3cm]m.west) -- node[below, font=\footnotesize] {2. send('progress', 10\%)} ([yshift=-0.3cm]r.east);
+    \draw[arrow, dotted] ([yshift=-0.9cm]m.west) -- node[below, font=\footnotesize] {3. send('progress', 50\%)} ([yshift=-0.9cm]r.east);
+    \draw[arrow, dashed] ([yshift=-1.5cm]m.west) -- node[below, font=\footnotesize] {4. return results (invoke resolves)} ([yshift=-1.5cm]r.east);
+\end{tikzpicture}
+\caption{Bidirectional: Request + Progress Events + Final Response}
+\end{figure}
+
+\textbf{This codebase example (Fingerprint Batch):}
+\begin{lstlisting}[language=TypeScript]
+// Preload - Two separate registrations
+generateFingerprintsBatch: (filePaths: string[]) =>
+  ipcRenderer.invoke('generate-fingerprints-batch', filePaths),
+
+onFingerprintBatchProgress: (callback) => {
+  const handler = (_event, progress) => callback(progress);
+  ipcRenderer.on('fingerprint-batch-progress', handler);
+  return () => ipcRenderer.removeListener('fingerprint-batch-progress', handler);
+},
+\end{lstlisting}
+
+\begin{lstlisting}[language=TypeScript]
+// React usage - both together
+useEffect(() => {
+  const cleanup = window.electronAPI.onFingerprintBatchProgress((p) => {
+    setProgress(p.percentage);
+  });
+  return cleanup;
+}, []);
+
+const handleScan = async () => {
+  // This call triggers progress events while running
+  const results = await window.electronAPI.generateFingerprintsBatch(files);
+  // results contains final data after all progress events
+};
+\end{lstlisting}
+
+\subsection{Summary: All IPC Patterns}
+
+\begin{table}[ht!]
+\centering
+\small
+\begin{tabular}{@{}p{2.5cm}p{3cm}p{3cm}p{2.5cm}p{3cm}@{}}
+\toprule
+\textbf{Pattern} & \textbf{Renderer API} & \textbf{Main API} & \textbf{Returns} & \textbf{Use Case} \\
+\midrule
+Async Request & \inlinecode{invoke()} & \inlinecode{handle()} & Promise & Get data \\
+Fire-and-Forget & \inlinecode{send()} & \inlinecode{on()} & Nothing & Notify state \\
+Event Listener & \inlinecode{on()} & \inlinecode{send()} & Callback & Progress \\
+Bidirectional & Both & Both & Both & Batch ops \\
+\bottomrule
+\end{tabular}
+\caption{IPC Pattern Summary}
+\end{table}
+
+\subsection{Error Handling in IPC}
+
+\textbf{Errors in \inlinecode{handle()} propagate to Renderer:}
+
+\begin{lstlisting}[language=TypeScript]
+// Main Process
+ipcMain.handle('risky-operation', async () => {
+  throw new Error('Something went wrong');
+});
+
+// Renderer - error is caught!
+try {
+  await window.electronAPI.riskyOperation();
+} catch (error) {
+  console.error('IPC error:', error.message);
+  // Shows: "Something went wrong"
+}
+\end{lstlisting}
+
+\textbf{Best practice - return error objects:}
+\begin{lstlisting}[language=TypeScript]
+// Main Process
+ipcMain.handle('write-metadata', async (_event, filePath, metadata) => {
+  try {
+    await writeMetadata(filePath, metadata);
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
+// Renderer
+const result = await window.electronAPI.writeMetadata(path, meta);
+if (!result.success) {
+  showToast('error', result.error);
+}
+\end{lstlisting}
+
+\section{Handler Module Registration}
 
 Handlers are organized into \textbf{modular files} for better maintainability.
 
@@ -2526,10 +3024,10 @@ playlistHandlers & \inlinecode{playlist-create} & invoke & Create a new playlist
 \centering
 \begin{tikzpicture}[
     node distance=0.3cm,
-    hub/.style={draw, circle, fill=yellow!20, minimum size=1.5cm, font=\small\bfseries},
+    hub/.style={draw, circle, fill=yellow!20, minimum size=1.5cm, font=\small\bfseries, align=center},
     module/.style={draw, rounded corners, fill=blue!10, minimum width=2cm, minimum height=0.5cm, font=\scriptsize, align=center}
 ]
-    \node[hub] (bridge) {IPC\\Bridge};
+    \node[hub] (bridge) {IPC Bridge};
     
     \node[module, above=1.5cm of bridge] (music) {Music\\scan, read, write};
     \node[module, above right=1cm and 2cm of bridge] (youtube) {YouTube\\download, status};
@@ -2850,18 +3348,27 @@ The application uses two distinct worker pool systems to maximize CPU utilizatio
 \toprule
 \textbf{System} & \textbf{Purpose} & \textbf{Workers} \\
 \midrule
-ParallelMetadataScanner & Metadata parsing & 15 concurrent parsers \\
-FingerprintWorkerPool & Audio fingerprinting & 15 concurrent fpcalc \\
+ParallelMetadataScanner & Metadata parsing & \inlinecode{os.cpus().length - 1} \\
+FingerprintWorkerPool & Audio fingerprinting & \inlinecode{Math.max(1, cpus - 1)} \\
 \bottomrule
 \end{tabular}
-\caption{Worker Pool Systems}
+\caption{Worker Pool Systems (dynamically sized based on CPU cores)}
 \end{table}
+
+\begin{notebox}
+\textbf{Actual Code (fingerprintWorkerPool.ts):}
+\begin{lstlisting}
+const NUM_CPUS = os.cpus().length;
+const DEFAULT_WORKER_COUNT = Math.max(1, NUM_CPUS - 1);
+\end{lstlisting}
+This leaves 1 CPU core free for UI/system tasks, preventing the app from becoming unresponsive during batch operations.
+\end{notebox}
 
 \section{Data Flow}
 
 \begin{enumerate}
     \item \textbf{Startup} --- App loads, scans music folder
-    \item \textbf{Parallel Metadata Scan} --- 15 workers parse metadata simultaneously
+    \item \textbf{Parallel Metadata Scan} --- (CPU cores - 1) workers parse metadata simultaneously
     \item \textbf{User initiates batch scan} --- Fingerprint worker pool spins up
     \item \textbf{API lookups} --- Rate-limited queries to AcoustID and MusicBrainz
     \item \textbf{Metadata writing} --- taglib-wasm embeds cover art and metadata
@@ -3057,6 +3564,51 @@ Flexible Layout & CSS flexbox with proper overflow scrolling \\
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \chapter{Cover Art Management}
 \label{ch:coverart}
+
+\section{Intelligent Release Selection}
+
+When a song is identified via AcoustID, it often matches multiple MusicBrainz releases (original album, compilations, soundtracks, etc.). The app uses a sophisticated scoring algorithm to pick the \textbf{most likely original release}:
+
+\begin{lstlisting}[language=TypeScript, title=Release Scoring Algorithm (musicbrainz.ts)]
+function scoreRelease(release: MusicBrainzRelease): number {
+  let score = 0;
+  
+  // Prefer official releases
+  if (status === 'Official') score += 100;
+  
+  // Primary type scoring
+  if (primaryType === 'Album') score += 50;
+  else if (primaryType === 'Single') score += 40;
+  else if (primaryType === 'EP') score += 30;
+  
+  // Penalize compilations/soundtracks HEAVILY
+  if (secondaryTypes.includes('Compilation')) score -= 200;
+  if (secondaryTypes.includes('Soundtrack')) score -= 150;
+  if (secondaryTypes.includes('Remix')) score -= 100;
+  
+  // Prefer earlier releases (original came first)
+  score += Math.min(50, currentYear - releaseYear);
+  
+  return score;
+}
+\end{lstlisting}
+
+\begin{tipbox}
+\textbf{Why This Matters:}
+
+Without this algorithm, a song like ``Bohemian Rhapsody'' might be tagged as from ``Now That's What I Call Music 87'' instead of the original ``A Night at the Opera'' album. The scoring ensures original albums are preferred over compilations.
+\end{tipbox}
+
+\section{Cover Art Fallback Strategy}
+
+The app tries multiple URLs in order of preference (from \inlinecode{getCoverArtUrls()}):
+
+\begin{enumerate}
+    \item 250px front cover for each release (best quality/size ratio)
+    \item 500px front cover for each release
+    \item Original size front cover for each release
+    \item Release group level art (some albums only have group-level art)
+\end{enumerate}
 
 \section{Cover Art Lifecycle}
 
@@ -3395,6 +3947,48 @@ Manages audio playback using Howler.js with shuffle, repeat, and history.
     \item \textbf{Repeat One:} Auto-advance replays current track
 \end{itemize}
 
+\subsection{Media Session API Integration}
+
+The hook integrates with the browser's Media Session API for OS-level media controls:
+
+\begin{itemize}
+    \item \textbf{Metadata:} Updates now-playing info (title, artist, album, artwork)
+    \item \textbf{Playback State:} Syncs playing/paused state with OS
+    \item \textbf{Position State:} Enables progress bar in OS media controls
+    \item \textbf{Action Handlers:} Play, pause, previous, next, seekto
+\end{itemize}
+
+\begin{lstlisting}[language=TypeScript, title=Media Session Setup (useAudioPlayer.ts)]
+// Update OS media controls with current song info
+navigator.mediaSession.metadata = new MediaMetadata({
+  title: currentSong.metadata?.title || currentSong.name,
+  artist: currentSong.metadata?.artist || 'Unknown Artist',
+  album: currentSong.metadata?.album || 'Unknown Album',
+  artwork: [{ src: albumArtUrl, sizes: '512x512' }]
+});
+
+// Register action handlers
+navigator.mediaSession.setActionHandler('play', togglePlayPause);
+navigator.mediaSession.setActionHandler('previoustrack', playPrevious);
+navigator.mediaSession.setActionHandler('nexttrack', playNext);
+\end{lstlisting}
+
+\subsection{Race Condition Prevention}
+
+The hook uses a \inlinecode{switchIdRef} to prevent race conditions when rapidly switching tracks:
+
+\begin{lstlisting}[language=TypeScript, title=Switch ID Pattern]
+const switchIdRef = useRef<number>(0);
+
+const playSong = (file, index) => {
+  const thisSwitchId = ++switchIdRef.current;
+  // ... later in callbacks:
+  if (switchIdRef.current !== thisSwitchId) {
+    return; // Stale request, ignore
+  }
+};
+\end{lstlisting}
+
 \section{useMusicLibrary}
 
 Manages the music file collection and sorting.
@@ -3415,6 +4009,25 @@ Manages the music file collection and sorting.
 \inlinecode{updateSingleFile(path)} & Update one file in-place \\
 \inlinecode{setSortBy(option)} & Change sort order \\
 \end{tabular}
+
+\subsection{Sort Options}
+
+Available sort modes in \inlinecode{sortMusicFiles.ts}:
+
+\begin{table}[ht!]
+\centering
+\begin{tabular}{@{}p{3cm}p{11cm}@{}}
+\toprule
+\textbf{Option} & \textbf{Behavior} \\
+\midrule
+\inlinecode{title} & A-Z by title (falls back to filename if no title) \\
+\inlinecode{artist} & A-Z by artist, then by title within same artist \\
+\inlinecode{track} & By album A-Z, then by track number within album \\
+\inlinecode{dateAdded} & Newest first (uses file \inlinecode{mtimeMs}) \\
+\bottomrule
+\end{tabular}
+\caption{Library Sort Options}
+\end{table}
 
 \subsection{In-Place Update Flow}
 
@@ -3645,6 +4258,21 @@ Queries AcoustID database to identify songs by audio fingerprint.
 \caption{acoustid.ts Functions}
 \end{table}
 
+\textbf{Minimum Confidence Threshold (apiHandlers.ts):}
+
+\begin{lstlisting}[language=TypeScript]
+const MIN_SCORE_THRESHOLD = 0.7;  // 70% match required
+
+if (!bestMatch.score || bestMatch.score < MIN_SCORE_THRESHOLD) {
+  console.log(`AcoustID match rejected: score ${bestMatch.score}`);
+  return null;  // Reject low-confidence matches
+}
+\end{lstlisting}
+
+\begin{notebox}
+\textbf{Why 70\%?} Lower confidence matches often identify the wrong recording (e.g., different versions, remixes). Setting 0.7 (70\%) prevents false positives while still catching most correct matches.
+\end{notebox}
+
 \section{musicbrainz.ts --- MusicBrainz API}
 
 Queries MusicBrainz for detailed metadata and cover art URLs.
@@ -3781,11 +4409,12 @@ Defines \inlinecode{ElectronAPI} interface for \inlinecode{window.electronAPI}.
 
 \textbf{Core Types:}
 
-\begin{lstlisting}[language=TypeScript]
+\begin{lstlisting}[language=TypeScript, title=Settings (settings.ts)]
+// Config file: %APPDATA%/music-sync-app/app-config.json
 interface AppSettings {
-  musicFolderPath: string | null
-  downloadFolderPath: string | null
-  scanSubfolders: boolean
+  musicFolderPath: string | null;      // User's music folder
+  downloadFolderPath: string | null;   // YouTube downloads folder
+  scanSubfolders: boolean;             // Default: true
 }
 
 type ScanStatusType = 
@@ -4226,20 +4855,70 @@ User's choice saved to \filepath{whisper-settings.json} in app data directory.
 \chapter{Binary Installation Flow}
 \label{ch:binaryinstall}
 
-When user clicks ``Install'' in Settings for Whisper.cpp:
+The app manages three external binaries, each with its own manager file:
+
+\section{Managed Binaries}
+
+\begin{table}[ht!]
+\centering
+\small
+\begin{tabular}{@{}p{3cm}p{2cm}p{6cm}p{3cm}@{}}
+\toprule
+\textbf{Binary} & \textbf{Version} & \textbf{Path} & \textbf{Manager} \\
+\midrule
+yt-dlp & Latest & \inlinecode{\%APPDATA\%/music-sync-app/yt-dlp-binaries/} & binaryManager.ts \\
+fpcalc & 1.6.0 & \inlinecode{\%APPDATA\%/music-sync-app/fpcalc-binary/} & fpcalcManager.ts \\
+whisper.cpp & 1.8.2 & \inlinecode{\%APPDATA\%/music-sync-app/whisper/} & whisperManager.ts \\
+\bottomrule
+\end{tabular}
+\caption{Managed Binary Locations}
+\end{table}
+
+\section{Platform-Specific Binary Names}
+
+\begin{lstlisting}[language=TypeScript, title=yt-dlp Binary Names (binaryManager.ts)]
+if (process.platform === 'win32') {
+  binaryFileName = process.arch === 'arm64' 
+    ? 'yt-dlp_win_arm64.exe' : 'yt-dlp.exe';
+} else if (process.platform === 'darwin') {
+  binaryFileName = process.arch === 'arm64' 
+    ? 'yt-dlp_macos_arm64' : 'yt-dlp_macos';
+} else {
+  binaryFileName = process.arch === 'arm64' 
+    ? 'yt-dlp_linux_arm64' : 'yt-dlp_linux';
+}
+\end{lstlisting}
+
+\section{fpcalc Download URLs}
+
+\begin{lstlisting}[language=TypeScript, title=Chromaprint URLs (fpcalcManager.ts)]
+const CHROMAPRINT_VERSION = '1.6.0';
+
+const DOWNLOAD_URLS = {
+  'win32-x64': `chromaprint-fpcalc-1.6.0-windows-x86_64.zip`,
+  'darwin-x64': `chromaprint-fpcalc-1.6.0-macos-x86_64.tar.gz`,
+  'darwin-arm64': `chromaprint-fpcalc-1.6.0-macos-arm64.tar.gz`,
+  'linux-x64': `chromaprint-fpcalc-1.6.0-linux-x86_64.tar.gz`,
+  'linux-arm64': `chromaprint-fpcalc-1.6.0-linux-arm64.tar.gz`,
+};
+\end{lstlisting}
+
+\section{Installation Flow}
+
+When user clicks ``Install'' in Settings:
 
 \begin{enumerate}
     \item \textbf{Settings.tsx} calls \inlinecode{handleInstallBinary()}
-    \item \textbf{preload.ts} invokes \inlinecode{install-whisper} IPC
-    \item \textbf{whisperManager.ts} executes:
+    \item \textbf{preload.ts} invokes IPC (e.g., \inlinecode{install-fpcalc})
+    \item Manager file executes:
     \begin{itemize}
-        \item Check platform (win32-x64, darwin-arm64, etc.)
-        \item Download whisper-bin-x64.zip from GitHub
-        \item Extract ALL files (exe + DLLs)
-        \item Download selected model from HuggingFace
-        \item Verify installation
+        \item Check platform (\inlinecode{process.platform}-\inlinecode{process.arch})
+        \item Download from GitHub/HuggingFace
+        \item Extract (ZIP on Windows, tar.gz on Unix)
+        \item Set executable permissions on Unix: \inlinecode{fs.chmodSync(path, 0o755)}
+        \item Verify by running \inlinecode{--version}
     \end{itemize}
-    \item \textbf{Settings.tsx} receives progress events
+    \item Progress events sent to renderer
     \item Status badge changes ``MISSING'' $\rightarrow$ ``INSTALLED''
 \end{enumerate}
 
@@ -4260,26 +4939,85 @@ When user clicks ``Install'' in Settings for Whisper.cpp:
 \caption{Binary Error Codes}
 \end{table}
 
+\section{Fingerprint Generation}
+
+\begin{lstlisting}[language=TypeScript, title=fpcalc Execution (fpcalcManager.ts)]
+// Run fpcalc with JSON output
+const { stdout } = await execFileAsync(binaryPath, ['-json', filePath], {
+  timeout: 60000,       // 60 second timeout for long files
+  maxBuffer: 10 * 1024 * 1024  // 10MB buffer
+});
+
+const result = JSON.parse(stdout);
+// Returns: { fingerprint: "AQAAEgk...", duration: 234.56 }
+\end{lstlisting}
+
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % CHAPTER 31: FFMPEG VOCAL ISOLATION
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \chapter{FFmpeg Vocal Isolation}
 \label{ch:ffmpeg}
 
-FFmpeg applies DSP filter chain to enhance vocals before Whisper transcription.
+Advanced 8-stage DSP pipeline to isolate vocals before Whisper transcription (\inlinecode{lyricsHandlers.ts}).
 
-\section{Audio Filter Chain}
+\section{8-Stage Audio Processing Pipeline}
 
-\begin{lstlisting}
-pan=1c|c0=0.5*c0+0.5*c1   -> Extract center channel (vocals)
-highpass=f=100             -> Remove sub-bass rumble
-lowpass=f=8000             -> Remove harsh highs
-afftdn=nf=-20:nt=w         -> FFT denoise (reduce background)
-acompressor                -> Compress dynamics
-dynaudnorm                 -> Normalize output levels
+\begin{table}[ht!]
+\centering
+\small
+\begin{tabular}{@{}p{0.5cm}p{4cm}p{9cm}@{}}
+\toprule
+\textbf{\#} & \textbf{Stage} & \textbf{FFmpeg Filter} \\
+\midrule
+1 & Center Channel Extract & \inlinecode{pan=1c|c0=0.5*c0+0.5*c1} \\
+2 & Frequency Isolation & \inlinecode{highpass=f=85} + \inlinecode{lowpass=f=12000} \\
+3 & Gentle Denoise & \inlinecode{afftdn=nf=-20} \\
+4 & Aggressive Denoise & \inlinecode{afftdn=nr=12:nf=-25} \\
+5 & Vocal Presence EQ & \inlinecode{equalizer=f=3000:g=4} (boost clarity) \\
+6 & De-essing & \inlinecode{highshelf=f=7000:g=-3} \\
+7 & Compression & \inlinecode{acompressor=threshold=0.1:ratio=4} \\
+8 & Loudness Normalize & \inlinecode{loudnorm=I=-16:LRA=11:TP=-1.5} \\
+\bottomrule
+\end{tabular}
+\caption{8-Stage Vocal Isolation Pipeline}
+\end{table}
+
+\section{Complete Filter Chain}
+
+\begin{lstlisting}[language=TypeScript, title=Actual Filter Chain (lyricsHandlers.ts)]
+const filterChain = [
+  // Center channel (vocals are typically centered)
+  'pan=1c|c0=0.5*c0+0.5*c1',
+  
+  // Human voice range: 85Hz - 12kHz
+  'highpass=f=85:poles=2',
+  'lowpass=f=12000:poles=2',
+  
+  // Two-pass noise reduction
+  'afftdn=nf=-20',
+  'afftdn=nr=12:nf=-25',
+  
+  // Vocal presence EQ
+  'equalizer=f=250:width_type=o:width=2:g=-3',  // Cut mud
+  'equalizer=f=3000:width_type=o:width=1.5:g=4', // Boost clarity
+  
+  // De-essing and dynamics
+  'highshelf=f=7000:g=-3',
+  'acompressor=threshold=0.1:ratio=4:attack=5:release=100',
+  'loudnorm=I=-16:LRA=11:TP=-1.5'
+].join(',');
 \end{lstlisting}
 
 \textbf{Output:} 16kHz mono WAV (optimal for Whisper)
+
+\section{Temp File Cleanup}
+
+Vocals are processed in a temp directory that auto-cleans:
+\begin{itemize}
+    \item Location: \inlinecode{os.tmpdir()/music-app-lyrics/}
+    \item Files older than 1 hour are automatically deleted
+    \item Cleanup runs on startup and after each transcription
+\end{itemize}
 
 \section{Whisper Command}
 
@@ -4291,6 +5029,36 @@ whisper-cli.exe \
   --no-timestamps \            # Plain text output
   --prompt "This is a song. Transcribe the sung lyrics."
 \end{lstlisting}
+
+\section{Available Whisper Models}
+
+Users can select from multiple models in Settings (from \inlinecode{whisperManager.ts}):
+
+\begin{table}[ht!]
+\centering
+\small
+\begin{tabular}{@{}p{2.5cm}p{2cm}p{2cm}p{7cm}@{}}
+\toprule
+\textbf{Model} & \textbf{Size} & \textbf{Language} & \textbf{Description} \\
+\midrule
+tiny.en & 75 MB & English & Fastest, lowest accuracy \\
+base.en & 142 MB & English & Fast, basic accuracy \\
+small.en & 488 MB & English & \textbf{Default} - Good balance of speed/accuracy \\
+medium.en & 1.5 GB & English & High accuracy, slower \\
+large-v3-turbo & 1.6 GB & Multi & Best accuracy, slowest \\
+\bottomrule
+\end{tabular}
+\caption{Whisper Model Options (downloaded from HuggingFace)}
+\end{table}
+
+\begin{notebox}
+\textbf{Platform Differences:}
+\begin{itemize}
+    \item \textbf{Windows:} Downloads whisper-cli binary automatically
+    \item \textbf{macOS:} Uses system whisper via \inlinecode{brew install whisper-cpp}
+    \item \textbf{Linux:} Uses system whisper via \inlinecode{apt install whisper.cpp}
+\end{itemize}
+\end{notebox}
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % CHAPTER 32: FILE WATCHER
@@ -4314,9 +5082,26 @@ File modified & Re-scan metadata, update in-place \\
 
 \section{Implementation}
 
-Uses Node.js \inlinecode{fs.watch()} with debouncing to prevent duplicate events.
+Uses Node.js \inlinecode{fs.watch()} with several key features:
 
-\textbf{Limitation:} Linux recursive watching may be limited depending on kernel.
+\begin{lstlisting}[language=TypeScript, title=File Watcher Constants (fileWatcher.ts)]
+const DEBOUNCE_DELAY = 500;      // ms to wait for events to settle
+const IGNORE_DURATION = 5000;    // ms to ignore self-made changes
+const AUDIO_EXTENSIONS = [
+  '.mp3', '.flac', '.wav', '.m4a', '.aac', '.ogg', '.opus',
+  '.wma', '.aiff', '.mp4', '.m4p', '.amr'
+];
+\end{lstlisting}
+
+\textbf{Key Features:}
+\begin{itemize}
+    \item \textbf{Debouncing:} Waits 500ms after last event before processing (prevents duplicates)
+    \item \textbf{Self-Change Ignore:} When app writes metadata, file is ignored for 5 seconds to prevent loops
+    \item \textbf{Recursive Watching:} Uses \inlinecode{recursive: true} option (Windows/macOS)
+    \item \textbf{Auto-Restart:} On error, automatically restarts watcher after 5 seconds
+\end{itemize}
+
+\textbf{Limitation:} Linux recursive watching may not work on all kernels.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % CHAPTER 33: PLAYLIST ERROR HANDLING
@@ -4873,23 +5658,34 @@ function resetFingerprintErrors() {
 \chapter{Window Configuration}
 \label{ch:windowconfig}
 
-BrowserWindow configuration in \filepath{window.ts}.
+BrowserWindow configuration in \filepath{window.ts}:
 
-\begin{lstlisting}[language=TypeScript]
+\begin{lstlisting}[language=TypeScript, title=Actual Window Config (window.ts)]
 win = new BrowserWindow({
-  width: 820, height: 720,
-  minWidth: 820, minHeight: 720,
-  frame: false,              // Remove default frame
-  titleBarStyle: 'hidden',   // macOS-specific
-  backgroundColor: '#1a1a1a',
+  width: 1228, height: 720,      // Default size
+  minWidth: 1228, minHeight: 720, // Minimum size
+  frame: false,                   // Custom titlebar
+  titleBarStyle: isMac ? 'hiddenInset' : 'hidden',
+  trafficLightPosition: isMac ? { x: 15, y: 12 } : undefined,
+  backgroundColor: '#0d1117',     // Dark theme
+  icon: iconPath,
   webPreferences: {
     preload: path.join(__dirname, 'preload.mjs'),
-    webSecurity: false,      // Allow file:// protocol
+    webSecurity: false,           // Allow file:// protocol
     allowRunningInsecureContent: true,
-    devTools: true,
+    devTools: true,               // Always enabled
   },
 })
 \end{lstlisting}
+
+\begin{notebox}
+\textbf{Platform Differences:}
+\begin{itemize}
+    \item \textbf{macOS:} Uses \inlinecode{hiddenInset} for native traffic lights
+    \item \textbf{Windows/Linux:} Uses custom TitleBar component
+    \item \textbf{Dev Tools:} Opens automatically when \inlinecode{VITE\_DEV\_SERVER\_URL} is set
+\end{itemize}
+\end{notebox}
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % CHAPTER 47: PRELOAD SCRIPT API SURFACE
@@ -4929,6 +5725,65 @@ API exposed via \inlinecode{contextBridge.exposeInMainWorld('electronAPI', ...)}
 \inlinecode{onWindowStateChanged()} \\
 \inlinecode{onTrayPlayPause()} \\
 \end{tabular}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% CHAPTER 47.5: TAGLIB-WASM SANDWICH METHOD
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\chapter{TagLib-WASM Sandwich Method}
+\label{ch:taglibsandwich}
+
+The app uses taglib-wasm to write ID3/Vorbis tags. Due to WASM virtual filesystem limitations, we use the ``Sandwich Method'' where file data is read into memory, modified, and written back.
+
+\section{The Sandwich Pattern}
+
+\begin{lstlisting}[language=TypeScript, title=Sandwich Method (musicHandlers.ts)]
+// 1. READ: File -> Memory Buffer
+const fileBuffer = fs.readFileSync(filePath);
+const data = new Uint8Array(fileBuffer);
+
+// 2. MODIFY: Open in taglib-wasm, make changes
+const { TagLib } = await import('taglib-wasm');
+const taglib = await TagLib.initialize();
+const file = await taglib.open(data);
+
+const tag = file.tag();
+tag.setTitle(metadata.title);
+tag.setArtist(metadata.artist);
+file.setPictures([picture]);
+
+// 3. SAVE: Memory -> Memory (updated buffer)
+file.save();
+const updatedBuffer = file.getFileBuffer();
+
+// 4. WRITE: Memory Buffer -> File
+fs.writeFileSync(filePath, updatedBuffer);
+file.dispose();
+\end{lstlisting}
+
+\section{Supported Tag Operations}
+
+\begin{table}[ht!]
+\centering
+\begin{tabular}{@{}p{5cm}p{9cm}@{}}
+\toprule
+\textbf{Method} & \textbf{Description} \\
+\midrule
+\inlinecode{tag.setTitle()} & Set track title \\
+\inlinecode{tag.setArtist()} & Set artist name \\
+\inlinecode{tag.setAlbum()} & Set album name \\
+\inlinecode{tag.setYear()} & Set release year \\
+\inlinecode{tag.setTrack()} & Set track number \\
+\inlinecode{tag.setGenre()} & Set genre \\
+\inlinecode{tag.setComment()} & Set comment field \\
+\inlinecode{file.setPictures()} & Embed cover art (replaces all) \\
+\bottomrule
+\end{tabular}
+\caption{TagLib-WASM Tag Methods}
+\end{table}
+
+\begin{notebox}
+\textbf{Note:} \inlinecode{albumArtist} is not directly supported by taglib-wasm's Tag interface. It would require format-specific handling (e.g., ID3v2 frames).
+\end{notebox}
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % CHAPTER 48: METADATA CACHE DETAILS
@@ -5179,6 +6034,34 @@ ytDlp.exec([
 \section{Rate Limiting}
 
 10-second cooldown between downloads to prevent abuse.
+
+\section{API Rate Limits}
+
+All external API calls are rate-limited via \inlinecode{rateLimiter.ts}:
+
+\begin{lstlisting}[language=TypeScript, title=API Delays (rateLimiter.ts)]
+export const API_DELAYS = {
+  ACOUSTID: 500,        // AcoustID allows 3/sec, we use 2/sec
+  MUSICBRAINZ: 1100,    // MusicBrainz requires 1/sec + buffer
+  COVERART: 1100,       // Cover Art Archive follows MB rules
+  BETWEEN_SONGS: 500,   // Delay between processing songs
+} as const;
+\end{lstlisting}
+
+\begin{table}[ht!]
+\centering
+\begin{tabular}{@{}p{4cm}p{3cm}p{3cm}p{4cm}@{}}
+\toprule
+\textbf{API} & \textbf{Official Limit} & \textbf{Our Delay} & \textbf{Reason} \\
+\midrule
+AcoustID & 3 req/sec & 500ms & Buffer for safety \\
+MusicBrainz & 1 req/sec & 1100ms & Extra 100ms buffer \\
+Cover Art Archive & 1 req/sec & 1100ms & Same as MusicBrainz \\
+YouTube & No official & 10000ms & Avoid IP blocking \\
+\bottomrule
+\end{tabular}
+\caption{API Rate Limits and Delays}
+\end{table}
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % CHAPTER 53: SYSTEM TRAY MENU
@@ -5955,29 +6838,51 @@ macOS/Linux & \inlinecode{/Users/song.mp3} & \inlinecode{file:///Users/song.mp3}
 \chapter{Color Extractor Algorithm}
 \label{ch:coloralgorithm}
 
-How dominant colors are extracted from album art.
+Extracts dominant colors from album art for dynamic UI theming (\inlinecode{colorExtractor.ts}).
 
 \section{Algorithm Steps}
 
 \begin{enumerate}
     \item Load image onto canvas (50x50 for performance)
-    \item Sample every 4th pixel
-    \item Skip transparent, very dark, and very light pixels
-    \item Quantize colors (reduce to nearest 32-step)
-    \item Count color occurrences
-    \item Return top 4 colors sorted by frequency
+    \item Sample every 4th pixel (16-byte stride in RGBA data)
+    \item Skip transparent pixels (\inlinecode{alpha < 128})
+    \item Skip very dark (\inlinecode{brightness < 20}) and very light (\inlinecode{brightness > 235})
+    \item Quantize colors to nearest 32-step: \inlinecode{Math.round(r / 32) * 32}
+    \item Count color occurrences using Map with key ``r,g,b''
+    \item Sort by count, return top 4 colors
 \end{enumerate}
+
+\begin{lstlisting}[language=TypeScript, title=Color Quantization (colorExtractor.ts)]
+// Quantize colors to reduce unique values
+const qr = Math.round(r / 32) * 32;
+const qg = Math.round(g / 32) * 32;
+const qb = Math.round(b / 32) * 32;
+
+const key = `${qr},${qg},${qb}`;
+// Count occurrences in Map
+\end{lstlisting}
+
+\section{Output Interface}
+
+\begin{lstlisting}[language=TypeScript]
+export interface ExtractedColors {
+  primary: string;    // Most frequent color
+  secondary: string;  // 2nd most frequent
+  accent: string;     // 3rd most frequent
+  background: string; // 4th most frequent
+}
+\end{lstlisting}
 
 \section{Default Colors}
 
-Used when extraction fails:
+Used when extraction fails (CORS error, no image, etc.):
 
 \begin{lstlisting}[language=TypeScript]
 {
-  primary: '#667eea',
-  secondary: '#764ba2',
-  accent: '#f093fb',
-  background: '#1a1a2e'
+  primary: '#667eea',    // Purple-blue
+  secondary: '#764ba2',  // Deep purple
+  accent: '#f093fb',     // Light pink
+  background: '#1a1a2e'  // Dark navy
 }
 \end{lstlisting}
 
@@ -7986,7 +8891,7 @@ Exports named SVG components for:
 \subsection{Layout Components}
 
 \subsubsection{TitleBar (components/layout/TitleBar/)}
-\begin{tabular}{@{}p{4cm}p{10cm}@{}}
+\begin{tabular}{@{}p{3.5cm}p{10cm}@{}}
 \textbf{Purpose} & Custom window title bar with traffic light controls \\
 \textbf{Features} & Frameless window controls, app logo, window drag area, macOS traffic light positioning \\
 \textbf{State} & \inlinecode{isMaximized} - tracks window state \\
@@ -7994,14 +8899,14 @@ Exports named SVG components for:
 \end{tabular}
 
 \subsubsection{Sidebar (components/layout/Sidebar/)}
-\begin{tabular}{@{}p{4cm}p{10cm}@{}}
+\begin{tabular}{@{}p{3.5cm}p{10cm}@{}}
 \textbf{Purpose} & Navigation sidebar with library and playlists \\
 \textbf{Features} & "All Songs" button, playlist list, create playlist button, settings button \\
 \textbf{Props} & \inlinecode{playlists}, \inlinecode{activePlaylistId}, \inlinecode{onPlaylistClick}, \inlinecode{onCreateClick}, \inlinecode{onSettingsClick} \\
 \end{tabular}
 
 \subsubsection{PlaybackBar (components/layout/PlaybackBar/)}
-\begin{tabular}{@{}p{4cm}p{10cm}@{}}
+\begin{tabular}{@{}p{3.5cm}p{10cm}@{}}
 \textbf{Purpose} & Bottom playback control bar \\
 \textbf{Features} & Album art, song info, progress bar, play/pause, prev/next, shuffle, repeat, volume, lyrics button \\
 \textbf{Key Props} & All \inlinecode{useAudioPlayer} return values, current song metadata \\
@@ -8011,7 +8916,7 @@ Exports named SVG components for:
 \subsection{Library Components}
 
 \subsubsection{SongList (components/library/SongList/)}
-\begin{tabular}{@{}p{4cm}p{10cm}@{}}
+\begin{tabular}{@{}p{3.5cm}p{10cm}@{}}
 \textbf{Purpose} & Main song list with virtualized scrolling \\
 \textbf{Features} & Column headers (title, artist, album, duration), sort controls, context menu, scan status indicators \\
 \textbf{Performance} & Uses react-window for virtualization (handles 10,000+ songs) \\
@@ -8019,7 +8924,7 @@ Exports named SVG components for:
 \end{tabular}
 
 \subsubsection{BatchScanProgress (components/library/BatchScanProgress/)}
-\begin{tabular}{@{}p{4cm}p{10cm}@{}}
+\begin{tabular}{@{}p{3.5cm}p{10cm}@{}}
 \textbf{Purpose} & Modal showing batch scan progress \\
 \textbf{Features} & Progress bar, current song name, API phase indicator, cancel button \\
 \textbf{API Phases} & acoustid $\rightarrow$ musicbrainz $\rightarrow$ coverart $\rightarrow$ writing \\
@@ -8028,7 +8933,7 @@ Exports named SVG components for:
 \subsection{Common Components}
 
 \subsubsection{AudioVisualizer (components/common/AudioVisualizer/)}
-\begin{tabular}{@{}p{4cm}p{10cm}@{}}
+\begin{tabular}{@{}p{3.5cm}p{10cm}@{}}
 \textbf{Purpose} & Real-time audio frequency visualization \\
 \textbf{Technology} & Web Audio API + Canvas \\
 \textbf{Props} & \inlinecode{isPlaying}, \inlinecode{audioElement} (Howl instance) \\
@@ -8036,14 +8941,14 @@ Exports named SVG components for:
 \end{tabular}
 
 \subsubsection{ContextMenu (components/common/ContextMenu/)}
-\begin{tabular}{@{}p{4cm}p{10cm}@{}}
+\begin{tabular}{@{}p{3.5cm}p{10cm}@{}}
 \textbf{Purpose} & Right-click context menu \\
 \textbf{Features} & Dynamic positioning, keyboard navigation, nested submenus \\
 \textbf{Props} & \inlinecode{x}, \inlinecode{y}, \inlinecode{items[]}, \inlinecode{onClose} \\
 \end{tabular}
 
 \subsubsection{NotificationToast (components/common/NotificationToast/)}
-\begin{tabular}{@{}p{4cm}p{10cm}@{}}
+\begin{tabular}{@{}p{3.5cm}p{10cm}@{}}
 \textbf{Purpose} & Toast notification system \\
 \textbf{Types} & success (green), error (red), warning (yellow), info (blue) \\
 \textbf{Props} & \inlinecode{message}, \inlinecode{type}, \inlinecode{isVisible}, \inlinecode{duration}, \inlinecode{onClose} \\
@@ -8052,13 +8957,13 @@ Exports named SVG components for:
 \subsection{Download Components}
 
 \subsubsection{DownloadButton (components/download/DownloadButton/)}
-\begin{tabular}{@{}p{4cm}p{10cm}@{}}
+\begin{tabular}{@{}p{3.5cm}p{10cm}@{}}
 \textbf{Purpose} & YouTube URL input and download trigger \\
 \textbf{Features} & URL validation, paste detection, loading spinner \\
 \end{tabular}
 
 \subsubsection{DownloadNotification (components/download/DownloadNotification/)}
-\begin{tabular}{@{}p{4cm}p{10cm}@{}}
+\begin{tabular}{@{}p{3.5cm}p{10cm}@{}}
 \textbf{Purpose} & Shows download progress for YouTube downloads \\
 \textbf{Features} & Progress bar, video title, download speed, ETA \\
 \end{tabular}
@@ -8066,13 +8971,13 @@ Exports named SVG components for:
 \subsection{Playlist Components}
 
 \subsubsection{PlaylistList (components/playlists/PlaylistList.tsx)}
-\begin{tabular}{@{}p{4cm}p{10cm}@{}}
+\begin{tabular}{@{}p{3.5cm}p{10cm}@{}}
 \textbf{Purpose} & Displays list of playlists in sidebar \\
 \textbf{Features} & Click to load, right-click context menu (rename, delete) \\
 \end{tabular}
 
 \subsubsection{CreatePlaylistModal (components/playlists/CreatePlaylistModal.tsx)}
-\begin{tabular}{@{}p{4cm}p{10cm}@{}}
+\begin{tabular}{@{}p{3.5cm}p{10cm}@{}}
 \textbf{Purpose} & Modal for creating new playlists \\
 \textbf{Fields} & Name (required), Description (optional) \\
 \end{tabular}
@@ -8080,7 +8985,7 @@ Exports named SVG components for:
 \subsection{Settings Component}
 
 \subsubsection{Settings (components/settings/Settings/)}
-\begin{tabular}{@{}p{4cm}p{10cm}@{}}
+\begin{tabular}{@{}p{3.5cm}p{10cm}@{}}
 \textbf{Purpose} & Application settings modal \\
 \textbf{Sections} & Music folder, Download folder, Scan subfolders toggle, Binary status (yt-dlp, fpcalc, whisper), Whisper model selector \\
 \textbf{Features} & Folder pickers, binary install buttons, status indicators \\
@@ -8089,7 +8994,7 @@ Exports named SVG components for:
 \subsection{Lyrics Component}
 
 \subsubsection{LyricsPanel (components/lyrics/LyricsPanel/)}
-\begin{tabular}{@{}p{4cm}p{10cm}@{}}
+\begin{tabular}{@{}p{3.5cm}p{10cm}@{}}
 \textbf{Purpose} & AI-generated lyrics display panel \\
 \textbf{Features} & Slide-out panel, generation progress, lyrics display with scroll \\
 \textbf{Pipeline} & FFmpeg vocal isolation $\rightarrow$ Whisper transcription \\
@@ -8619,7 +9524,7 @@ This chapter provides an extremely detailed reference of every IPC channel in th
 \end{figure}
 
 \subsection{Channel: scan-music-folder}
-\begin{tabular}{@{}p{3cm}p{11cm}@{}}
+\begin{tabular}{@{}p{2.8cm}p{10.5cm}@{}}
 \textbf{Purpose} & Scans a directory for music files using parallel processing \\
 \textbf{Parameters} & \inlinecode{folderPath: string} --- Path to scan \\
 \textbf{Returns} & \inlinecode{MusicFile[]} --- Array of parsed music files with metadata \\
@@ -8628,7 +9533,7 @@ This chapter provides an extremely detailed reference of every IPC channel in th
 \end{tabular}
 
 \subsection{Channel: select-music-folder}
-\begin{tabular}{@{}p{3cm}p{11cm}@{}}
+\begin{tabular}{@{}p{2.8cm}p{10.5cm}@{}}
 \textbf{Purpose} & Opens OS folder picker dialog \\
 \textbf{Parameters} & None \\
 \textbf{Returns} & \inlinecode{string | null} --- Selected folder path or null if cancelled \\
@@ -8636,7 +9541,7 @@ This chapter provides an extremely detailed reference of every IPC channel in th
 \end{tabular}
 
 \subsection{Channel: write-metadata}
-\begin{tabular}{@{}p{3cm}p{11cm}@{}}
+\begin{tabular}{@{}p{2.8cm}p{10.5cm}@{}}
 \textbf{Purpose} & Writes ID3/Vorbis tags to audio file \\
 \textbf{Parameters} & \inlinecode{filePath: string, metadata: AudioMetadata} \\
 \textbf{Returns} & \inlinecode{\{success: boolean, error?: string\}} \\
@@ -8678,7 +9583,7 @@ This chapter provides an extremely detailed reference of every IPC channel in th
 \end{figure}
 
 \subsection{Channel: generate-fingerprints-batch}
-\begin{tabular}{@{}p{3cm}p{11cm}@{}}
+\begin{tabular}{@{}p{2.8cm}p{10.5cm}@{}}
 \textbf{Purpose} & Generate fingerprints for multiple files in PARALLEL \\
 \textbf{Parameters} & \inlinecode{filePaths: string[]} --- Array of file paths \\
 \textbf{Returns} & \inlinecode{\{results: FingerprintResult[], stats: BatchStats\}} \\
@@ -8730,7 +9635,7 @@ window.electronAPI.onFingerprintProgress((progress) => {
 \end{figure}
 
 \subsection{Channel: lookup-acoustid}
-\begin{tabular}{@{}p{3cm}p{11cm}@{}}
+\begin{tabular}{@{}p{2.8cm}p{10.5cm}@{}}
 \textbf{Purpose} & Look up song by audio fingerprint \\
 \textbf{Parameters} & \inlinecode{fingerprint: string, duration: number} \\
 \textbf{Returns} & \inlinecode{\{mbid: string, title: string, artist: string\} | null} \\
@@ -8739,7 +9644,7 @@ window.electronAPI.onFingerprintProgress((progress) => {
 \end{tabular}
 
 \subsection{Channel: lookup-musicbrainz}
-\begin{tabular}{@{}p{3cm}p{11cm}@{}}
+\begin{tabular}{@{}p{2.8cm}p{10.5cm}@{}}
 \textbf{Purpose} & Fetch full metadata using MusicBrainz Recording ID (MBID) \\
 \textbf{Parameters} & \inlinecode{mbid: string} --- Recording ID from AcoustID \\
 \textbf{Returns} & Full recording object with artists, releases, release-groups \\
@@ -8796,14 +9701,14 @@ window.electronAPI.onFingerprintProgress((progress) => {
 \begin{figure}[ht!]
 \centering
 \begin{tikzpicture}[
-    step/.style={draw, rounded corners, minimum width=3cm, minimum height=0.7cm, align=center, font=\small},
+    stepbox/.style={draw, rounded corners, minimum width=3cm, minimum height=0.7cm, align=center, font=\small},
     arrow/.style={->, thick, >=stealth}
 ]
-    \node[step, fill=blue!10] (song) at (0, 0) {Audio File};
-    \node[step, fill=purple!10] (ffmpeg) at (3.5, 0) {FFmpeg};
-    \node[step, fill=yellow!15] (wav) at (7, 0) {16kHz WAV};
-    \node[step, fill=green!10] (whisper) at (10.5, 0) {Whisper.cpp};
-    \node[step, fill=orange!15] (lyrics) at (14, 0) {Lyrics Text};
+    \node[stepbox, fill=blue!10] (song) at (0, 0) {Audio File};
+    \node[stepbox, fill=purple!10] (ffmpeg) at (3.5, 0) {FFmpeg};
+    \node[stepbox, fill=yellow!15] (wav) at (7, 0) {16kHz WAV};
+    \node[stepbox, fill=green!10] (whisper) at (10.5, 0) {Whisper.cpp};
+    \node[stepbox, fill=orange!15] (lyrics) at (14, 0) {Lyrics Text};
     
     \draw[arrow] (song) -- node[above, font=\scriptsize] {extract} (ffmpeg);
     \draw[arrow] (ffmpeg) -- node[above, font=\scriptsize] {convert} (wav);
@@ -8815,7 +9720,7 @@ window.electronAPI.onFingerprintProgress((progress) => {
 \end{figure}
 
 \subsection{Channel: generate-lyrics}
-\begin{tabular}{@{}p{3cm}p{11cm}@{}}
+\begin{tabular}{@{}p{2.8cm}p{10.5cm}@{}}
 \textbf{Purpose} & Generate lyrics from audio using AI transcription \\
 \textbf{Parameters} & \inlinecode{filePath: string} --- Path to audio file \\
 \textbf{Returns} & \inlinecode{\{success: boolean, lyrics?: string, error?: string\}} \\
@@ -8859,7 +9764,7 @@ window.electronAPI.onFingerprintProgress((progress) => {
 \end{figure}
 
 \subsection{Channel: download-youtube}
-\begin{tabular}{@{}p{3cm}p{11cm}@{}}
+\begin{tabular}{@{}p{2.8cm}p{10.5cm}@{}}
 \textbf{Purpose} & Download audio from YouTube URL \\
 \textbf{Parameters} & \inlinecode{url: string, outputDir: string} \\
 \textbf{Returns} & \inlinecode{\{success: boolean, filePath?: string\}} \\
@@ -8885,7 +9790,7 @@ window.electronAPI.onFingerprintProgress((progress) => {
 %------------------------------------------------------------------------------
 \section{Watch Handlers (watchHandlers.ts)}
 
-\begin{tabular}{@{}p{4cm}p{10cm}@{}}
+\begin{tabular}{@{}p{3.5cm}p{10cm}@{}}
 \textbf{watch-start} & Start watching a folder for changes \\
 \textbf{watch-stop} & Stop watching \\
 \textbf{watch-get-status} & Get current watch status \\
@@ -8897,7 +9802,7 @@ window.electronAPI.onFingerprintProgress((progress) => {
 %------------------------------------------------------------------------------
 \section{System Handlers (systemHandlers.ts)}
 
-\begin{tabular}{@{}p{4cm}p{10cm}@{}}
+\begin{tabular}{@{}p{3.5cm}p{10cm}@{}}
 \textbf{get-platform-info} & Returns OS, platform, app version, paths \\
 \textbf{show-in-explorer} & Open file location in system file browser \\
 \textbf{get-settings} & Load app settings from disk \\
@@ -8911,25 +9816,708 @@ window.electronAPI.onFingerprintProgress((progress) => {
 \begin{table}[ht!]
 \centering
 \small
-\begin{tabular}{@{}p{3cm}p{4cm}p{6.5cm}@{}}
+\begin{tabular}{@{}p{3.5cm}p{3cm}p{7cm}@{}}
 \toprule
 \textbf{Module} & \textbf{Channels} & \textbf{Purpose} \\
 \midrule
-musicHandlers & 6 channels & Scan folders, read/write metadata \\
-fingerprintHandlers & 4 channels & Generate audio fingerprints \\
-apiHandlers & 4 channels & External API calls (AcoustID, MusicBrainz) \\
-cacheHandlers & 7 channels & Track scan status in SQLite \\
-lyricsHandlers & 3 channels & AI lyrics transcription \\
-youtubeHandlers & 5 channels & YouTube download, binary management \\
-playlistHandlers & 7 channels & CRUD operations for playlists \\
-watchHandlers & 3 channels & File system watching \\
-systemHandlers & 5 channels & Platform info, settings \\
+musicHandlers & 3 channels & scan-music-folder, select-music-folder, read-single-file-metadata \\
+settingsHandlers & 3 channels & get-settings, save-settings, select-download-folder \\
+binaryHandlers & 5 channels & get-binary-statuses, install-ytdlp, install-fpcalc, install-whisper, binary-install-progress \\
+whisperHandlers & 3 channels & get-whisper-models, get-selected-whisper-model, set-whisper-model \\
+windowHandlers & 7 channels & window-minimize, maximize, close, state-changed, tray-play-pause, playback-state, visibility \\
+youtubeHandlers & 4 channels & download-youtube, download-progress, binary-download-progress, download-title \\
+imageHandlers & 4 channels & download-image, download-image-with-fallback, write-cover-art, write-metadata \\
+apiHandlers & 2 channels & lookup-acoustid, lookup-musicbrainz \\
+cacheHandlers & 8 channels & get-file-status, mark-file-scanned, get-batch-status, get-unscanned-files, get-statistics, get-entry, cleanup-orphaned, clear \\
+fingerprintHandlers & 6 channels & generate-fingerprint, check-ready, ensure-ready, generate-batch, get-pool-info, batch-progress \\
+playlistHandlers & 14 channels & create, delete, rename, update-description, update-cover, get-all, get-by-id, get-songs, add-songs, remove-song, reorder, is-song-in, get-containing-song, cleanup-missing \\
+watchHandlers & 5 channels & file-watcher-start, stop, status, ignore, event \\
+lyricsHandlers & 2 channels & process-lyrics, lyrics-progress \\
+platformHandlers & 2 channels & get-platform-info, read-file-buffer \\
 \midrule
-\textbf{Total} & \textbf{44 channels} & \\
+\textbf{Total} & \textbf{68 channels} & \\
 \bottomrule
 \end{tabular}
-\caption{Complete IPC Channel Count by Module}
+\caption{Complete IPC Channel Count by Module (from preload.ts)}
 \end{table}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% CHAPTER: ADDITIONAL ARCHITECTURE DIAGRAMS
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\chapter{Additional Architecture Diagrams}
+\label{ch:more_diagrams}
+
+This chapter contains additional visual representations of complex systems in the application.
+
+%------------------------------------------------------------------------------
+\section{React Component Hierarchy}
+
+\begin{figure}[ht!]
+\centering
+\begin{tikzpicture}[
+    component/.style={draw, rounded corners, minimum width=2cm, minimum height=0.8cm, align=center, font=\small},
+    arrow/.style={->, thick, >=stealth}
+]
+    % Root
+    \node[component, fill=blue!20] (app) at (0, 4) {App.tsx};
+    
+    % Level 1
+    \node[component, fill=green!15] (titlebar) at (-5, 2.5) {TitleBar};
+    \node[component, fill=green!15] (sidebar) at (-2, 2.5) {Sidebar};
+    \node[component, fill=green!15] (main) at (2, 2.5) {MainContent};
+    \node[component, fill=green!15] (player) at (5, 2.5) {NowPlaying};
+    
+    % Level 2 - Sidebar children
+    \node[component, fill=yellow!15] (nav) at (-4, 1) {Navigation};
+    \node[component, fill=yellow!15] (artists) at (-1, 1) {ArtistList};
+    
+    % Level 2 - Main children
+    \node[component, fill=yellow!15] (songlist) at (1, 1) {SongList};
+    \node[component, fill=yellow!15] (settings) at (4, 1) {Settings};
+    
+    % Level 3
+    \node[component, fill=orange!15] (songitem) at (1, -0.5) {SongItem};
+    \node[component, fill=orange!15] (visualizer) at (5, 1) {Visualizer};
+    
+    % Arrows
+    \draw[arrow] (app) -- (titlebar);
+    \draw[arrow] (app) -- (sidebar);
+    \draw[arrow] (app) -- (main);
+    \draw[arrow] (app) -- (player);
+    \draw[arrow] (sidebar) -- (nav);
+    \draw[arrow] (sidebar) -- (artists);
+    \draw[arrow] (main) -- (songlist);
+    \draw[arrow] (main) -- (settings);
+    \draw[arrow] (songlist) -- (songitem);
+    \draw[arrow] (player) -- (visualizer);
+\end{tikzpicture}
+\caption{React Component Tree Structure}
+\label{fig:component_tree}
+\end{figure}
+
+%------------------------------------------------------------------------------
+\section{Settings Persistence Flow}
+
+\begin{figure}[ht!]
+\centering
+\begin{tikzpicture}[
+    box/.style={draw, rounded corners, minimum width=2.5cm, minimum height=1cm, align=center, font=\small},
+    arrow/.style={->, thick, >=stealth}
+]
+    % User action
+    \node[box, fill=blue!15] (user) at (0, 0) {User Changes\\Setting};
+    
+    % React state
+    \node[box, fill=green!15] (state) at (3.5, 0) {React State\\Updates};
+    
+    % IPC call
+    \node[box, fill=yellow!15] (ipc) at (7, 0) {IPC:\\saveSettings()};
+    
+    % Main process
+    \node[box, fill=orange!15] (main) at (10.5, 0) {Main Process\\Writes JSON};
+    
+    % Disk
+    \node[draw, cylinder, shape border rotate=90, aspect=0.3, fill=gray!20, minimum height=0.8cm, minimum width=1.5cm] (disk) at (14, 0) {};
+    \node[below=0.1cm of disk, font=\scriptsize] {settings.json};
+    
+    \draw[arrow] (user) -- (state);
+    \draw[arrow] (state) -- (ipc);
+    \draw[arrow] (ipc) -- (main);
+    \draw[arrow] (main) -- (disk);
+    
+    % App restart path
+    \node[box, fill=purple!15] (load) at (7, -2) {App Start:\\loadSettings()};
+    \draw[arrow, dashed] (disk) |- (load);
+    \draw[arrow, dashed] (load) -| (state);
+\end{tikzpicture}
+\caption{Settings Save and Load Flow}
+\label{fig:settings_persistence_flow}
+\end{figure}
+
+%------------------------------------------------------------------------------
+\section{Playlist CRUD Operations}
+
+\begin{figure}[ht!]
+\centering
+\begin{tikzpicture}[
+    op/.style={draw, rounded corners, minimum width=2cm, minimum height=0.7cm, align=center, font=\small, fill=blue!10},
+    db/.style={draw, rounded corners, minimum width=2.5cm, minimum height=0.7cm, align=center, font=\small, fill=green!15},
+    arrow/.style={->, thick, >=stealth}
+]
+    % Operations
+    \node[op] (create) at (0, 2) {CREATE};
+    \node[op] (read) at (3, 2) {READ};
+    \node[op] (update) at (6, 2) {UPDATE};
+    \node[op] (delete) at (9, 2) {DELETE};
+    
+    % IPC layer
+    \node[draw, minimum width=10cm, minimum height=0.8cm, fill=yellow!10, rounded corners] (ipc) at (4.5, 0.5) {IPC Channel Layer};
+    
+    % Database operations
+    \node[db] (insert) at (0, -1) {INSERT};
+    \node[db] (select) at (3, -1) {SELECT};
+    \node[db] (upd) at (6, -1) {UPDATE};
+    \node[db] (del) at (9, -1) {DELETE};
+    
+    % SQLite
+    \node[draw, cylinder, shape border rotate=90, aspect=0.3, fill=gray!20, minimum height=1cm, minimum width=2cm] (sqlite) at (4.5, -3) {};
+    \node[below=0.1cm of sqlite, font=\scriptsize] {playlists.db};
+    
+    \draw[arrow] (create) -- (ipc);
+    \draw[arrow] (read) -- (ipc);
+    \draw[arrow] (update) -- (ipc);
+    \draw[arrow] (delete) -- (ipc);
+    
+    \draw[arrow] (ipc) -- (insert);
+    \draw[arrow] (ipc) -- (select);
+    \draw[arrow] (ipc) -- (upd);
+    \draw[arrow] (ipc) -- (del);
+    
+    \draw[arrow] (insert) -- (sqlite);
+    \draw[arrow] (select) -- (sqlite);
+    \draw[arrow] (upd) -- (sqlite);
+    \draw[arrow] (del) -- (sqlite);
+\end{tikzpicture}
+\caption{Playlist CRUD Database Flow}
+\label{fig:playlist_crud}
+\end{figure}
+
+%------------------------------------------------------------------------------
+\section{File Watcher Event Flow}
+
+\begin{figure}[ht!]
+\centering
+\begin{tikzpicture}[
+    box/.style={draw, rounded corners, minimum width=2.5cm, minimum height=0.8cm, align=center, font=\small},
+    event/.style={draw, rounded corners, minimum width=2cm, minimum height=0.6cm, align=center, font=\scriptsize, fill=orange!15},
+    arrow/.style={->, thick, >=stealth}
+]
+    % File system
+    \node[box, fill=gray!20] (fs) at (0, 0) {File System};
+    
+    % Watcher
+    \node[box, fill=blue!15] (watcher) at (4, 0) {chokidar\\Watcher};
+    
+    % Events
+    \node[event] (add) at (8, 1) {file-added};
+    \node[event] (change) at (8, 0) {file-changed};
+    \node[event] (remove) at (8, -1) {file-removed};
+    
+    % Renderer
+    \node[box, fill=green!15] (renderer) at (12, 0) {Renderer\\UI Update};
+    
+    \draw[arrow] (fs) -- node[above, font=\scriptsize] {monitors} (watcher);
+    \draw[arrow] (watcher) -- (add);
+    \draw[arrow] (watcher) -- (change);
+    \draw[arrow] (watcher) -- (remove);
+    \draw[arrow] (add) -- (renderer);
+    \draw[arrow] (change) -- (renderer);
+    \draw[arrow] (remove) -- (renderer);
+    
+    % Debounce note
+    \node[below=0.5cm of watcher, font=\scriptsize\itshape, text width=3cm, align=center] {300ms debounce\\prevents spam};
+\end{tikzpicture}
+\caption{File Watcher Real-Time Events}
+\label{fig:file_watcher}
+\end{figure}
+
+%------------------------------------------------------------------------------
+\section{Audio Visualization Data Flow}
+
+\begin{figure}[ht!]
+\centering
+\begin{tikzpicture}[
+    box/.style={draw, rounded corners, minimum width=2.5cm, minimum height=0.8cm, align=center, font=\small},
+    arrow/.style={->, thick, >=stealth}
+]
+    % Audio source
+    \node[box, fill=blue!15] (audio) at (0, 0) {Howler.js\\Audio};
+    
+    % Web Audio API
+    \node[box, fill=purple!15] (webaudio) at (3.5, 0) {Web Audio\\API};
+    
+    % Analyzer
+    \node[box, fill=yellow!15] (analyzer) at (7, 0) {Analyzer\\Node};
+    
+    % FFT Data
+    \node[box, fill=orange!15] (fft) at (10.5, 0) {FFT\\Frequency Data};
+    
+    % Canvas
+    \node[box, fill=green!15] (canvas) at (14, 0) {Canvas\\Render};
+    
+    \draw[arrow] (audio) -- (webaudio);
+    \draw[arrow] (webaudio) -- (analyzer);
+    \draw[arrow] (analyzer) -- node[above, font=\scriptsize] {60fps} (fft);
+    \draw[arrow] (fft) -- (canvas);
+    
+    % Modes
+    \node[below=1cm of canvas, font=\small] (modes) {Visualizer Modes:};
+    \node[below=0.3cm of modes, font=\scriptsize] {Bars | Wave | Circular};
+\end{tikzpicture}
+\caption{Audio Visualization Pipeline}
+\label{fig:visualizer_flow}
+\end{figure}
+
+%------------------------------------------------------------------------------
+\section{Complete Application Architecture Overview}
+
+\begin{figure}[ht!]
+\centering
+\begin{tikzpicture}[
+    layer/.style={draw, rounded corners, minimum width=12cm, minimum height=1.5cm, align=center},
+    component/.style={draw, rounded corners, minimum width=2cm, minimum height=0.7cm, align=center, font=\scriptsize},
+    arrow/.style={<->, thick, >=stealth}
+]
+    % Frontend Layer
+    \node[layer, fill=blue!10] (frontend) at (0, 4) {};
+    \node[above=0cm of frontend, font=\bfseries] {Frontend (Renderer Process)};
+    \node[component, fill=blue!20] at (-4, 4) {React UI};
+    \node[component, fill=blue!20] at (-1, 4) {Hooks};
+    \node[component, fill=blue!20] at (2, 4) {State};
+    \node[component, fill=blue!20] at (4.5, 4) {Visualizer};
+    
+    % IPC Layer
+    \node[layer, fill=yellow!15, minimum height=0.8cm] (ipc) at (0, 2.3) {};
+    \node[font=\bfseries\small] at (0, 2.3) {IPC Bridge (68 Channels)};
+    
+    % Backend Layer
+    \node[layer, fill=green!10] (backend) at (0, 0.5) {};
+    \node[above=0cm of backend, font=\bfseries] {Backend (Main Process)};
+    \node[component, fill=green!20] at (-4.5, 0.5) {Scanner};
+    \node[component, fill=green!20] at (-2, 0.5) {Fingerprint};
+    \node[component, fill=green!20] at (0.5, 0.5) {Cache};
+    \node[component, fill=green!20] at (2.8, 0.5) {YouTube};
+    \node[component, fill=green!20] at (5, 0.5) {Whisper};
+    
+    % External Layer
+    \node[layer, fill=purple!10, minimum height=1cm] (external) at (0, -1.5) {};
+    \node[above=0cm of external, font=\bfseries] {External Services};
+    \node[component, fill=purple!20] at (-3.5, -1.5) {AcoustID};
+    \node[component, fill=purple!20] at (-0.5, -1.5) {MusicBrainz};
+    \node[component, fill=purple!20] at (2.5, -1.5) {Cover Art};
+    
+    % Arrows
+    \draw[arrow] (frontend) -- (ipc);
+    \draw[arrow] (ipc) -- (backend);
+    \draw[arrow, dashed] (backend) -- (external);
+\end{tikzpicture}
+\caption{Complete Application Architecture}
+\label{fig:complete_arch}
+\end{figure}
+
+%------------------------------------------------------------------------------
+\section{Song Identification Pipeline}
+
+\begin{figure}[ht!]
+\centering
+\begin{tikzpicture}[
+    stepbox/.style={draw, rounded corners, minimum width=2cm, minimum height=0.8cm, align=center, font=\small},
+    decision/.style={draw, diamond, aspect=2, minimum width=1.5cm, align=center, font=\scriptsize},
+    arrow/.style={->, thick, >=stealth}
+]
+    % Steps
+    \node[stepbox, fill=blue!15] (file) at (0, 0) {Audio File};
+    \node[stepbox, fill=green!15] (fpcalc) at (3, 0) {fpcalc};
+    \node[stepbox, fill=yellow!15] (fp) at (6, 0) {Fingerprint};
+    \node[stepbox, fill=orange!15] (acoustid) at (9, 0) {AcoustID};
+    
+    % Decision
+    \node[decision, fill=red!10] (match) at (12, 0) {Match?};
+    
+    % Success path
+    \node[stepbox, fill=purple!15] (mb) at (12, -2) {MusicBrainz};
+    \node[stepbox, fill=green!20] (tagged) at (12, -4) {Write Tags};
+    
+    % No match path
+    \node[stepbox, fill=gray!20] (nomatch) at (15, 0) {No Match};
+    
+    \draw[arrow] (file) -- (fpcalc);
+    \draw[arrow] (fpcalc) -- (fp);
+    \draw[arrow] (fp) -- (acoustid);
+    \draw[arrow] (acoustid) -- (match);
+    \draw[arrow] (match) -- node[right, font=\scriptsize] {Yes} (mb);
+    \draw[arrow] (mb) -- (tagged);
+    \draw[arrow] (match) -- node[above, font=\scriptsize] {No} (nomatch);
+\end{tikzpicture}
+\caption{Complete Song Identification Flow}
+\label{fig:song_id_flow}
+\end{figure}
+
+%------------------------------------------------------------------------------
+\section{Repeat and Shuffle Mode State Machine}
+
+\begin{figure}[ht!]
+\centering
+\begin{tikzpicture}[
+    state/.style={draw, ellipse, minimum width=2.5cm, minimum height=1cm, align=center, font=\small},
+    arrow/.style={->, thick, >=stealth}
+]
+    % Repeat states
+    \node[state, fill=gray!20] (off) at (0, 0) {Repeat\\OFF};
+    \node[state, fill=blue!15] (all) at (4, 0) {Repeat\\ALL};
+    \node[state, fill=green!15] (one) at (8, 0) {Repeat\\ONE};
+    
+    \draw[arrow] (off) to[bend left=20] node[above, font=\scriptsize] {click} (all);
+    \draw[arrow] (all) to[bend left=20] node[above, font=\scriptsize] {click} (one);
+    \draw[arrow] (one) to[bend left=40] node[below, font=\scriptsize] {click} (off);
+    
+    % Shuffle states (below)
+    \node[state, fill=gray!20] (shufoff) at (2, -3) {Shuffle\\OFF};
+    \node[state, fill=purple!15] (shufon) at (6, -3) {Shuffle\\ON};
+    
+    \draw[arrow] (shufoff) to[bend left=20] node[above, font=\scriptsize] {toggle} (shufon);
+    \draw[arrow] (shufon) to[bend left=20] node[below, font=\scriptsize] {toggle} (shufoff);
+\end{tikzpicture}
+\caption{Repeat and Shuffle Mode Cycling}
+\label{fig:repeat_shuffle}
+\end{figure}
+
+%------------------------------------------------------------------------------
+\section{Context Menu Flow}
+
+\begin{figure}[ht!]
+\centering
+\begin{tikzpicture}[
+    box/.style={draw, rounded corners, minimum width=2.5cm, minimum height=0.8cm, align=center, font=\small},
+    menu/.style={draw, rounded corners, minimum width=3cm, minimum height=2cm, align=left, font=\scriptsize, fill=white},
+    arrow/.style={->, thick, >=stealth}
+]
+    % Right click
+    \node[box, fill=blue!15] (click) at (0, 0) {Right Click\\on Song};
+    
+    % Context menu
+    \node[menu] (menu) at (4.5, 0) {
+        \textbf{Context Menu}\\[2pt]
+        Play Next\\
+        Add to Queue\\
+        Add to Playlist\\
+        Edit Metadata\\
+        Show in Explorer
+    };
+    
+    % Actions
+    \node[box, fill=green!15] (action) at (9, 0) {Execute\\Action};
+    
+    % IPC
+    \node[box, fill=yellow!15] (ipc) at (12.5, 0) {IPC Call\\(if needed)};
+    
+    \draw[arrow] (click) -- (menu);
+    \draw[arrow] (menu) -- node[above, font=\scriptsize] {select} (action);
+    \draw[arrow] (action) -- (ipc);
+\end{tikzpicture}
+\caption{Context Menu Action Flow}
+\label{fig:context_menu}
+\end{figure}
+
+%------------------------------------------------------------------------------
+\section{Queue Management Flow}
+
+\begin{figure}[ht!]
+\centering
+\begin{tikzpicture}[
+    box/.style={draw, rounded corners, minimum width=2cm, minimum height=0.7cm, align=center, font=\small},
+    queue/.style={draw, minimum width=4cm, minimum height=2cm, align=center, font=\small, fill=blue!10},
+    arrow/.style={->, thick, >=stealth}
+]
+    % Queue box
+    \node[queue] (queue) at (6, 0) {};
+    \node[above=0cm of queue, font=\bfseries] {Play Queue};
+    \node[font=\scriptsize] at (6, 0.5) {Song A};
+    \node[font=\scriptsize] at (6, 0) {Song B};
+    \node[font=\scriptsize] at (6, -0.5) {Song C};
+    
+    % Actions
+    \node[box, fill=green!15] (add) at (1, 1) {Add to Queue};
+    \node[box, fill=yellow!15] (next) at (1, 0) {Play Next};
+    \node[box, fill=orange!15] (clear) at (1, -1) {Clear Queue};
+    
+    % Player
+    \node[box, fill=purple!15] (player) at (11, 0) {Audio Player};
+    
+    \draw[arrow] (add) -- node[above, font=\scriptsize] {append} (queue);
+    \draw[arrow] (next) -- node[above, font=\scriptsize] {insert at 0} (queue);
+    \draw[arrow] (clear) -- node[below, font=\scriptsize] {empty} (queue);
+    \draw[arrow] (queue) -- node[above, font=\scriptsize] {pop} (player);
+\end{tikzpicture}
+\caption{Play Queue Operations}
+\label{fig:queue_management}
+\end{figure}
+
+%------------------------------------------------------------------------------
+\section{Download State Machine}
+
+\begin{figure}[ht!]
+\centering
+\begin{tikzpicture}[
+    state/.style={draw, ellipse, minimum width=2cm, minimum height=0.8cm, align=center, font=\small},
+    arrow/.style={->, thick, >=stealth}
+]
+    \node[state, fill=gray!20] (idle) at (0, 0) {Idle};
+    \node[state, fill=blue!15] (fetching) at (3.5, 0) {Fetching\\Info};
+    \node[state, fill=yellow!15] (downloading) at (7, 0) {Downloading};
+    \node[state, fill=orange!15] (converting) at (10.5, 0) {Converting};
+    \node[state, fill=green!20] (done) at (14, 0) {Complete};
+    \node[state, fill=red!15] (error) at (7, -2) {Error};
+    
+    \draw[arrow] (idle) -- node[above, font=\scriptsize] {start} (fetching);
+    \draw[arrow] (fetching) -- node[above, font=\scriptsize] {got URL} (downloading);
+    \draw[arrow] (downloading) -- node[above, font=\scriptsize] {100\%} (converting);
+    \draw[arrow] (converting) -- node[above, font=\scriptsize] {ffmpeg} (done);
+    \draw[arrow] (fetching) -- node[left, font=\scriptsize] {fail} (error);
+    \draw[arrow] (downloading) -- node[right, font=\scriptsize] {fail} (error);
+    \draw[arrow] (error) -- node[below, font=\scriptsize] {retry} (idle);
+\end{tikzpicture}
+\caption{YouTube Download State Machine}
+\label{fig:download_states}
+\end{figure}
+
+%------------------------------------------------------------------------------
+\section{Binary Installation Flow}
+
+\begin{figure}[ht!]
+\centering
+\begin{tikzpicture}[
+    stepbox/.style={draw, rounded corners, minimum width=2.2cm, minimum height=0.7cm, align=center, font=\small},
+    decision/.style={draw, diamond, aspect=2, minimum width=1cm, align=center, font=\scriptsize},
+    arrow/.style={->, thick, >=stealth}
+]
+    \node[stepbox, fill=blue!15] (check) at (0, 0) {Check\\Installed};
+    \node[decision, fill=yellow!15] (exists) at (3, 0) {Exists?};
+    \node[stepbox, fill=green!20] (ready) at (6, 1) {Ready};
+    \node[stepbox, fill=orange!15] (download) at (6, -1) {Download\\Binary};
+    \node[stepbox, fill=purple!15] (extract) at (9, -1) {Extract\\ZIP};
+    \node[stepbox, fill=green!20] (chmod) at (12, -1) {Set\\Executable};
+    
+    \draw[arrow] (check) -- (exists);
+    \draw[arrow] (exists) -- node[above, font=\scriptsize] {yes} (ready);
+    \draw[arrow] (exists) -- node[right, font=\scriptsize] {no} (download);
+    \draw[arrow] (download) -- (extract);
+    \draw[arrow] (extract) -- (chmod);
+    \draw[arrow] (chmod) |- (ready);
+\end{tikzpicture}
+\caption{Binary Auto-Installation Flow (fpcalc, yt-dlp, whisper)}
+\label{fig:binary_install}
+\end{figure}
+
+%------------------------------------------------------------------------------
+\section{Notification Toast System}
+
+\begin{figure}[ht!]
+\centering
+\begin{tikzpicture}[
+    toast/.style={draw, rounded corners, minimum width=3cm, minimum height=0.8cm, align=center, font=\small},
+    arrow/.style={->, thick, >=stealth}
+]
+    % Trigger
+    \node[toast, fill=blue!15] (trigger) at (0, 0) {Event Occurs};
+    
+    % Toast types
+    \node[toast, fill=green!20] (success) at (5, 1.5) {Success};
+    \node[toast, fill=red!15] (error) at (5, 0.5) {Error};
+    \node[toast, fill=yellow!15] (warning) at (5, -0.5) {Warning};
+    \node[toast, fill=blue!15] (info) at (5, -1.5) {Info};
+    
+    % Display
+    \node[toast, fill=gray!20] (display) at (10, 0) {Show Toast\\(5 seconds)};
+    
+    % Auto dismiss
+    \node[toast, fill=white] (dismiss) at (14, 0) {Auto\\Dismiss};
+    
+    \draw[arrow] (trigger) -- (success);
+    \draw[arrow] (trigger) -- (error);
+    \draw[arrow] (trigger) -- (warning);
+    \draw[arrow] (trigger) -- (info);
+    \draw[arrow] (success) -- (display);
+    \draw[arrow] (error) -- (display);
+    \draw[arrow] (warning) -- (display);
+    \draw[arrow] (info) -- (display);
+    \draw[arrow] (display) -- node[above, font=\scriptsize] {timeout} (dismiss);
+\end{tikzpicture}
+\caption{Toast Notification System}
+\label{fig:toast_system}
+\end{figure}
+
+%------------------------------------------------------------------------------
+\section{Search and Filter Flow}
+
+\begin{figure}[ht!]
+\centering
+\begin{tikzpicture}[
+    box/.style={draw, rounded corners, minimum width=2.5cm, minimum height=0.8cm, align=center, font=\small},
+    arrow/.style={->, thick, >=stealth}
+]
+    \node[box, fill=blue!15] (input) at (0, 0) {User Types\\Search};
+    \node[box, fill=yellow!15] (debounce) at (3.5, 0) {Debounce\\(300ms)};
+    \node[box, fill=orange!15] (filter) at (7, 0) {Filter\\Songs Array};
+    \node[box, fill=green!15] (results) at (10.5, 0) {Filtered\\Results};
+    \node[box, fill=purple!15] (render) at (14, 0) {Re-render\\List};
+    
+    \draw[arrow] (input) -- (debounce);
+    \draw[arrow] (debounce) -- (filter);
+    \draw[arrow] (filter) -- (results);
+    \draw[arrow] (results) -- (render);
+    
+    \node[below=0.5cm of filter, font=\scriptsize\itshape, text width=4cm, align=center] {Matches: title, artist,\\album, genre};
+\end{tikzpicture}
+\caption{Search Debounce and Filter Pipeline}
+\label{fig:search_flow}
+\end{figure}
+
+%------------------------------------------------------------------------------
+\section{Volume Control System}
+
+\begin{figure}[ht!]
+\centering
+\begin{tikzpicture}[
+    box/.style={draw, rounded corners, minimum width=2cm, minimum height=0.7cm, align=center, font=\small},
+    arrow/.style={->, thick, >=stealth}
+]
+    % Input methods
+    \node[box, fill=blue!15] (slider) at (0, 1) {Slider};
+    \node[box, fill=blue!15] (wheel) at (0, 0) {Mouse Wheel};
+    \node[box, fill=blue!15] (keys) at (0, -1) {Arrow Keys};
+    
+    % Volume state
+    \node[box, fill=yellow!15, minimum width=2.5cm] (state) at (4, 0) {Volume State\\(0-100)};
+    
+    % Howler
+    \node[box, fill=green!15] (howler) at (8, 0) {Howler.js\\volume()};
+    
+    % Persist
+    \node[box, fill=purple!15] (save) at (12, 0) {Save to\\Settings};
+    
+    \draw[arrow] (slider) -- (state);
+    \draw[arrow] (wheel) -- (state);
+    \draw[arrow] (keys) -- (state);
+    \draw[arrow] (state) -- (howler);
+    \draw[arrow] (state) -- (save);
+    
+    % Mute toggle
+    \node[box, fill=orange!15] (mute) at (4, -2) {Mute Toggle};
+    \draw[arrow] (mute) -- (state);
+\end{tikzpicture}
+\caption{Volume Control Input Sources}
+\label{fig:volume_control}
+\end{figure}
+
+%------------------------------------------------------------------------------
+\section{Drag and Drop to Playlist}
+
+\begin{figure}[ht!]
+\centering
+\begin{tikzpicture}[
+    box/.style={draw, rounded corners, minimum width=2.5cm, minimum height=0.8cm, align=center, font=\small},
+    arrow/.style={->, thick, >=stealth}
+]
+    \node[box, fill=blue!15] (drag) at (0, 0) {Drag Song(s)};
+    \node[box, fill=yellow!15] (hover) at (4, 0) {Hover Over\\Playlist};
+    \node[box, fill=orange!15] (drop) at (8, 0) {Drop};
+    \node[box, fill=green!15] (add) at (12, 0) {Add to\\Playlist};
+    
+    \draw[arrow] (drag) -- (hover);
+    \draw[arrow] (hover) -- (drop);
+    \draw[arrow] (drop) -- (add);
+    
+    % Visual feedback
+    \node[below=0.5cm of hover, font=\scriptsize\itshape] {Highlight target};
+    \node[below=0.5cm of add, font=\scriptsize\itshape] {Dedup check};
+\end{tikzpicture}
+\caption{Drag and Drop to Playlist Flow}
+\label{fig:drag_drop}
+\end{figure}
+
+%------------------------------------------------------------------------------
+\section{Keyboard Shortcuts System}
+
+\begin{figure}[ht!]
+\centering
+\begin{tikzpicture}[
+    key/.style={draw, rounded corners, minimum width=1.5cm, minimum height=0.6cm, align=center, font=\small\ttfamily, fill=gray!20},
+    action/.style={draw, rounded corners, minimum width=2.5cm, minimum height=0.6cm, align=center, font=\small, fill=green!15},
+    arrow/.style={->, thick, >=stealth}
+]
+    % Keys
+    \node[key] (space) at (0, 2) {Space};
+    \node[key] (left) at (0, 1) {$\leftarrow$};
+    \node[key] (right) at (0, 0) {$\rightarrow$};
+    \node[key] (up) at (0, -1) {$\uparrow$};
+    \node[key] (down) at (0, -2) {$\downarrow$};
+    
+    % Actions
+    \node[action] (playpause) at (5, 2) {Play/Pause};
+    \node[action] (prev) at (5, 1) {Previous};
+    \node[action] (next) at (5, 0) {Next};
+    \node[action] (volup) at (5, -1) {Volume Up};
+    \node[action] (voldown) at (5, -2) {Volume Down};
+    
+    \draw[arrow] (space) -- (playpause);
+    \draw[arrow] (left) -- (prev);
+    \draw[arrow] (right) -- (next);
+    \draw[arrow] (up) -- (volup);
+    \draw[arrow] (down) -- (voldown);
+    
+    % Global listener
+    \node[below=0.5cm of down, font=\scriptsize\itshape] {useEffect keydown listener};
+\end{tikzpicture}
+\caption{Keyboard Shortcut Mappings}
+\label{fig:keyboard_shortcuts}
+\end{figure}
+
+%------------------------------------------------------------------------------
+\section{Error Handling and Recovery}
+
+\begin{figure}[ht!]
+\centering
+\begin{tikzpicture}[
+    box/.style={draw, rounded corners, minimum width=2.5cm, minimum height=0.8cm, align=center, font=\small},
+    decision/.style={draw, diamond, aspect=2, minimum width=1.5cm, align=center, font=\scriptsize},
+    arrow/.style={->, thick, >=stealth}
+]
+    \node[box, fill=blue!15] (op) at (0, 0) {Operation};
+    \node[decision, fill=yellow!15] (result) at (3.5, 0) {Success?};
+    \node[box, fill=green!20] (continue) at (7, 1) {Continue};
+    \node[box, fill=red!15] (catch) at (7, -1) {Catch Error};
+    \node[box, fill=orange!15] (log) at (10.5, -1) {Log to\\Console};
+    \node[box, fill=purple!15] (toast) at (14, -1) {Show\\Toast};
+    
+    \draw[arrow] (op) -- (result);
+    \draw[arrow] (result) -- node[above, font=\scriptsize] {yes} (continue);
+    \draw[arrow] (result) -- node[right, font=\scriptsize] {no} (catch);
+    \draw[arrow] (catch) -- (log);
+    \draw[arrow] (log) -- (toast);
+\end{tikzpicture}
+\caption{Error Handling Pattern}
+\label{fig:error_handling}
+\end{figure}
+
+%------------------------------------------------------------------------------
+\section{Album Art Loading Strategy}
+
+\begin{figure}[ht!]
+\centering
+\begin{tikzpicture}[
+    stepbox/.style={draw, rounded corners, minimum width=2cm, minimum height=0.7cm, align=center, font=\small},
+    decision/.style={draw, diamond, aspect=2, minimum width=1cm, align=center, font=\scriptsize},
+    arrow/.style={->, thick, >=stealth}
+]
+    \node[stepbox, fill=blue!15] (request) at (0, 0) {Load\\Album Art};
+    \node[decision, fill=yellow!15] (embedded) at (3, 0) {In File?};
+    \node[stepbox, fill=green!20] (use) at (6, 1) {Use\\Embedded};
+    \node[decision, fill=yellow!15] (cached) at (6, -1) {Cached?};
+    \node[stepbox, fill=green!20] (usecache) at (9, 0) {Use\\Cache};
+    \node[stepbox, fill=orange!15] (fetch) at (9, -2) {Fetch from\\Cover Art API};
+    \node[stepbox, fill=gray!20] (placeholder) at (12, -2) {Use\\Placeholder};
+    
+    \draw[arrow] (request) -- (embedded);
+    \draw[arrow] (embedded) -- node[above, font=\scriptsize] {yes} (use);
+    \draw[arrow] (embedded) -- node[right, font=\scriptsize] {no} (cached);
+    \draw[arrow] (cached) -- node[above, font=\scriptsize] {yes} (usecache);
+    \draw[arrow] (cached) -- node[right, font=\scriptsize] {no} (fetch);
+    \draw[arrow] (fetch) -- node[above, font=\scriptsize] {fail} (placeholder);
+\end{tikzpicture}
+\caption{Album Art Loading with Fallbacks}
+\label{fig:album_art_loading}
+\end{figure}
 
 %------------------------------------------------------------------------------
 % END DOCUMENT
