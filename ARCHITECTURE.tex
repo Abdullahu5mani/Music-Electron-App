@@ -141,6 +141,14 @@
     breakable
 }
 
+\newtcolorbox{notebox}{
+    colback=blue!5,
+    colframe=blue!50!black,
+    fonttitle=\bfseries,
+    title={\faInfoCircle\ Note},
+    breakable
+}
+
 %------------------------------------------------------------------------------
 % PAGE STYLE
 %------------------------------------------------------------------------------
@@ -2373,16 +2381,16 @@ ipcMain.handle('scan-music-folder', async (event, folderPath) => {
 \begin{figure}[ht!]
 \centering
 \begin{tikzpicture}[
-    step/.style={draw, rounded corners, fill=blue!10, minimum width=3.5cm, minimum height=0.8cm, align=center, font=\small},
+    stepbox/.style={draw, rounded corners, fill=blue!10, minimum width=3.5cm, minimum height=0.8cm, align=center, font=\small},
     arrow/.style={->, thick, >=stealth}
 ]
-    \node[step, fill=green!20] (s1) at (0, 0) {1. React calls \\\inlinecode{window.electronAPI.scan()}};
-    \node[step, fill=yellow!20] (s2) at (5.5, 0) {2. Preload calls\\\inlinecode{ipcRenderer.invoke()}};
-    \node[step, fill=blue!15] (s3) at (11, 0) {3. Main Process\\\inlinecode{ipcMain.handle()}};
+    \node[stepbox, fill=green!20] (s1) at (0, 0) {1. React calls};
+    \node[stepbox, fill=yellow!20] (s2) at (5.5, 0) {2. Preload calls};
+    \node[stepbox, fill=blue!15] (s3) at (11, 0) {3. Main Process};
     
-    \node[step, fill=blue!15] (s4) at (11, -2) {4. Read files from disk\\Parse metadata};
-    \node[step, fill=yellow!20] (s5) at (5.5, -2) {5. Return result\\to preload};
-    \node[step, fill=green!20] (s6) at (0, -2) {6. Promise resolves\\React updates UI};
+    \node[stepbox, fill=blue!15] (s4) at (11, -2) {4. Read files};
+    \node[stepbox, fill=yellow!20] (s5) at (5.5, -2) {5. Return result};
+    \node[stepbox, fill=green!20] (s6) at (0, -2) {6. Promise resolves};
     
     \draw[arrow] (s1) -- (s2);
     \draw[arrow] (s2) -- (s3);
