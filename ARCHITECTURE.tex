@@ -3822,6 +3822,73 @@ CREATE TABLE playlist_songs (
 CREATE INDEX idx_playlist_songs_playlist ON playlist_songs(playlistId);
 \end{lstlisting}
 
+\section{Playlist Operations Flow}
+
+\begin{figure}[ht!]
+\centering
+\begin{tikzpicture}[
+    node distance=0.6cm and 1.2cm,
+    uibox/.style={rectangle, draw=blue!60, fill=blue!10, thick, minimum width=2.8cm, minimum height=0.7cm, text width=2.6cm, align=center, font=\small},
+    ipcbox/.style={rectangle, draw=orange!60, fill=orange!10, thick, minimum width=2.8cm, minimum height=0.7cm, text width=2.6cm, align=center, font=\small},
+    dbbox/.style={rectangle, draw=green!60, fill=green!10, thick, minimum width=2.8cm, minimum height=0.7cm, text width=2.6cm, align=center, font=\small},
+    arrowlabel/.style={font=\tiny, midway, fill=white},
+]
+    % UI layer
+    \node[uibox] (ui_create) at (0,0) {UI: Create Playlist};
+    \node[uibox, right=1.5cm of ui_create] (ui_add) {UI: Add Songs};
+    \node[uibox, right=1.5cm of ui_add] (ui_delete) {UI: Delete Playlist};
+    
+    % IPC layer
+    \node[ipcbox, below=of ui_create] (ipc_create) {IPC Handler\\playlistCreate};
+    \node[ipcbox, below=of ui_add] (ipc_add) {IPC Handler\\playlistAddSongs};
+    \node[ipcbox, below=of ui_delete] (ipc_delete) {IPC Handler\\playlistDelete};
+    
+    % DB layer
+    \node[dbbox, below=of ipc_create] (db_create) {DB: INSERT INTO\\playlists};
+    \node[dbbox, below=of ipc_add] (db_add) {DB: INSERT INTO\\playlist\_songs};
+    \node[dbbox, below=of ipc_delete] (db_delete) {DB: DELETE FROM\\playlists};
+    
+    % Response layer
+    \node[uibox, below=of db_add] (response) {UI Updates\\with new data};
+    
+    % Arrows - Create flow
+    \draw[->, thick] (ui_create) -- node[arrowlabel, right] {invoke} (ipc_create);
+    \draw[->, thick] (ipc_create) -- (db_create);
+    \draw[->, thick, dashed] (db_create) -- (response);
+    
+    % Arrows - Add flow
+    \draw[->, thick] (ui_add) -- node[arrowlabel, right] {invoke} (ipc_add);
+    \draw[->, thick] (ipc_add) -- (db_add);
+    \draw[->, thick, dashed] (db_add) -- (response);
+    
+    % Arrows - Delete flow
+    \draw[->, thick] (ui_delete) -- node[arrowlabel, right] {invoke} (ipc_delete);
+    \draw[->, thick] (ipc_delete) -- (db_delete);
+    \draw[->, thick, dashed] (db_delete) -- (response);
+    
+    % Side note - Operations
+    \node[draw=purple!60, fill=purple!5, thick, minimum width=3cm, minimum height=3.5cm, text width=2.8cm, align=left, font=\tiny, right=1cm of ipc_delete] (operations) {
+        \textbf{Available Operations:}\\[0.1cm]
+        • playlistCreate\\
+        • playlistDelete\\
+        • playlistRename\\
+        • playlistAddSongs\\
+        • playlistRemoveSong\\
+        • playlistReorderSongs\\
+        • playlistGetAll\\
+        • playlistGetSongs\\
+        • playlistIsSongIn\\
+        • playlistCleanupMissing
+    };
+\end{tikzpicture}
+\caption{Playlist Management Operation Flow}
+\label{fig:playlist_management_flow}
+\end{figure}
+
+\begin{tipbox}
+\textbf{Cascade Delete:} When a playlist is deleted, all associated songs in \inlinecode{playlist\_songs} are automatically removed via \inlinecode{ON DELETE CASCADE}.
+\end{tipbox}
+
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % CHAPTER 15: AI LYRICS GENERATION
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -5703,6 +5770,54 @@ win = new BrowserWindow({
 
 API exposed via \inlinecode{contextBridge.exposeInMainWorld('electronAPI', ...)}.
 
+This chapter documents all 68 IPC channels available through the \inlinecode{electronAPI} object, categorized by their communication pattern.
+
+\section{API Overview Diagram}
+
+\begin{figure}[ht!]
+\centering
+\begin{tikzpicture}[
+    node distance=0.3cm,
+    category/.style={rectangle, draw=blue!60, fill=blue!10, thick, minimum width=12cm, minimum height=0.8cm, font=\bfseries},
+    apibox/.style={rectangle, draw=gray!60, fill=gray!5, minimum width=11.5cm, minimum height=0.5cm, font=\small\ttfamily, text width=11cm, align=left},
+]
+    % Title
+    \node[font=\Large\bfseries] (title) at (0,0) {electronAPI Communication Patterns};
+    
+    % INVOKE category
+    \node[category, below=of title] (invoke_cat) {Request/Response (invoke/handle) — 46 channels};
+    
+    \node[apibox, below=0.1cm of invoke_cat, anchor=north] (api1) {Music: scanMusicFolder, selectMusicFolder, readSingleFileMetadata};
+    \node[apibox, below=0cm of api1] (api2) {Settings: getSettings, saveSettings, selectDownloadFolder};
+    \node[apibox, below=0cm of api2] (api3) {Binaries: getBinaryStatuses, installYtdlp, installFpcalc, installWhisper};
+    \node[apibox, below=0cm of api3] (api4) {YouTube: downloadYouTube, downloadImage, downloadImageWithFallback};
+    \node[apibox, below=0cm of api4] (api5) {Metadata: writeCoverArt, writeMetadata, readFileBuffer};
+    \node[apibox, below=0cm of api5] (api6) {APIs: lookupAcoustid, lookupMusicBrainz};
+    \node[apibox, below=0cm of api6] (api7) {Cache: cacheGetFileStatus, cacheMarkFileScanned, cacheGetBatchStatus...};
+    \node[apibox, below=0cm of api7] (api8) {Fingerprint: generateFingerprint, generateFingerprintsBatch, fingerprintCheckReady...};
+    \node[apibox, below=0cm of api8] (api9) {Playlists: playlistCreate, playlistDelete, playlistGetAll, playlistAddSongs...};
+    \node[apibox, below=0cm of api9] (api10) {Watcher: fileWatcherStart, fileWatcherStop, fileWatcherStatus};
+    \node[apibox, below=0cm of api10] (api11) {Platform: getPlatformInfo};
+    
+    % SEND category
+    \node[category, below=0.5cm of api11] (send_cat) {Fire-and-Forget (send/on) — 4 channels};
+    
+    \node[apibox, below=0.1cm of send_cat, anchor=north] (send1) {sendPlaybackState, minimizeWindow, maximizeWindow, closeWindow};
+    
+    % LISTENERS category
+    \node[category, below=0.5cm of send1] (listen_cat) {Event Listeners (Main → Renderer) — 18 channels};
+    
+    \node[apibox, below=0.1cm of listen_cat, anchor=north] (listen1) {onDownloadProgress, onDownloadTitle, onBinaryInstallProgress};
+    \node[apibox, below=0cm of listen1] (listen2) {onBinaryDownloadProgress, onFingerprintBatchProgress};
+    \node[apibox, below=0cm of listen2] (listen3) {onWindowStateChanged, onTrayPlayPause, onFileWatcherEvent};
+    
+    % Stats box
+    \node[draw=green!60, fill=green!10, thick, minimum width=12cm, minimum height=0.6cm, below=0.5cm of listen3, font=\small] (stats) {Total: 68 IPC Channels (46 Request/Response + 4 Fire-and-Forget + 18 Listeners)};
+\end{tikzpicture}
+\caption{Complete electronAPI Surface - All IPC Communication Channels}
+\label{fig:electronapi_surface}
+\end{figure}
+
 \section{INVOKE (Request \texorpdfstring{$\rightarrow$}{->} Response)}
 
 \begin{tabular}{@{}l@{}}
@@ -5848,6 +5963,82 @@ function generateFileHash(filePath: string): string {
 \end{tabular}
 \caption{Scan Status Types}
 \end{table}
+
+\section{Cache Flow Diagram}
+
+\begin{figure}[ht!]
+\centering
+\begin{tikzpicture}[
+    node distance=0.6cm and 1.5cm,
+    startbox/.style={rectangle, draw=blue!60, fill=blue!10, thick, minimum width=3cm, minimum height=0.7cm, text width=2.8cm, align=center, font=\small},
+    checkdiamond/.style={diamond, draw=orange!60, fill=orange!10, thick, minimum width=2.5cm, minimum height=1.2cm, text width=2cm, align=center, font=\tiny},
+    processbox/.style={rectangle, draw=green!60, fill=green!10, thick, minimum width=2.8cm, minimum height=0.7cm, text width=2.6cm, align=center, font=\small},
+    resultbox/.style={rectangle, draw=purple!60, fill=purple!10, thick, minimum width=2.5cm, minimum height=0.6cm, text width=2.3cm, align=center, font=\small},
+]
+    % Start
+    \node[startbox] (scan) at (0,0) {File Scan Request\\song.mp3};
+    
+    % Generate hash
+    \node[processbox, below=of scan] (hash) {Generate Hash\\SHA256(path+size+mtime)};
+    
+    % Database lookup
+    \node[processbox, below=of hash] (db) {DB Lookup\\SELECT * WHERE path};
+    
+    % Check exists
+    \node[checkdiamond, below=of db] (exists) {Entry\\Exists?};
+    
+    % No entry path
+    \node[resultbox, left=1.5cm of exists] (unscanned) {Status:\\unscanned};
+    
+    % Yes entry - check hash
+    \node[checkdiamond, below=1.2cm of exists] (hashcheck) {Hash\\Matches?};
+    
+    % Hash mismatch
+    \node[resultbox, left=1.5cm of hashcheck] (changed) {Status:\\file-changed};
+    
+    % Hash matches - check metadata
+    \node[checkdiamond, below=1.2cm of hashcheck] (metacheck) {Has\\Metadata?};
+    
+    % Has metadata
+    \node[resultbox, left=1.5cm of metacheck] (tagged) {Status:\\scanned-tagged};
+    
+    % No metadata
+    \node[resultbox, right=1.5cm of metacheck] (nomatch) {Status:\\scanned-no-match};
+    
+    % Return to UI
+    \node[processbox, below=1.2cm of metacheck] (ui) {Return Status to UI};
+    
+    % Arrows
+    \draw[->, thick] (scan) -- (hash);
+    \draw[->, thick] (hash) -- (db);
+    \draw[->, thick] (db) -- (exists);
+    \draw[->, thick] (exists) -- node[left, font=\tiny] {No} (unscanned);
+    \draw[->, thick] (exists) -- node[right, font=\tiny] {Yes} (hashcheck);
+    \draw[->, thick] (hashcheck) -- node[left, font=\tiny] {No} (changed);
+    \draw[->, thick] (hashcheck) -- node[right, font=\tiny] {Yes} (metacheck);
+    \draw[->, thick] (metacheck) -- node[left, font=\tiny] {Yes} (tagged);
+    \draw[->, thick] (metacheck) -- node[right, font=\tiny] {No} (nomatch);
+    \draw[->, thick] (unscanned) |- (ui);
+    \draw[->, thick] (changed) |- (ui);
+    \draw[->, thick] (tagged) |- (ui);
+    \draw[->, thick] (nomatch) |- (ui);
+    
+    % Legend
+    \node[above right=0cm and 3cm of scan, draw=gray, fill=gray!5, minimum width=2.5cm, minimum height=2cm, text width=2.3cm, font=\tiny] (legend) {
+        \textbf{Cache Benefits:}\\[0.1cm]
+        • Skip scanned files\\
+        • Detect file changes\\
+        • Track metadata status\\
+        • Optimize UI badges
+    };
+\end{tikzpicture}
+\caption{Metadata Cache Lookup Flow}
+\label{fig:metadata_cache_flow}
+\end{figure}
+
+\begin{notebox}
+\textbf{Performance:} Batch lookups use \inlinecode{SELECT WHERE path IN (...)}, processing 1000+ files in \textless10ms.
+\end{notebox}
 
 \section{Key Functions}
 
@@ -7491,6 +7682,79 @@ Methods of the parallel scanner class.
 \label{ch:fingerprintpoolclass}
 
 Methods of the fingerprint worker pool.
+
+\section{Batch Processing Flow}
+
+The \inlinecode{FingerprintWorkerPool} orchestrates parallel fingerprinting using multiple worker processes.
+
+\begin{figure}[ht!]
+\centering
+\begin{tikzpicture}[
+    node distance=0.7cm and 1.5cm,
+    processbox/.style={rectangle, draw=blue!60, fill=blue!10, thick, minimum width=3.5cm, minimum height=0.8cm, text width=3.2cm, align=center, font=\small},
+    workerbox/.style={rectangle, draw=orange!60, fill=orange!10, thick, minimum width=2.5cm, minimum height=0.6cm, font=\small\ttfamily},
+    queuebox/.style={rectangle, draw=purple!60, fill=purple!10, thick, minimum width=2.2cm, minimum height=0.6cm, font=\small},
+    resultbox/.style={rectangle, draw=green!60, fill=green!10, thick, minimum width=2.2cm, minimum height=0.6cm, font=\small},
+]
+    % Input
+    \node[processbox] (input) at (0,0) {1. Renderer Calls\\generateFingerprintsBatch([files])};
+    
+    % Main Process receives
+    \node[processbox, below=of input] (main) {2. Main Process\\ipcMain.handle};
+    
+    % Pool initialization
+    \node[processbox, below=of main] (pool) {3. FingerprintWorkerPool\\Worker Count = CPU - 1};
+    
+    % Queue and workers
+    \node[queuebox, below left=0.5cm and 0.5cm of pool] (queue) {Job Queue\\[file1, file2...]};
+    \node[workerbox, below=0.5cm of pool] (worker1) {Worker 1\\fpcalc};
+    \node[workerbox, right=0.2cm of worker1] (worker2) {Worker 2\\fpcalc};
+    \node[workerbox, right=0.2cm of worker2] (worker3) {Worker 3\\fpcalc};
+    \node[workerbox, right=0.2cm of worker3] (workern) {Worker N\\fpcalc};
+    
+    % Progress callback
+    \node[processbox, right=1.5cm of pool] (progress) {4. Progress Events\\webContents.send()};
+    
+    % Results
+    \node[resultbox, below=1.2cm of worker2] (results) {Results Array\\[fingerprints]};
+    
+    % Final response
+    \node[processbox, below=of results] (response) {5. Final Response\\Promise resolves};
+    
+    % Renderer receives
+    \node[processbox, below=of response] (renderer) {6. Renderer Gets\\results + stats};
+    
+    % Arrows
+    \draw[->, thick] (input) -- (main);
+    \draw[->, thick] (main) -- (pool);
+    \draw[->, thick] (pool) -- (queue);
+    \draw[->, thick] (pool) -- (worker1);
+    \draw[->, thick] (pool) -- (worker2);
+    \draw[->, thick] (pool) -- (worker3);
+    \draw[->, thick] (pool) -- (workern);
+    \draw[->, thick, dashed] (worker1) -- node[left, font=\tiny] {fingerprint} (results);
+    \draw[->, thick, dashed] (worker2) -- (results);
+    \draw[->, thick, dashed] (worker3) -- (results);
+    \draw[->, thick, dashed] (workern) -- (results);
+    \draw[->, thick, dotted, orange] (worker1) -| (progress);
+    \draw[->, thick, dotted, orange] (worker2) -- (progress);
+    \draw[->, thick, dotted, orange] (worker3) |- (progress);
+    \draw[->, thick] (results) -- (response);
+    \draw[->, thick] (response) -- (renderer);
+    
+    % Labels
+    \node[above right=0cm and 0.2cm of worker3, font=\tiny\itshape, text=gray] {Parallel Execution};
+    \node[right=0cm of progress, font=\tiny\itshape, text=orange] {Real-time\\updates};
+\end{tikzpicture}
+\caption{Fingerprint Batch Processing Flow with Worker Pool}
+\label{fig:fingerprint_batch_flow}
+\end{figure}
+
+\begin{tipbox}
+\textbf{Key Insight:} Each worker processes files independently, reporting progress via IPC events while the main \inlinecode{processAll()} promise only resolves when ALL workers complete.
+\end{tipbox}
+
+\section{Method Reference}
 
 \begin{table}[ht!]
 \centering
