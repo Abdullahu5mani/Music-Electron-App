@@ -7706,7 +7706,7 @@ The \inlinecode{FingerprintWorkerPool} orchestrates parallel fingerprinting usin
     \node[processbox, below=of main] (pool) {3. FingerprintWorkerPool\\Worker Count = CPU - 1};
     
     % Queue and workers
-    \node[queuebox, below left=0.5cm and 0.5cm of pool] (queue) {Job Queue\\[file1, file2...]};
+    \node[queuebox, below left=0.5cm and 0.5cm of pool] (queue) {Job Queue\\{[}file1, file2...{]}};
     \node[workerbox, below=0.5cm of pool] (worker1) {Worker 1\\fpcalc};
     \node[workerbox, right=0.2cm of worker1] (worker2) {Worker 2\\fpcalc};
     \node[workerbox, right=0.2cm of worker2] (worker3) {Worker 3\\fpcalc};
@@ -7716,7 +7716,7 @@ The \inlinecode{FingerprintWorkerPool} orchestrates parallel fingerprinting usin
     \node[processbox, right=1.5cm of pool] (progress) {4. Progress Events\\webContents.send()};
     
     % Results
-    \node[resultbox, below=1.2cm of worker2] (results) {Results Array\\[fingerprints]};
+    \node[resultbox, below=1.2cm of worker2] (results) {Results Array\\{[}fingerprints{]}};
     
     % Final response
     \node[processbox, below=of results] (response) {5. Final Response\\Promise resolves};
@@ -7776,8 +7776,9 @@ The \inlinecode{FingerprintWorkerPool} orchestrates parallel fingerprinting usin
 \section{Helper Functions}
 
 \begin{tabular}{@{}p{5cm}p{9cm}@{}}
+\small
 \inlinecode{getFingerprintPool(count?)} & Gets singleton pool \\
-\inlinecode{generateFingerprintsParallel(paths, onProgress?)} & Main entry point \\
+\inlinecode{generateFingerprints\allowbreak Parallel\allowbreak(paths, onProgress?)} & Main entry point \\
 \inlinecode{getCPUCount()} & Number of CPU cores \\
 \inlinecode{getDefaultWorkerCount()} & CPU cores - 1 \\
 \end{tabular}
@@ -8394,10 +8395,10 @@ interface MusicFile {
 \midrule
 \endhead
 \inlinecode{getYtDlpWrap(onProgress?)} & \inlinecode{Promise<YTDlpWrap>} & Gets or initializes yt-dlp-wrap \\
-\inlinecode{downloadYouTubeAudio(options)} & \inlinecode{Promise<\{success, filePath?, error?, title?\}>} & Downloads audio from YouTube \\
+\inlinecode{downloadYouTube\allowbreak Audio(options)} & \inlinecode{Promise<\allowbreak\{success, file\allowbreak Path?, error?, title?\}>} & Downloads audio from YouTube \\
 \inlinecode{getVideoTitle(url, ytDlp)} & \inlinecode{Promise<string>} & Fetches video title before download \\
-\inlinecode{checkBinaryVersion(path, onProgress?)} & \inlinecode{Promise<\{isUpToDate, versions\}>} & Checks if yt-dlp is up to date \\
-\inlinecode{downloadBinaryWithProgress(path, onProgress?)} & \inlinecode{Promise<void>} & Downloads yt-dlp binary \\
+\inlinecode{checkBinary\allowbreak Version(path, onProgress?)} & \inlinecode{Promise<\allowbreak\{isUp\allowbreak ToDate, versions\}>} & Checks if yt-dlp is up to date \\
+\inlinecode{downloadBinary\allowbreak WithProgress(path, onProgress?)} & \inlinecode{Promise<void>} & Downloads yt-dlp binary \\
 \inlinecode{getInstalledVersion(path)} & \inlinecode{Promise<string|null>} & Gets installed yt-dlp version \\
 \inlinecode{getLatestVersion()} & \inlinecode{Promise<string|null>} & Gets latest version from GitHub \\
 \inlinecode{getAssetNameForPlatform()} & \inlinecode{string|null} & Returns correct binary name for OS \\
@@ -8532,7 +8533,7 @@ interface FingerprintResult {
 \midrule
 \endhead
 \inlinecode{getFingerprintPool(count?)} & \inlinecode{FingerprintWorkerPool} & Gets singleton pool \\
-\inlinecode{generateFingerprintsParallel(paths, onProgress?)} & \inlinecode{Promise<FingerprintJobResult[]>} & Parallel fingerprinting \\
+\inlinecode{generateFingerprints\allowbreak Parallel(paths, onProgress?)} & \inlinecode{Promise<Fingerprint\allowbreak JobResult[]>} & Parallel fingerprinting \\
 \inlinecode{getCPUCount()} & \inlinecode{number} & Gets CPU core count \\
 \inlinecode{getDefaultWorkerCount()} & \inlinecode{number} & Gets default worker count \\
 \bottomrule
@@ -9017,7 +9018,7 @@ export async function lookupFingerprint(
 \endhead
 \inlinecode{ensureFpcalcReady()} & \inlinecode{Promise<boolean>} & Ensures fpcalc is ready \\
 \inlinecode{generateFingerprint(filePath)} & \inlinecode{Promise<string|null>} & Single fingerprint \\
-\inlinecode{generateFingerprintsBatch(paths, onProgress?)} & \inlinecode{Promise<BatchFingerprintResult[]>} & Parallel batch \\
+\inlinecode{generateFingerprints\allowbreak Batch(paths, onProgress?)} & \inlinecode{Promise<Batch\allowbreak FingerprintResult[]>} & Parallel batch \\
 \inlinecode{resetFingerprintErrors()} & \inlinecode{void} & Resets error counter \\
 \bottomrule
 \caption{fingerprint.ts Exports}
