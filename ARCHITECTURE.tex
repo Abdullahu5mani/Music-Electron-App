@@ -4978,6 +4978,86 @@ const DOWNLOAD_URLS = {
 };
 \end{lstlisting}
 
+\section{Installation Flow Diagram}
+
+\begin{figure}[ht!]
+\centering
+\begin{tikzpicture}[
+    node distance=0.6cm,
+    uibox/.style={rectangle, draw=blue!60, fill=blue!10, thick, minimum width=3.5cm, minimum height=0.7cm, text width=3.2cm, align=center, font=\small},
+    checkdiamond/.style={diamond, draw=orange!60, fill=orange!10, thick, minimum width=2cm, minimum height=0.9cm, text width=1.6cm, align=center, font=\tiny},
+    processbox/.style={rectangle, draw=green!60, fill=green!10, thick, minimum width=3.5cm, minimum height=0.7cm, text width=3.2cm, align=center, font=\small},
+    successbox/.style={rectangle, draw=purple!60, fill=purple!10, thick, minimum width=3.5cm, minimum height=0.7cm, text width=3.2cm, align=center, font=\small},
+]
+    % Start
+    \node[uibox] (ui) at (0,0) {UI: Click Install\\Button};
+    
+    % IPC invoke
+    \node[processbox, below=of ui] (ipc) {IPC: install-binary};
+    
+    % Platform check
+    \node[processbox, below=of ipc] (platform) {Check Platform\\win32/darwin/linux};
+    
+    % Architecture check
+    \node[processbox, below=of platform] (arch) {Check Arch\\x64/arm64};
+    
+    % Download
+    \node[processbox, below=of arch] (download) {Download Binary\\GitHub/HuggingFace};
+    
+    % Progress events
+    \node[uibox, right=2cm of download, fill=orange!10] (progress) {Progress Events\\webContents.send()};
+    
+    % Extract check
+    \node[checkdiamond, below=1cm of download] (extcheck) {ZIP or\\tar.gz?};
+    
+    % Extract ZIP
+    \node[processbox, left=1.5cm of extcheck] (zip) {Extract ZIP\\(Windows)};
+    
+    % Extract tar
+    \node[processbox, right=1.5cm of extcheck] (tar) {Extract tar.gz\\(Unix)};
+    
+    % Set permissions
+    \node[processbox, below=1cm of extcheck] (perms) {Set Permissions\\chmod 0o755 (Unix)};
+    
+    % Verify
+    \node[processbox, below=of perms] (verify) {Verify\\Run --version};
+    
+    % Success
+    \node[successbox, below=of verify] (success) {Update Status\\MISSING → INSTALLED};
+    
+    % Renderer update
+    \node[uibox, below=of success] (badge) {UI Badge Updates};
+    
+    % Arrows
+    \draw[->, thick] (ui) -- (ipc);
+    \draw[->, thick] (ipc) -- (platform);
+    \draw[->, thick] (platform) -- (arch);
+    \draw[->, thick] (arch) -- (download);
+    \draw[->, thick, dotted, orange] (download) -- (progress);
+    \draw[->, thick] (download) -- (extcheck);
+    \draw[->, thick] (extcheck) -- node[left, font=\tiny] {.zip} (zip);
+    \draw[->, thick] (extcheck) -- node[right, font=\tiny] {.tar.gz} (tar);
+    \draw[->, thick] (zip) |- (perms);
+    \draw[->, thick] (tar) |- (perms);
+    \draw[->, thick] (perms) -- (verify);
+    \draw[->, thick] (verify) -- (success);
+    \draw[->, thick] (success) -- (badge);
+    
+    % Legend
+    \node[draw=gray, fill=gray!5, thick, minimum width=3cm, minimum height=2.5cm, text width=2.8cm, align=left, font=\tiny, left=1.5cm of download] (legend) {
+        \textbf{Binaries:}\\[0.05cm]
+        • yt-dlp (latest)\\
+        • fpcalc (v1.6.0)\\
+        • whisper.cpp (v1.8.2)\\[0.1cm]
+        \textbf{Sources:}\\
+        • GitHub Releases\\
+        • HuggingFace
+    };
+\end{tikzpicture}
+\caption{Binary Installation Complete Workflow}
+\label{fig:binary_install_flow}
+\end{figure}
+
 \section{Installation Flow}
 
 When user clicks ``Install'' in Settings:
@@ -5154,6 +5234,71 @@ File deleted & Remove from library \\
 File modified & Re-scan metadata, update in-place \\
 \bottomrule
 \end{tabular}
+
+\section{File Watcher Flow Diagram}
+
+\begin{figure}[ht!]
+\centering
+\begin{tikzpicture}[
+    node distance=0.7cm,
+    fsbox/.style={rectangle, draw=blue!60, fill=blue!10, thick, minimum width=3.5cm, minimum height=0.7cm, text width=3.2cm, align=center, font=\small},
+    checkbox/.style={diamond, draw=orange!60, fill=orange!10, thick, minimum width=2.2cm, minimum height=1cm, text width=1.8cm, align=center, font=\tiny},
+    processbox/.style={rectangle, draw=green!60, fill=green!10, thick, minimum width=3.2cm, minimum height=0.7cm, text width=3cm, align=center, font=\small},
+    ipcbox/.style={rectangle, draw=purple!60, fill=purple!10, thick, minimum width=3.2cm, minimum height=0.7cm, text width=3cm, align=center, font=\small},
+]
+    % File system event
+    \node[fsbox] (fs) at (0,0) {1. File System Event\\(add/change/delete)};
+    
+    % Debounce check
+    \node[checkbox, below=of fs] (debounce) {Within\\500ms\\of last?};
+    
+    % Ignore - left path
+    \node[processbox, left=1.5cm of debounce, fill=gray!10] (ignore) {Ignore\\(debouncing)};
+    
+    % Continue - check extension
+    \node[checkbox, below=1cm of debounce] (ext) {Audio\\file?};
+    
+    % Not audio
+    \node[processbox, left=1.5cm of ext, fill=gray!10] (skip) {Skip};
+    
+    % Check self-change
+    \node[checkbox, below=1cm of ext] (selfcheck) {Self-\\change\\(<5s)?};
+    
+    % Ignore self
+    \node[processbox, left=1.5cm of selfcheck, fill=gray!10] (selfignore) {Ignore\\(prevent loop)};
+    
+    % Process event
+    \node[processbox, below=1cm of selfcheck] (process) {Process Event\\Read metadata};
+    
+    % Send IPC
+    \node[ipcbox, below=of process] (ipc) {IPC Send\\file-watcher-event};
+    
+    % Renderer receives
+    \node[fsbox, below=of ipc] (renderer) {Renderer Updates\\Library UI};
+    
+    % Arrows
+    \draw[->, thick] (fs) -- (debounce);
+    \draw[->, thick] (debounce) -- node[left, font=\tiny] {Yes} (ignore);
+    \draw[->, thick] (debounce) -- node[right, font=\tiny] {No} (ext);
+    \draw[->, thick] (ext) -- node[left, font=\tiny] {No} (skip);
+    \draw[->, thick] (ext) -- node[right, font=\tiny] {Yes} (selfcheck);
+    \draw[->, thick] (selfcheck) -- node[left, font=\tiny] {Yes} (selfignore);
+    \draw[->, thick] (selfcheck) -- node[right, font=\tiny] {No} (process);
+    \draw[->, thick] (process) -- (ipc);
+    \draw[->, thick] (ipc) -- (renderer);
+    
+    % Note box
+    \node[draw=red!60, fill=red!5, thick, minimum width=3.5cm, minimum height=2cm, text width=3.3cm, align=left, font=\tiny, right=1cm of process] (note) {
+        \textbf{Debouncing:}\\
+        Waits 500ms after last event\\[0.1cm]
+        \textbf{Self-Change Ignore:}\\
+        App's own metadata writes ignored for 5s\\[0.1cm]
+        \textbf{Prevents:} Infinite loops
+    };
+\end{tikzpicture}
+\caption{File Watcher Event Processing Flow}
+\label{fig:file_watcher_flow}
+\end{figure}
 
 \section{Implementation}
 
