@@ -289,28 +289,94 @@ These two worlds \textbf{cannot directly talk to each other} for security. They 
 \begin{figure}[ht!]
     \centering
     \begin{tikzpicture}[
-        node distance=2cm,
+        node distance=0.8cm and 1.5cm,
         process/.style={rectangle, rounded corners, draw=sectioncolor, fill=accentcolor!10, thick, minimum width=4cm, minimum height=1.5cm, align=center},
         bridge/.style={ellipse, draw=warningcolor!80, fill=warningcolor!10, thick, minimum width=3cm, minimum height=1cm, align=center},
+        component/.style={rectangle, draw=blue!60, fill=blue!10, thick, minimum width=2.5cm, minimum height=0.6cm, font=\small, align=center},
+        external/.style={rectangle, draw=orange!60, fill=orange!10, thick, minimum width=2cm, minimum height=0.5cm, font=\tiny, align=center},
+        storage/.style={cylinder, draw=green!60, fill=green!10, thick, minimum width=1.8cm, minimum height=0.5cm, font=\tiny, align=center, shape aspect=0.3},
         arrow/.style={thick, <->, >=stealth, sectioncolor}
     ]
-        % Nodes
-        \node (main) [process] {\textbf{Main Process} \\ \small (Node.js, File System, OS)};
-        \node (bridge) [bridge, right=of main] {\textbf{IPC Bridge} \\ \small (Preload Script)};
-        \node (renderer) [process, right=of bridge] {\textbf{Renderer Process} \\ \small (React UI, Web Audio API)};
-
-        % Paths
+        % Main Process
+        \node (main) [process] at (0,0) {\textbf{Main Process} \\ \small (Node.js, File System, OS)};
+        
+        % Main Process Components
+        \node[component, above left=0.5cm and 0.2cm of main] (music) {musicScanner.ts};
+        \node[component, left=0.2cm of main] (youtube) {youtubeDownloader.ts};
+        \node[component, below left=0.5cm and 0.2cm of main] (fpcalc) {fpcalcManager.ts};
+        
+        % IPC Bridge
+        \node (bridge) [bridge, right=2.5cm of main] {\textbf{IPC Bridge} \\ \small (Preload Script)};
+        
+        % Renderer Process
+        \node (renderer) [process, right=2.5cm of bridge] {\textbf{Renderer Process} \\ \small (React UI, Web Audio API)};
+        
+        % Renderer Components
+        \node[component, above right=0.5cm and 0.2cm of renderer] (app) {App.tsx};
+        \node[component, right=0.2cm of renderer] (player) {useAudioPlayer};
+        \node[component, below right=0.5cm and 0.2cm of renderer] (scanner) {useSongScanner};
+        
+        % External APIs
+        \node[external, right=1.2cm of scanner] (acoustid) {AcoustID\\API};
+        \node[external, below=0.3cm of acoustid] (mb) {MusicBrainz\\API};
+        
+        % Storage
+        \node[storage, below=1.5cm of main] (cache) {metadata-\\cache.db};
+        \node[storage, right=0.5cm of cache] (playlists) {playlists.db};
+        \node[storage, right=0.5cm of playlists] (settings) {app-\\config.json};
+        
+        % Binaries
+        \node[component, fill=purple!10, below=1.5cm of fpcalc] (bin1) {yt-dlp.exe};
+        \node[component, fill=purple!10, right=0.3cm of bin1] (bin2) {fpcalc.exe};
+        \node[component, fill=purple!10, right=0.3cm of bin2] (bin3) {whisper.cpp};
+        
+        % Main arrows
         \draw [arrow] (main) -- (bridge);
         \draw [arrow] (bridge) -- (renderer);
-
+        
+        % Component connections
+        \draw[->, thick, dashed, blue] (music) -- (main);
+        \draw[->, thick, dashed, blue] (youtube) -- (main);
+        \draw[->, thick, dashed, blue] (fpcalc) -- (main);
+        \draw[->, thick, dashed, blue] (renderer) -- (app);
+        \draw[->, thick, dashed, blue] (renderer) -- (player);
+        \draw[->, thick, dashed, blue] (renderer) -- (scanner);
+        
+        % API connections
+        \draw[->, thick, dotted, orange] (scanner) -- (acoustid);
+        \draw[->, thick, dotted, orange] (scanner) -- (mb);
+        
+        % Storage connections
+        \draw[->, thick, dotted, green] (main) -- (cache);
+        \draw[->, thick, dotted, green] (main) -- (playlists);
+        \draw[->, thick, dotted, green] (main) -- (settings);
+        
+        % Binary connections
+        \draw[->, thick, dotted, purple] (main) -- (bin1);
+        \draw[->, thick, dotted, purple] (main) -- (bin2);
+        \draw[->, thick, dotted, purple] (main) -- (bin3);
+        
         % Labels
-        \node [above=0.2cm of main] {\color{sectioncolor}\textbf{Backend}};
-        \node [above=0.2cm of renderer] {\color{sectioncolor}\textbf{Frontend}};
-        \node [below=0.5cm of bridge, text width=6cm, align=center] {\small \textit{Communication via window.electronAPI}};
+        \node [above=0.2cm of main, font=\bfseries] {\color{sectioncolor}Backend};
+        \node [above=0.2cm of renderer, font=\bfseries] {\color{sectioncolor}Frontend};
+        \node [below=0.7cm of bridge, text width=6cm, align=center, font=\tiny] {\textit{Secure Communication via window.electronAPI}}; 
+        
+        % Legend
+        \node[draw=gray, fill=gray!5, thick, text width=2.5cm, align=left, font=\tiny, above=1cm of renderer] (legend) {
+            \textbf{Legend:}\\[0.05cm]
+            ━━ IPC Communication\\
+            ┄┄ API Calls\\
+            ┄┄ Database Access\\
+            ┄┄ Binary Execution
+        };
     \end{tikzpicture}
-    \caption{Process Isolation and IPC Communication Architecture}
+    \caption{Complete Electron Architecture with All Components}
     \label{fig:process_isolation}
 \end{figure}
+
+\begin{notebox}
+\textbf{Security Boundary:} The IPC Bridge ensures the Renderer (web code) can never directly access the file system, preventing malicious code from stealing files. All file operations MUST go through the Main Process!
+\end{notebox}
 
 \section{How IPC Actually Works (Step-by-Step Example)}
 
@@ -3065,29 +3131,130 @@ playlistHandlers & \inlinecode{playlist-create} & invoke & Create a new playlist
 \chapter{External API Integration}
 \label{ch:api}
 
+\begin{tipbox}
+\textbf{Real-World Analogy: Song Detective Work}
+
+Imagine you find an unmarked music CD. To identify the songs, you'd:
+\begin{enumerate}
+    \item \textbf{Listen to it} (Generate audio fingerprint)
+    \item \textbf{Ask a music expert} "What song has this melody?" (AcoustID)
+    \item \textbf{Look it up in a music encyclopedia} (MusicBrainz)
+    \item \textbf{Find the album cover} (Cover Art Archive)
+    \item \textbf{Label the CD} (Write metadata to file)
+\end{enumerate}
+This is exactly what the app does automatically!
+\end{tipbox}
+
+\section{Complete Song Identification Workflow}
+
 \begin{figure}[ht!]
 \centering
 \begin{tikzpicture}[
-    node distance=1.5cm,
-    box/.style={draw, rounded corners, minimum width=3cm, minimum height=1cm, align=center, fill=white},
-    api/.style={draw, ellipse, fill=yellow!10, minimum width=2.5cm},
-    arrow/.style={->, thick, >=stealth}
+    node distance=0.7cm,
+    startbox/.style={rectangle, draw=blue!70, fill=blue!15, thick, minimum width=4cm, minimum height=0.8cm, text width=3.8cm, align=center, font=\small\bfseries},
+    processbox/.style={rectangle, draw=green!70, fill=green!15, thick, minimum width=4cm, minimum height=0.8cm, text width=3.8cm, align=center, font=\small},
+    apibox/.style={ellipse, draw=orange!70, fill=orange!15, thick, minimum width=3.5cm, minimum height=1cm, align=center, font=\small\bfseries},
+    checkdiamond/.style={diamond, draw=red!70, fill=red!15, thick, minimum width=2.5cm, minimum height=1.2cm, text width=2.2cm, align=center, font=\tiny\bfseries},
+    successbox/.style={rectangle, draw=purple!70, fill=purple!15, thick, minimum width=4cm, minimum height=0.8cm, text width=3.8cm, align=center, font=\small},
+    errorbox/.style={rectangle, draw=red!70, fill=red!15, thick, minimum width=3cm, minimum height=0.7cm, text width=2.8cm, align=center, font=\small},
 ]
-    \node[box, fill=blue!10] (fp) {Generate Fingerprint\\(\techterm{fpcalc})};
-    \node[api, below=of fp] (acoustid) {AcoustID API};
-    \node[api, right=2.5cm of acoustid] (mb) {MusicBrainz API};
-    \node[api, below=of mb] (caa) {Cover Art Archive};
-    \node[box, left=2.5cm of caa, fill=green!10] (taglib) {Embed Tags\\(taglib-wasm)};
-
-    \draw[arrow] (fp) -- (acoustid);
-    \draw[arrow] (acoustid) -- node[above, font=\scriptsize] {MBID} (mb);
-    \draw[arrow] (mb) -- node[right, font=\scriptsize] {Release ID} (caa);
-    \draw[arrow] (caa) -- (taglib);
-    \draw[arrow] (mb) |- (taglib);
+    % Start
+    \node[startbox] (start) at (0,0) {1. Unknown Audio File\\mystery\_song.mp3};
+    
+    % Generate fingerprint
+    \node[processbox, below=of start] (fpcalc) {2. Generate Fingerprint\\Run fpcalc binary\\(19ms avg)};
+    
+    % Check fingerprint
+    \node[checkdiamond, below=1cm of fpcalc] (fpcheck) {Finger-\\print\\OK?};
+    
+    % Fingerprint error
+    \node[errorbox, left=2cm of fpcheck] (fperror) {ERROR:\\Audio corrupt};
+    
+    % AcoustID lookup
+    \node[apibox, below=1.2cm of fpcheck] (acoustid) {3. AcoustID API\\``What song is this?''};
+    
+    % Confidence check
+    \node[checkdiamond, below=1cm of acoustid] (confcheck) {Confidence\\>70\%?};
+    
+    % Low confidence
+    \node[errorbox, left=2cm of confcheck] (noconf) {No Match\\(confidence too low)};
+    
+    % Got MBID
+    \node[processbox, below=1.2cm of confcheck] (mbid) {4. Got MBID\\(MusicBrainz ID)};
+    
+    % MusicBrainz lookup
+    \node[apibox, below=of mbid] (mb) {5. MusicBrainz API\\Get full metadata};
+    
+    % Cover art lookup
+    \node[apibox, below=of mb] (caa) {6. Cover Art Archive\\Download album art};
+    
+    % Write to file
+    \node[successbox, below=of caa] (write) {7. Write to File\\taglib-wasm embeds\\title, artist, album, art};
+    
+    % Success
+    \node[startbox, fill=green!20, below=of write] (success) {✓ Song Identified!\\Beautiful metadata};
+    
+    % Arrows
+    \draw[->, thick] (start) -- (fpcalc);
+    \draw[->, thick] (fpcalc) -- (fpcheck);
+    \draw[->, thick] (fpcheck) -- node[left, font=\tiny] {No} (fperror);
+    \draw[->, thick] (fpcheck) -- node[right, font=\tiny] {Yes} (acoustid);
+    \draw[->, thick] (acoustid) -- (confcheck);
+    \draw[->, thick] (confcheck) -- node[left, font=\tiny] {No} (noconf);
+    \draw[->, thick] (confcheck) -- node[right, font=\tiny] {Yes} (mbid);
+    \draw[->, thick] (mbid) -- (mb);
+    \draw[->, thick] (mb) -- (caa);
+    \draw[->, thick] (caa) -- (write);
+    \draw[->, thick] (write) -- (success);
+    
+    % Timeline annotations
+    \node[right=1cm of fpcalc, font=\tiny, text width=2cm, align=left] {⏱ ~19ms per file};
+    \node[right=1cm of acoustid, font=\tiny, text width=2cm, align=left] {⏱ ~500ms\\🌐 rate limit};
+    \node[right=1cm of mb, font=\tiny, text width=2cm, align=left] {⏱ ~1100ms\\🌐 rate limit};
+    \node[right=1cm of caa, font=\tiny, text width=2cm, align=left] {⏱ ~1100ms\\🌐 rate limit};
+    
+    % Info box
+    \node[draw=gray, fill=gray!5, thick, minimum width=3.5cm, minimum height=4cm, text width=3.3cm, align=left, font=\tiny, left=2.5cm of mbid] (info) {
+        \textbf{Why This Order?}\\[0.1cm]
+        1. Fingerprint is local\\
+        \quad(fast, no network)\\[0.05cm]
+        2. AcoustID finds MBID\\
+        \quad(music "GPS coordinate")\\[0.05cm]
+        3. MusicBrainz uses MBID\\
+        \quad(complete metadata)\\[0.05cm]
+        4. Cover art uses release ID\\
+        \quad(from MusicBrainz)\\[0.1cm]
+        \textbf{Total Time:}\\
+        ~2.7 seconds per song\\[0.05cm]
+        (mostly API rate limits)
+    };
 \end{tikzpicture}
-\caption{Song Identification API Flow}
-\label{fig:api_flow}
+\caption{Complete Song Identification Workflow with Error Handling}
+\label{fig:song_identification_complete}
 \end{figure}
+
+\begin{notebox}
+\textbf{Key Insight:} The 70\% confidence threshold prevents false matches. For example, if AcoustID says "I'm only 50\% sure this is Song X", we skip it rather than risk wrong metadata.
+\end{notebox}
+
+\section{Real-World Example}
+
+\textbf{Input:} \inlinecode{mystery\_song.mp3} (no metadata)
+
+\begin{enumerate}
+    \item \textbf{Fingerprint Generated:} \inlinecode{AQAAEgk6DUI...} (2048 characters)
+    \item \textbf{AcoustID Response:} 95\% confidence → MBID: \inlinecode{a1b2c3d4-...}
+    \item \textbf{MusicBrainz Lookup:}
+    \begin{itemize}
+        \item Title: "Bohemian Rhapsody"
+        \item Artist: "Queen"
+        \item Album: "A Night at the Opera"
+        \item Year: 1975
+        \item Release ID: \inlinecode{e5f6g7h8-...}
+    \end{itemize}
+    \item \textbf{Cover Art:} Downloaded 500KB JPEG
+    \item \textbf{Result:} File now has complete ID3 tags!
+\end{enumerate}
 
 \section{Rate Limiting}
 
@@ -6351,6 +6518,104 @@ interface FileScanStatus {
 
 YouTube audio download using yt-dlp.
 
+\begin{tipbox}
+\textbf{Real-World Analogy: Ordering Food Delivery}
+
+When you order food delivery:
+\begin{enumerate}
+    \item \textbf{Check if delivery person is available} (Binary installed?)
+    \item \textbf{Wait if too many recent orders} (Rate limiting)
+    \item \textbf{Get restaurant confirmation} ("Order received! ETA 15 min")
+    \item \textbf{Track delivery} ("Your order is on the way...")
+    \item \textbf{Receive food} (File downloaded!)
+\end{enumerate}
+This is exactly how YouTube downloads work!
+\end{tipbox}
+
+\section{Complete YouTube Download Workflow}
+
+\begin{figure}[ht!]
+\centering
+\begin{tikzpicture}[
+    node distance=0.7cm,
+    userbox/.style={rectangle, draw=blue!70, fill=blue!15, thick, minimum width=3.5cm, minimum height=0.7cm, text width=3.3cm, align=center, font=\small},
+    checkdiamond/.style={diamond, draw=orange!70, fill=orange!15, thick, minimum width=2.3cm, minimum height=1cm, text width=2cm, align=center, font=\tiny\bfseries},
+    processbox/.style={rectangle, draw=green!70, fill=green!15, thick, minimum width=3.5cm, minimum height=0.7cm, text width=3.3cm, align=center, font=\small},
+    dlbox/.style={rectangle, draw=purple!70, fill=purple!15, thick, minimum width=3.5cm, minimum height=0.7cm, text width=3.3cm, align=center, font=\small},
+    errorbox/.style={rectangle, draw=red!70, fill=red!15, thick, minimum width=2.8cm, minimum height=0.6cm, text width=2.6cm, align=center, font=\small},
+]
+    % Start
+    \node[userbox] (input) at (0,0) {1. User Pastes URL\\youtube.com/watch?v=...};
+    
+    % Rate limit check
+    \node[checkdiamond, below=1cm of input] (ratecheck) {Last DL\\<10s\\ago?};
+    
+    % Wait
+    \node[errorbox, left=2cm of ratecheck] (wait) {Wait 10s\\(prevent abuse)};
+    
+    % Binary check
+    \node[checkdiamond, below=1.2cm of ratecheck] (bincheck) {yt-dlp\\installed?};
+    
+    % Install binary
+    \node[processbox, left=2cm of bincheck, fill=orange!10] (install) {Auto-Install\\from GitHub};
+    
+    % Get title
+    \node[processbox, below=1.2cm of bincheck] (title) {3. Fetch Video Title\\Send to UI};
+    
+    % Start download
+    \node[dlbox, below=of title] (start) {4. Execute yt-dlp\\--extract-audio\\--audio-format mp3};
+    
+    % Progress events
+    \node[processbox, below=of start, fill=blue!10] (progress) {5. Progress Events\\0\% → 25\% → 50\% → 100\%\\webContents.send()};
+    
+    % Success
+    \node[dlbox, fill=green!20, below=of progress] (done) {6. Download Complete!\\song.mp3 saved};
+    
+    % Auto-scan
+    \node[userbox, below=of done] (scan) {7. File Watcher\\Auto-adds to library};
+    
+    % Arrows
+    \draw[->, thick] (input) -- (ratecheck);
+    \draw[->, thick] (ratecheck) -- node[left, font=\tiny] {Yes} (wait);
+    \draw[->, thick, dashed] (wait) |- (ratecheck);
+    \draw[->, thick] (ratecheck) -- node[right, font=\tiny] {No} (bincheck);
+    \draw[->, thick] (bincheck) -- node[left, font=\tiny] {No} (install);
+    \draw[->, thick, dashed] (install) |- (bincheck);
+    \draw[->, thick] (bincheck) -- node[right, font=\tiny] {Yes} (title);
+    \draw[->, thick] (title) -- (start);
+    \draw[->, thick] (start) -- (progress);
+    \draw[->, thick] (progress) -- (done);
+    \draw[->, thick] (done) -- (scan);
+    
+    % Info box
+    \node[draw=gray, fill=gray!5, thick, minimum width=3.5cm, minimum height=5cm, text width=3.3cm, align=left, font=\tiny, right=1.5cm of start] (info) {
+        \textbf{yt-dlp Arguments:}\\[0.1cm]
+        • \texttt{--extract-audio}\\
+        \quad(MP4 → MP3)\\[0.05cm]
+        • \texttt{--audio-format mp3}\\
+        \quad(force MP3)\\[0.05cm]
+        • \texttt{--embed-thumbnail}\\
+        \quad(save album art)\\[0.05cm]
+        • \texttt{--add-metadata}\\
+        \quad(write ID3 tags)\\[0.1cm]
+        \textbf{Rate Limiting:}\\
+        10s delay prevents:\\
+        • IP bans\\
+        • YouTube throttling\\
+        • Server overload\\[0.1cm]
+        \textbf{Avg Time:}\\
+        3-5min per video\\
+        (depends on length)
+    };
+\end{tikzpicture}
+\caption{Complete YouTube Download Workflow with Auto-Recovery}
+\label{fig:youtube_download_complete}
+\end{figure}
+
+\begin{notebox}
+\textbf{Smart Auto-Recovery:} If yt-dlp is missing, the app automatically downloads it from GitHub. The user never sees an error - it just works!
+\end{notebox}
+
 \section{Download Arguments}
 
 \begin{lstlisting}[language=bash]
@@ -7229,6 +7494,100 @@ Used when extraction fails (CORS error, no image, etc.):
   background: '#1a1a2e'  // Dark navy
 }
 \end{lstlisting}
+
+\begin{tipbox}
+\textbf{Real-World Analogy: Paint Store Color Matching}
+
+Imagine you walk into a paint store with a magazine photo of a room. The color matcher:
+\begin{enumerate}
+    \item \textbf{Takes small samples} (not every pixel - too slow!)
+    \item \textbf{Ignores white/black} (walls, shadows - not interesting)
+    \item \textbf{Rounds similar shades} ("This red-120 is basically red-128")
+    \item \textbf{Counts which colors appear most}
+    \item \textbf{Recommends top 4 paint colors}
+\end{enumerate}
+This is exactly our algorithm!
+\end{tipbox}
+
+\section{Visual Color Extraction Flow}
+
+\begin{figure}[ht!]
+\centering
+\begin{tikzpicture}[
+    node distance=0.7cm,
+    imgbox/.style={rectangle, draw=blue!70, fill=blue!15, thick, minimum width=3.8cm, minimum height=0.8cm, text width=3.6cm, align=center, font=\small},
+    processbox/.style={rectangle, draw=green!70, fill=green!15, thick, minimum width=3.8cm, minimum height=0.8cm, text width=3.6cm, align=center, font=\small},
+    filterbox/.style={rectangle, draw=orange!70, fill=orange!15, thick, minimum width=3.8cm, minimum height=0.8cm, text width=3.6cm, align=center, font=\small},
+    resultbox/.style={rectangle, draw=purple!70, fill=purple!15, thick, minimum width=3.8cm, minimum height=0.8cm, text width=3.6cm, align=center, font=\small},
+]
+    % Start - album art
+    \node[imgbox] (img) at (0,0) {1. Album Art Image\\800x800 pixels\\= 640,000 pixels!};
+    
+    % Downscale
+    \node[processbox, below=of img] (canvas) {2. Resize to 50x50\\Only 2,500 pixels\\(97\% reduction)};
+    
+    % Sample
+    \node[processbox, below=of canvas] (sample) {3. Sample Every 4th Pixel\\625 samples analyzed\\(efficient!)};
+    
+    % Filter transparent
+    \node[filterbox, below=of sample] (filter1) {4. Filter: Skip Transparent\\alpha < 128 removed};
+    
+    % Filter extremes
+    \node[filterbox, below=of filter1] (filter2) {5. Filter: Skip Extremes\\brightness < 20 (too dark)\\brightness > 235 (too light)};
+    
+    % Quantize
+    \node[processbox, below=of filter2] (quantize) {6. Quantize Colors\\RGB(127,45,200) → RGB(128,32,192)\\(snap to 32-step grid)};
+    
+    % Count
+    \node[processbox, below=of quantize] (count) {7. Count Occurrences\\Map: "128,32,192" → 47 times\\"64,96,128" → 32 times};
+    
+    % Sort
+    \node[processbox, below=of count] (sort) {8. Sort by Frequency\\Most common = Primary};
+    
+    % Result
+    \node[resultbox, below=of sort] (result) {9. Return Top 4\\Primary, Secondary,\\Accent, Background};
+    
+    % Arrows
+    \draw[->, thick] (img) -- (canvas);
+    \draw[->, thick] (canvas) -- (sample);
+    \draw[->, thick] (sample) -- (filter1);
+    \draw[->, thick] (filter1) -- (filter2);
+    \draw[->, thick] (filter2) -- (quantize);
+    \draw[->, thick] (quantize) -- (count);
+    \draw[->, thick] (count) -- (sort);
+    \draw[->, thick] (sort) -- (result);
+    
+    % Example box
+    \node[draw=gray, fill=gray!5, thick, minimum width=4cm, minimum height=6cm, text width=3.8cm, align=left, font=\tiny, right=1.5cm of quantize] (example) {
+        \textbf{Example Flow:}\\[0.1cm]
+        \textbf{Input:} Queen album art\\[0.05cm]
+        640,000 pixels → 625 samples\\[0.1cm]
+        \textbf{After Filtering:}\\
+        • 580 valid samples\\
+        • 45 too transparent\\
+        • (none too dark/light)\\[0.1cm]
+        \textbf{After Quantization:}\\
+        • 28 unique colors\\
+        • (from 580 originals)\\[0.1cm]
+        \textbf{Top 4 Colors:}\\
+        • Primary: \#a02040\\
+        \quad(appears 156x)\\
+        • Secondary: \#605030\\
+        \quad(appears 94x)\\
+        • Accent: \#c08040\\
+        \quad(appears 67x)\\
+        • Background: \#302010\\
+        \quad(appears 45x)\\[0.1cm]
+        \textbf{Total Time:} ~5ms
+    };
+\end{tikzpicture}
+\caption{Color Extraction Algorithm Visual Flow}
+\label{fig:color_extraction_flow}
+\end{figure}
+
+\begin{notebox}
+\textbf{Why Quantization?} Without it, RGB(127,45,200) and RGB(128,46,201) would be counted as different colors, even though humans can't tell them apart. Quantization groups similar colors, making the algorithm more accurate.
+\end{notebox}
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % CHAPTER 73: API DELAYS CONSTANTS
