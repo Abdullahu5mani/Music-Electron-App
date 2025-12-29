@@ -3278,33 +3278,84 @@ API calls are rate-limited to respect external service limits.
 % Rate Limiting Timeline
 \begin{figure}[ht!]
 \centering
-\begin{tikzpicture}[scale=0.8]
-    % Timeline axis
-    \draw[thick, ->] (0,0) -- (12,0) node[right] {Time (ms)};
+\begin{tikzpicture}[scale=0.7]
+    % Title
+    \node[font=\bfseries] at (6,4.5) {Batch Processing 3 Songs with Rate Limiting};
     
-    % AcoustID calls
-    \foreach \x in {0, 2, 4, 6} {
-        \fill[blue!30] (\x,0.5) rectangle (\x+1.5,1);
-    }
-    \node[left] at (0,0.75) {AcoustID};
-    \node[font=\scriptsize] at (0.75,1.3) {500ms};
+    % Time axis
+    \draw[thick, ->] (0,0) -- (13,0) node[right] {Time (seconds)};
     
-    % MusicBrainz calls
-    \foreach \x in {0, 2.5, 5} {
-        \fill[green!30] (\x,-0.5) rectangle (\x+2,-1);
+    % Time markers
+    \foreach \x in {0,1,...,12} {
+        \draw (\x,0.1) -- (\x,-0.1);
+        \node[below, font=\tiny] at (\x,-0.2) {\x s};
     }
-    \node[left] at (0,-0.75) {MusicBrainz};
-    \node[font=\scriptsize] at (1,-1.3) {1100ms};
+    
+    % Song 1
+    \node[left, font=\small\bfseries] at (0,3.5) {Song 1:};
+    \fill[blue!40] (0,3.3) rectangle (0.02,3.7) node[right, font=\tiny, midway] { Fingerprint (19ms)};
+    \fill[orange!40] (0.5,3.3) rectangle (1,3.7) node[midway, font=\tiny] {AcoustID};
+    \fill[green!40] (1.6,3.3) rectangle (2.7,3.7) node[midway, font=\tiny] {MusicBrainz};
+    \fill[purple!40] (3.8,3.3) rectangle (4.9,3.7) node[midway, font=\tiny] {Cover Art};
+    \node[right, font=\tiny, green] at (5,3.5) {✓ Done (5s)};
+    
+    % Song 2
+    \node[left, font=\small\bfseries] at (0,2.5) {Song 2:};
+    \fill[blue!40] (0.5,2.3) rectangle (0.52,2.7) node[right, font=\tiny, midway] { Fingerprint};
+    \fill[orange!40] (1,2.3) rectangle (1.5,2.7) node[midway, font=\tiny] {AcoustID};
+    \fill[green!40] (2.7,2.3) rectangle (3.8,2.7) node[midway, font=\tiny] {MusicBrainz};
+    \fill[purple!40] (4.9,2.3) rectangle (6,2.7) node[midway, font=\tiny] {Cover Art};
+    \node[right, font=\tiny, green] at (6.2,2.5) {✓ Done (6.5s)};
+    
+    % Song 3
+    \node[left, font=\small\bfseries] at (0,1.5) {Song 3:};
+    \fill[blue!40] (1,1.3) rectangle (1.02,1.7) node[right, font=\tiny, midway] { Fingerprint};
+    \fill[orange!40] (1.5,1.3) rectangle (2,1.7) node[midway, font=\tiny] {AcoustID};
+    \fill[green!40] (3.8,1.3) rectangle (4.9,1.7) node[midway, font=\tiny] {MusicBrainz};
+    \fill[purple!40] (6,1.3) rectangle (7.1,1.7) node[midway, font=\tiny] {Cover Art};
+    \node[right, font=\tiny, green] at (7.3,1.5) {✓ Done (8s)};
+    
+    % Delay arrows
+    \draw[<->, thick, red, dotted] (1,3.1) -- (1.6,3.1) node[midway, below, font=\tiny] {500ms};
+    \draw[<->, thick,red, dotted] (2.7,3.1) -- (3.8,3.1) node[midway, below, font=\tiny] {1100ms};
     
     % Legend
-    \node[draw, fill=blue!30, minimum width=0.5cm, minimum height=0.3cm] at (9,1) {};
-    \node[right, font=\scriptsize] at (9.4,1) {AcoustID: 500ms};
-    \node[draw, fill=green!30, minimum width=0.5cm, minimum height=0.3cm] at (9,-0.5) {};
-    \node[right, font=\scriptsize] at (9.4,-0.5) {MusicBrainz: 1100ms};
+    \node[draw, fill=blue!40, minimum width=0.4cm, minimum height=0.2cm] at (9.5,3.8) {};
+    \node[right, font=\tiny] at (9.8,3.8) {Fingerprint (19ms)};
+    
+    \node[draw, fill=orange!40, minimum width=0.4cm, minimum height=0.2cm] at (9.5,3.4) {};
+    \node[right, font=\tiny] at (9.8,3.4) {AcoustID (500ms delay)};
+    
+    \node[draw, fill=green!40, minimum width=0.4cm, minimum height=0.2cm] at (9.5,3.0) {};
+    \node[right, font=\tiny] at (9.8,3.0) {MusicBrainz (1100ms delay)};
+    
+    \node[draw, fill=purple!40, minimum width=0.4cm, minimum height=0.2cm] at (9.5,2.6) {};
+    \node[right, font=\tiny] at (9.8,2.6) {Cover Art (1100ms delay)};
+    
+    % Summary box
+    \node[draw=gray, fill=gray!5, thick, text width=2.5cm, align=left, font=\tiny] at (11,1.5) {
+        \textbf{Why Stagger?}\\[0.05cm]
+        • Prevents ban\\
+        • Respects APIs\\
+        • ~2.7s per song\\
+        • 3 songs = 8s total
+    };
 \end{tikzpicture}
-\caption{Rate Limiting Timeline: API Call Delays}
+\caption{Rate Limiting in Action: Batch Processing 3 Songs}
 \label{fig:rate_limit_timeline}
 \end{figure}
+
+\begin{tipbox}
+\textbf{Real-World Analogy: Coffee Shop Drive-Through}
+
+Imagine a drive-through coffee shop with signs:
+\begin{itemize}
+    \item "Maximum 2 cars per minute" (AcoustID: 500ms delay)
+    \item "Maximum 1 car per minute" (MusicBrainz: 1100ms delay)  
+\end{itemize}
+
+You can't just flood the line! You must wait between customers. Same with APIs - we respect their speed limits to avoid getting banned!
+\end{tipbox}
 
 % Circuit Breaker State Machine
 \begin{figure}[ht!]
@@ -4061,6 +4112,115 @@ CREATE INDEX idx_playlist_songs_playlist ON playlist_songs(playlistId);
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \chapter{AI Lyrics Generation}
 \label{ch:lyrics}
+
+\begin{tipbox}
+\textbf{Real-World Analogy: Recording Studio Audio Engineer}
+
+Imagine you're an audio engineer trying to transcribe song lyrics:
+\begin{enumerate}
+    \item \textbf{Isolate Vocals} - Remove instruments using special filters (like studio mixing)
+    \item \textbf{Optimize for Speech} - Convert to format AI understands (16kHz mono WAV)
+    \item \textbf{AI Transcription} - Feed to speech recognition system (Whisper)
+    \item \textbf{Clean Up} - Delete temporary files (keep studio clean)
+\end{enumerate}
+This is exactly what the AI Lyrics pipeline does!
+\end{tipbox}
+
+\section{Complete AI Lyrics Pipeline}
+
+\begin{figure}[ht!]
+\centering
+\begin{tikzpicture}[
+    node distance=0.7cm,
+    inputbox/.style={rectangle, draw=blue!70, fill=blue!15, thick, minimum width=3.8cm, minimum height=0.7cm, text width=3.6cm, align=center, font=\small},
+    ffmpegbox/.style={rectangle, draw=orange!70, fill=orange!15, thick, minimum width=3.8cm, minimum height=0.7cm, text width=3.6cm, align=center, font=\small},
+    whisperbox/.style={rectangle, draw=purple!70, fill=purple!15, thick, minimum width=3.8cm, minimum height=0.7cm, text width=3.6cm, align=center, font=\small},
+    outputbox/.style={rectangle, draw=green!70, fill=green!15, thick, minimum width=3.8cm, minimum height=0.7cm, text width=3.6cm, align=center, font=\small},
+    progressbox/.style={rectangle, draw=cyan!70, fill=cyan!10, thick, minimum width=2.8cm, minimum height=0.6cm, text width=2.6cm, align=center, font=\tiny},
+]
+    % Input
+    \node[inputbox] (input) at (0,0) {1. Input Audio\\song.mp3\\(stereo, any sample rate)};
+    
+    % Progress 1
+    \node[progressbox, right=1cm of input] (prog1) {Progress Event:\\``Isolating vocals...''\\(20\%)};
+    
+    % FFmpeg Stage 1
+    \node[ffmpegbox, below=of input] (ffmpeg1) {2. FFmpeg: Extract Vocals\\8-Stage DSP Pipeline\\Remove instruments};
+    
+    % Temp file 1
+    \node[inputbox, fill=gray!10, below=of ffmpeg1] (temp1) {temp\_vocals.wav\\(16kHz mono WAV)};
+    
+    % Progress 2
+    \node[progressbox, right=1cm of temp1] (prog2) {Progress Event:\\``Preparing for AI...''\\(40\%)};
+    
+    % Check Whisper
+    \node[ffmpegbox, below=of temp1] (check) {3. Check Whisper.cpp\\Auto-download if missing};
+    
+    % Whisper transcription
+    \node[whisperbox, below=of check] (whisper) {4. Whisper AI\\Speech-to-Text\\(selected model)};
+    
+    % Progress 3
+    \node[progressbox, right=1cm of whisper] (prog3) {Progress Event:\\``Transcribing...''\\(60\%)};
+    
+    % Output
+    \node[outputbox, below=of whisper] (output) {5. Lyrics Text\\``Verse 1: ...\\nChorus: ...''};
+    
+    % Progress 4
+    \node[progressbox, right=1cm of output] (prog4) {Progress Event:\\``Complete!''\\(100\%)};
+    
+    % Cleanup
+    \node[ffmpegbox, fill=red!10, below=of output] (cleanup) {6. Cleanup\\Delete temp\_vocals.wav};
+    
+    % Final
+    \node[outputbox, fill=green!20, below=of cleanup] (done) {7. Display in UI\\LyricsPanel shows result};
+    
+    % Arrows
+    \draw[->, thick] (input) -- (ffmpeg1);
+    \draw[->, thick] (ffmpeg1) -- (temp1);
+    \draw[->, thick] (temp1) -- (check);
+    \draw[->, thick] (check) -- (whisper);
+    \draw[->, thick] (whisper) -- (output);
+    \draw[->, thick] (output) -- (cleanup);
+    \draw[->, thick] (cleanup) -- (done);
+    
+    % Progress arrows
+    \draw[->, thick, dotted, cyan] (input) -- (prog1);
+    \draw[->, thick, dotted, cyan] (temp1) -- (prog2);
+    \draw[->, thick, dotted, cyan] (whisper) -- (prog3);
+    \draw[->, thick, dotted, cyan] (output) -- (prog4);
+    
+    % Info box
+    \node[draw=gray, fill=gray!5, thick, minimum width=3.5cm, minimum height=6.5cm, text width=3.3cm, align=left, font=\tiny, left=1.5cm of whisper] (info) {
+        \textbf{FFmpeg 8-Stage DSP:}\\[0.05cm]
+        1. High-pass filter (80Hz)\\
+        2. Low-pass filter (3kHz)\\
+        3. Stereo to mono mix\\
+        4. Phase inversion\\
+        5. Freq. reduction\\
+        6. Mid-range boost\\
+        7. Compression\\
+        8. Normalization\\[0.1cm]
+        \textbf{Why 16kHz Mono?}\\
+        • Whisper trained on 16kHz\\
+        • Mono = smaller file\\
+        • Faster processing\\[0.1cm]
+        \textbf{Temp File Cleanup:}\\
+        Prevents disk bloat\\
+        (WAV files are huge!)\\[0.1cm]
+        \textbf{Total Time:}\\
+        • tiny.en: ~30s\\
+        • base.en: ~1min\\
+        • medium.en: ~3min\\
+        (for 3min song)
+    };
+\end{tikzpicture}
+\caption{Complete AI Lyrics Generation Pipeline (8-Stage FFmpeg + Whisper)}
+\label{fig:ai_lyrics_pipeline}
+\end{figure}
+
+\begin{notebox}
+\textbf{Why Vocal Isolation?} Music contains instruments that confuse speech recognition AI. By removing instruments with FFmpeg filters, we give Whisper only the vocals, dramatically improving accuracy!
+\end{notebox}
 
 \section{Pipeline Overview}
 
