@@ -4040,6 +4040,104 @@ CREATE TABLE playlist_songs (
 CREATE INDEX idx_playlist_songs_playlist ON playlist_songs(playlistId);
 \end{lstlisting}
 
+\begin{tipbox}
+\textbf{Real-World Analogy: Music Library Card Catalog}
+
+Imagine a physical music library with:
+\begin{itemize}
+    \item \textbf{metadata\_cache.db} - A file cabinet tracking which CDs you've cataloged (prevents re-scanning)
+    \item \textbf{playlists.db} - A notebook where you write custom playlists referencing CD locations
+\end{itemize}
+
+The "CASCADE DELETE" is like: if you tear out a playlist page, all songs listed on that page disappear too!
+\end{tipbox}
+
+\section{Complete Database Schema Visualization}
+
+\begin{figure}[ht!]
+\centering
+\begin{tikzpicture}[
+    node distance=1.2cm and 2.5cm,
+    table/.style={rectangle split, rectangle split parts=3, draw=blue!70, fill=blue!10, thick, minimum width=4cm, text width=3.8cm, font=\small},
+    relationship/.style={draw=green!60, thick, ->, >=stealth},
+]
+    % Metadata Cache DB
+    \node[table] (cache) {
+        \textbf{metadata\_cache}
+        \nodepart{second}
+        \underline{filePath} TEXT\\
+        fileHash TEXT\\
+        scannedAt INTEGER\\
+        mbid TEXT\\
+        hasMetadata INTEGER
+        \nodepart{third}
+        \textit{PK: filePath}
+    };
+    
+    % Playlists table
+    \node[table, right=3cm of cache] (playlists) {
+        \textbf{playlists}
+        \nodepart{second}
+        \underline{id} INTEGER\\
+        name TEXT\\
+        description TEXT\\
+        coverArtPath TEXT\\
+        createdAt INTEGER\\
+        updatedAt INTEGER
+        \nodepart{third}
+        \textit{PK: id (auto-inc)}
+    };
+    
+    % Playlist songs junction table
+    \node[table, below=1.5cm of playlists] (songs) {
+        \textbf{playlist\_songs}
+        \nodepart{second}
+        \underline{playlistId} INTEGER\\
+        \underline{filePath} TEXT\\
+        position INTEGER\\
+        addedAt INTEGER
+        \nodepart{third}
+        \textit{PK: (playlistId, filePath)}\\
+        \textit{FK: playlistId → playlists(id)}
+    };
+    
+    % Relationships
+    \draw[relationship] (playlists) -- (songs) node[midway, right, font=\tiny] {1:N\\CASCADE\\DELETE};
+    
+    % Database labels
+    \node[above=0.3cm of cache, font=\bfseries, text=blue] {metadata-cache.db};
+    \node[above=0.3cm of playlists, font=\bfseries, text=blue] {playlists.db};
+    
+    % Info boxes
+    \node[draw=orange, fill=orange!5, thick, text width=3.5cm, align=left, font=\tiny, below=0.5cm of cache] (info1) {
+        \textbf{Purpose:}\\
+        Tracks which files have been scanned to avoid re-processing\\[0.1cm]
+        \textbf{Hash Formula:}\\
+        SHA256(path + filesize + mtime)\\[0.1cm]
+        \textbf{Performance:}\\
+        1000+ lookups in <10ms
+    };
+    
+    \node[draw=orange, fill=orange!5, thick, text width=3.5cm, align=left, font=\tiny, below=0.5cm of songs] (info2) {
+        \textbf{Purpose:}\\
+        Store user-created playlists\\[0.1cm]
+        \textbf{Junction Table:}\\
+        playlist\_songs links playlists to files (many-to-many)\\[0.1cm]
+        \textbf{Index:}\\
+        idx\_playlist\_songs\_playlist for fast queries
+    };
+\end{tikzpicture}
+\caption{Complete Database Schema: Entity-Relationship Diagram}
+\label{fig:database_schema}
+\end{figure}
+
+\begin{notebox}
+\textbf{Why Two Separate Databases?} \\
+\textbf{metadata-cache.db} is for system use (fast lookups during scanning).\\
+\textbf{playlists.db} is for user data (create/delete playlists frequently).\\
+Separation prevents locking issues and allows independent backups!
+\end{notebox}
+
 \section{Playlist Operations Flow}
 
 \begin{figure}[ht!]
@@ -9967,6 +10065,95 @@ The shuffle feature adds a ``memory'' so the jukebox remembers what it just play
 \end{tipbox}
 
 The \filepath{useAudioPlayer} hook manages playback with shuffle history, repeat modes, and OS integration.
+
+\subsection{Complete Playback Control Flow}
+
+\begin{figure}[ht!]
+\centering
+\begin{tikzpicture}[
+    node distance=0.7cm and 1cm,
+    statebox/.style={rectangle, draw=blue!70, fill=blue!15, thick, minimum width=3cm, minimum height=0.7cm, text width=2.8cm, align=center, font=\small},
+    actionbox/.style={diamond, draw=orange!70, fill=orange!15, thick, minimum width=2.2cm, minimum height=1cm, text width=1.8cm, align=center, font=\tiny\bfseries},
+    resultbox/.style={rectangle, draw=green!70, fill=green!15, thick, minimum width=3cm, minimum height=0.7cm, text width=2.8cm, align=center, font=\small},
+]
+    % Initial state
+    \node[statebox] (init) at (0,0) {IDLE\\No song playing};
+    
+    % User clicks song
+    \node[actionbox, below=1cm of init] (click) {User\\Clicks\\Song};
+    
+    % Loading
+    \node[statebox, below=1cm of click] (load) {LOADING\\Create Howl object};
+    
+    % Playing
+    \node[resultbox, below=of load] (playing) {PLAYING\\Audio streaming};
+    
+    % Pause button
+    \node[actionbox, left=2cm of playing] (pause) {User\\Clicks\\Pause};
+    
+    % Paused state
+    \node[statebox, fill=yellow!15, below=of pause] (paused) {PAUSED\\Audio stopped};
+    
+    % Resume
+    \node[actionbox, right=2cm of paused] (resume) {User\\Clicks\\Play};
+    
+    % Next button
+    \node[actionbox, right=2.5cm of playing] (next) {User\\Clicks\\Next};
+    
+    % Check queue
+    \node[actionbox, below=1cm of next] (checkQ) {Songs\\Left in\\Queue?};
+    
+    % Next song
+    \node[resultbox, left=1cm of checkQ] (nextSong) {Load Next Song\\(or random if shuffle)};
+    
+    % End of queue
+    \node[statebox, fill=red!15, right=1cm of checkQ] (end) {END\\Back to idle};
+    
+    % Volume/Seek
+    \node[actionbox, below=1.5cm of playing] (volseek) {Volume\\or Seek};
+    
+    \node[resultbox, below=of volseek] (adjust) {Adjust Playback\\Howl.volume()\\Howl.seek()};
+    
+    % Main flow arrows
+    \draw[->, thick] (init) -- (click);
+    \draw[->, thick] (click) -- (load);
+    \draw[->, thick] (load) -- (playing);
+    \draw[->, thick] (playing) -- (pause);
+    \draw[->, thick] (pause) -- (paused);
+    \draw[->, thick] (paused) -- (resume);
+    \draw[->, thick, dashed] (resume) |- (playing);
+    \draw[->, thick] (playing) -- (next);
+    \draw[->, thick] (next) -- (checkQ);
+    \draw[->, thick] (checkQ) -- node[above, font=\tiny] {Yes} (nextSong);
+    \draw[->, thick] (checkQ) -- node[above, font=\tiny] {No} (end);
+    \draw[->, thick, dashed] (nextSong) |- (load);
+    \draw[->, thick] (playing) -- (volseek);
+    \draw[->, thick] (volseek) -- (adjust);
+    \draw[->, thick, dashed] (adjust) -| (playing);
+    
+    % Labels
+    \node[draw=gray, fill=gray!5, thick, text width=2.5cm, align=left, font=\tiny, right=1.5cm of end] (info) {
+        \textbf{Howler.js API:}\\[0.05cm]
+        • new Howl(src)\\
+        • .play()\\
+        • .pause()\\
+        • .stop()\\
+        • .volume(0-1)\\
+        • .seek(seconds)\\[0.1cm]
+        \textbf{Events:}\\
+        • onload\\
+        • onplay\\
+        • onend\\
+        • onerror
+    };
+\end{tikzpicture}
+\caption{Complete Audio Player User Interaction Flow}
+\label{fig:audio_player_flow}
+\end{figure}
+
+\begin{notebox}
+\textbf{Why Howler.js?} It handles all the complex audio stuff: format detection (MP3/FLAC/WAV), cross-browser compatibility, streaming, and provides a simple API. We just call \inlinecode{.play()} and it works everywhere!
+\end{notebox}
 
 \subsection{Repeat Mode Cycle}
 
