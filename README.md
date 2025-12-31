@@ -2,7 +2,7 @@
   <img src="src/assets/logo.png" alt="Music Sync App Logo" width="128" height="128">
 </p>
 
-<h1 align="center">Music Sync App</h1>
+<h1 align="center">Music Electron App</h1>
 
 <p align="center">
   <a href="https://www.electronjs.org/">
