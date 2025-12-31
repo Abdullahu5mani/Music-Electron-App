@@ -541,35 +541,92 @@ export async function downloadYouTubeAudio(
       // Create a new AbortController for this download
       activeDownloadController = new AbortController()
 
-      // Download with metadata and thumbnail
-      const eventEmitter = ytDlp.exec([
+      console.log(`[YouTube] Starting download for: ${options.url}`)
+
+      // Emit initial status
+      if (options.onProgress) {
+        options.onProgress({
+          percentage: 0,
+          downloaded: 0,
+          total: 0,
+          speed: 'Starting...',
+          eta: '--:--'
+        })
+      }
+
+      const args = [
         options.url,
         '--extract-audio',
         '--audio-format', 'mp3',
-        '--audio-quality', '0',  // Best quality
-        '--embed-thumbnail',      // Embed thumbnail
-        '--add-metadata',         // Add metadata
+        '--audio-quality', '0',   // Best quality
+        '--embed-thumbnail',       // Embed thumbnail
+        '--add-metadata',          // Add metadata
         '--output', outputTemplate,
-        '--newline',
+        '--newline',               // Important for parsing progress
         '--progress',
         '--no-warnings',
-        '--ignore-errors',        // Skip unavailable videos
+        '--ignore-errors',         // Skip unavailable videos
         '--no-check-certificates', // Avoid SSL issues
-        '--no-part'               // Don't use .part files, write directly
-      ], {}, {
-        signal: activeDownloadController.signal
-      } as any)
+        '--verbose'               // Add verbose logging to see what's happening
+      ]
+
+      // Download with metadata and thumbnail
+      const eventEmitter = ytDlp.exec(args)
+
+      // Store a reference to the process for manual killing if needed
+      const childProcess = eventEmitter.ytDlpProcess
+
+      // Manual abort handling
+      const abortHandler = () => {
+        if (childProcess && childProcess.pid) {
+          console.log(`[Abort] Signal received. Killing PID: ${childProcess.pid}`)
+          try {
+            if (process.platform === 'win32') {
+              const { exec } = require('child_process')
+              // /F = Force, /T = Tree (kill children), /PID = Process ID
+              // 2>NUL suppresses the "Process not found" error output
+              exec(`taskkill /F /T /PID ${childProcess.pid} >NUL 2>&1`, (err: any) => {
+                // If there's an error, it might just mean the process is already gone
+                if (err) console.log(`[Abort] Process ${childProcess.pid} cleanup: Process might already be dead.`)
+                else console.log(`[Abort] Successfully killed process tree ${childProcess.pid}`)
+              })
+            } else {
+              childProcess.kill('SIGKILL')
+              console.log(`[Abort] Sent SIGKILL to ${childProcess.pid}`)
+            }
+          } catch (e) {
+            console.error(`[Abort] Error killing process:`, e)
+          }
+        } else {
+          console.log('[Abort] No child process or PID found to kill.')
+        }
+      }
+
+      if (activeDownloadController) {
+        activeDownloadController.signal.addEventListener('abort', abortHandler)
+      }
 
       let downloadedFile: string | null = null
       let hasError = false
+      let lastProgressUpdate = Date.now()
+
+      // Removed manual stdout/stderr logging listeners as they might interfere 
+      // with yt-dlp-wrap's internal progress parsing mechanisms.
+      // If we need debugging, we can rely on the verbose flag we added to args.
 
       eventEmitter.on('progress', (progress: any) => {
+        // Throttle updates to every 100ms to avoid flooding UI
+        if (Date.now() - lastProgressUpdate < 100) return
+        lastProgressUpdate = Date.now()
+
         if (options.onProgress && !hasError) {
           const percent = progress.percent || 0
           const downloaded = progress.downloaded || 0
           const total = progress.total || 0
           const speed = progress.speed || '0 B/s'
           const eta = progress.eta || '--:--'
+
+          // console.log(`[YouTube] Progress: ${percent}% ${speed}`)
 
           options.onProgress({
             percentage: percent,
@@ -593,17 +650,31 @@ export async function downloadYouTubeAudio(
 
       eventEmitter.on('error', (error: Error) => {
         hasError = true
-        activeDownloadController = null
+        console.error('[YouTube] Download Error Event:', error)
+
+        // Clean up abort listener
+        if (activeDownloadController) {
+          activeDownloadController.signal.removeEventListener('abort', abortHandler)
+          activeDownloadController = null
+        }
+
+        // Standardize error message
         resolve({
           success: false,
-          error: error.message,
+          error: error.message || 'Unknown download error',
         })
       })
 
       // Wait for completion
       await new Promise<void>((resolvePromise) => {
         eventEmitter.on('close', (code: number | null) => {
-          activeDownloadController = null
+          console.log(`[YouTube] Download process closed with code: ${code}`)
+
+          // Clean up abort listener
+          if (activeDownloadController) {
+            activeDownloadController.signal.removeEventListener('abort', abortHandler)
+            activeDownloadController = null
+          }
           // With --ignore-errors, yt-dlp might exit with code 1 if some videos failed
           // but others succeeded. We consider it "done" and check for files afterwards.
           if (code === 0 || code === 1 || code === null) {

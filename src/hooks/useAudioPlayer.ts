@@ -170,18 +170,36 @@ export function useAudioPlayer(musicFiles: MusicFile[]): UseAudioPlayerReturn {
   // Find the current playing song by its path in the new array
   useEffect(() => {
     if (currentFilePathRef.current && playingIndex !== null) {
-      const newIndex = musicFiles.findIndex(file => file.path === currentFilePathRef.current)
+      // Robust matching: Try exact match first, then normalized path, then fuzzy match
+      const normalizePath = (p: string) => p.toLowerCase().replace(/[\\/]+/g, '/')
+
+      const currentPath = currentFilePathRef.current
+      const normalizedCurrentPath = normalizePath(currentPath)
+
+      let newIndex = musicFiles.findIndex(file => file.path === currentPath)
+
+      // If exact path match fails, try normalized path
+      if (newIndex === -1) {
+        newIndex = musicFiles.findIndex(file => normalizePath(file.path) === normalizedCurrentPath)
+      }
+
+      // If that fails, try matching by Just Filename (very strong indicator)
+      if (newIndex === -1) {
+        // Find by name matching is often safer across different data sources (db vs scanner)
+        const currentName = currentPath.split(/[\\/]/).pop()
+        if (currentName) {
+          newIndex = musicFiles.findIndex(file => {
+            const fileName = file.path.split(/[\\/]/).pop()
+            return fileName === currentName
+          })
+        }
+      }
+
       if (newIndex !== -1 && newIndex !== playingIndex) {
         setPlayingIndex(newIndex)
       } else if (newIndex === -1) {
-        // Current song not found in new array, stop playback
-        if (currentSound) {
-          currentSound.stop()
-          currentSound.unload()
-          setCurrentSound(null)
-        }
-        setPlayingIndex(null)
-        currentFilePathRef.current = null
+        // Still not found? Log it but don't stop playback. 
+        console.warn('[AudioPlayer] Could not find current song in new context:', currentPath)
       }
     }
   }, [musicFiles])
