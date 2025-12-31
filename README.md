@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="src/assets/icons/logo.svg" alt="Music Sync App" width="200" height="200">
+  <img src="https://raw.githubusercontent.com/Abdullahu5mani/Music-Electron-App/main/src/assets/logo.svg" alt="Music Sync App" width="200" height="200">
 </p>
 
 <h1 align="center">Music Sync App</h1>
