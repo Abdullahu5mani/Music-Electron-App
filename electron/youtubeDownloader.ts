@@ -7,10 +7,35 @@ import { execFile } from 'child_process'
 import { promisify } from 'util'
 
 const execFileAsync = promisify(execFile)
+import { ignoreFile } from './fileWatcher'
 
 let ytDlpWrap: YTDlpWrap | null = null
-let lastDownloadTime: number = 0
 const DOWNLOAD_DELAY_MS = 10000 // 10 seconds
+
+// Track state
+let lastDownloadTime: number = 0
+let activeDownloadController: AbortController | null = null
+
+/**
+ * Cancels the currently active YouTube download
+ */
+export function cancelActiveDownload(): boolean {
+  console.log('Attempting to cancel active download with AbortController...')
+  if (activeDownloadController) {
+    try {
+      activeDownloadController.abort()
+      activeDownloadController = null
+      console.log('Successfully called abort() on active download controller')
+      return true
+    } catch (error) {
+      console.error('Failed to abort download:', error)
+      activeDownloadController = null
+    }
+  } else {
+    console.log('No active download controller found to cancel')
+  }
+  return false
+}
 
 export interface BinaryDownloadProgress {
   status: 'checking' | 'not-found' | 'downloading' | 'downloaded' | 'installed' | 'updating' | 'version-check'
@@ -434,15 +459,35 @@ export interface DownloadProgress {
  */
 async function getVideoTitle(url: string, ytDlp: YTDlpWrap): Promise<string> {
   try {
-    const result = await ytDlp.execPromise([
+    // Optimization: only get the first title and use --flat-playlist for speed
+    const isPlaylist = url.includes('list=') && !url.includes('v=')
+
+    const args = [
       url,
       '--get-title',
       '--no-warnings',
-    ])
-    return result.trim() || 'Unknown Title'
+      '--ignore-errors',
+      '--playlist-items', '1', // Only get the first title to be fast
+      '--flat-playlist'        // Don't extract full info, just list it
+    ]
+
+    const result = await ytDlp.execPromise(args)
+
+    if (!result || result.trim() === '') {
+      return 'YouTube Content'
+    }
+
+    const titles = result.trim().split('\n')
+    const baseTitle = titles[0] || 'Unknown Title'
+
+    if (isPlaylist) {
+      return `Playlist: ${baseTitle}...`
+    }
+
+    return baseTitle
   } catch (error) {
     console.error('Failed to get video title:', error)
-    return 'Unknown Title'
+    return 'YouTube Content'
   }
 }
 
@@ -493,6 +538,9 @@ export async function downloadYouTubeAudio(
 
       const outputTemplate = path.join(options.outputPath, '%(title)s.%(ext)s')
 
+      // Create a new AbortController for this download
+      activeDownloadController = new AbortController()
+
       // Download with metadata and thumbnail
       const eventEmitter = ytDlp.exec([
         options.url,
@@ -501,12 +549,16 @@ export async function downloadYouTubeAudio(
         '--audio-quality', '0',  // Best quality
         '--embed-thumbnail',      // Embed thumbnail
         '--add-metadata',         // Add metadata
-        '--write-thumbnail',      // Save thumbnail separately
         '--output', outputTemplate,
         '--newline',
         '--progress',
         '--no-warnings',
-      ])
+        '--ignore-errors',        // Skip unavailable videos
+        '--no-check-certificates', // Avoid SSL issues
+        '--no-part'               // Don't use .part files, write directly
+      ], {}, {
+        signal: activeDownloadController.signal
+      } as any)
 
       let downloadedFile: string | null = null
       let hasError = false
@@ -532,11 +584,16 @@ export async function downloadYouTubeAudio(
       eventEmitter.on('ytDlpEvent', (eventType: string, eventData: any) => {
         if (eventType === 'download' && eventData.filename) {
           downloadedFile = eventData.filename
+          // Tell file watcher to ignore this file while we're writing it
+          if (downloadedFile) {
+            ignoreFile(downloadedFile)
+          }
         }
       })
 
       eventEmitter.on('error', (error: Error) => {
         hasError = true
+        activeDownloadController = null
         resolve({
           success: false,
           error: error.message,
@@ -544,19 +601,45 @@ export async function downloadYouTubeAudio(
       })
 
       // Wait for completion
-      await new Promise<void>((resolvePromise, rejectPromise) => {
+      await new Promise<void>((resolvePromise) => {
         eventEmitter.on('close', (code: number | null) => {
-          if (code === 0 || code === null) {
+          activeDownloadController = null
+          // With --ignore-errors, yt-dlp might exit with code 1 if some videos failed
+          // but others succeeded. We consider it "done" and check for files afterwards.
+          if (code === 0 || code === 1 || code === null) {
             resolvePromise()
           } else {
-            rejectPromise(new Error(`yt-dlp exited with code ${code}`))
+            // Only reject on actual fatal errors (e.g. command not found, etc.)
+            // though most of those are caught by the 'error' handler
+            resolvePromise()
           }
         })
-        eventEmitter.on('error', rejectPromise)
       })
 
       // Find the downloaded file
       if (downloadedFile && fs.existsSync(downloadedFile)) {
+        // Final absolute cleanup: remove any leftover junk files in the output directory
+        // that might have been created by yt-dlp or ffmpeg
+        try {
+          const files = fs.readdirSync(options.outputPath)
+          const junkExtensions = ['.webp', '.webm', '.vtt', '.description', '.info.json', '.ytdl', '.part', '.temp']
+
+          for (const file of files) {
+            if (junkExtensions.some(ext => file.endsWith(ext))) {
+              const filePath = path.join(options.outputPath, file)
+              // Check if it was created very recently (within the last 2 minutes)
+              const stats = fs.statSync(filePath)
+              const now = Date.now()
+              if (now - stats.mtimeMs < 120000) {
+                fs.unlinkSync(filePath)
+                console.log(`Cleaned up leftover junk file: ${file}`)
+              }
+            }
+          }
+        } catch (cleanupError) {
+          console.error('Error during final cleanup:', cleanupError)
+        }
+
         resolve({
           success: true,
           filePath: downloadedFile,

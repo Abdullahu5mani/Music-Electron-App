@@ -431,7 +431,15 @@ export function SongList({
     return (
       <div className="music-list">
         <h2>Music Files (0)</h2>
-        <p>No music files found. Select a folder to scan.</p>
+        <div className="empty-state">
+          <div className="empty-state-icon">
+            <img src={musicNoteIcon} alt="" />
+          </div>
+          <p className="empty-state-message">No music files found</p>
+          <p className="empty-state-hint">
+            Open <strong>Settings</strong> to select a folder and scan your music library
+          </p>
+        </div>
       </div>
     )
   }

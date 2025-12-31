@@ -36,7 +36,8 @@ const state: FileWatcherState = {
 const IGNORE_DURATION = 5000
 
 // Debounce delay in ms (wait for file operations to settle)
-const DEBOUNCE_DELAY = 500
+// Increased to 2000ms to handle batch downloads/transfers better without rapid UI flickering
+const DEBOUNCE_DELAY = 2000
 
 /**
  * Check if a file has a supported audio extension

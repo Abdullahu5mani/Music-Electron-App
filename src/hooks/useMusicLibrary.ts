@@ -47,35 +47,48 @@ export function useMusicLibrary(): UseMusicLibraryReturn {
     console.log(`[FileWatcher Event] ${event.type}: ${event.files.length} files`)
 
     if (event.type === 'removed') {
-      // Remove files from the library
+      // Batch remove files from the library
       setMusicFiles(prevFiles =>
         prevFiles.filter(file => !event.files.includes(file.path))
       )
     } else if (event.type === 'changed' || event.type === 'added') {
-      // For changed/added files, read their metadata and update/add to library
+      // Process all files first to avoid multiple state updates in a loop
+      const updatedFileData: MusicFile[] = []
+
       for (const filePath of event.files) {
         try {
           const fileData = await window.electronAPI.readSingleFileMetadata(filePath)
           if (fileData) {
-            setMusicFiles(prevFiles => {
-              const existingIndex = prevFiles.findIndex(f => f.path === filePath)
-              if (existingIndex >= 0) {
-                // Update existing file
-                const updated = [...prevFiles]
-                updated[existingIndex] = {
-                  ...fileData,
-                  dateAdded: prevFiles[existingIndex].dateAdded ?? Date.now()
-                }
-                return updated
-              } else {
-                // Add new file
-                return [...prevFiles, { ...fileData, dateAdded: Date.now() }]
-              }
-            })
+            updatedFileData.push(fileData)
           }
         } catch (err) {
           console.error(`Failed to read metadata for ${filePath}:`, err)
         }
+      }
+
+      if (updatedFileData.length > 0) {
+        setMusicFiles(prevFiles => {
+          const newFiles = [...prevFiles]
+          let hasChange = false
+
+          for (const fileData of updatedFileData) {
+            const existingIndex = newFiles.findIndex(f => f.path === fileData.path)
+            if (existingIndex >= 0) {
+              // Only update if something actually changed (optional but safer)
+              newFiles[existingIndex] = {
+                ...fileData,
+                dateAdded: prevFiles[existingIndex].dateAdded ?? Date.now()
+              }
+              hasChange = true
+            } else {
+              // Add as new file
+              newFiles.push({ ...fileData, dateAdded: Date.now() })
+              hasChange = true
+            }
+          }
+
+          return hasChange ? newFiles : prevFiles
+        })
       }
     }
   }, [])

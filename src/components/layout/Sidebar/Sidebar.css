@@ -1,30 +1,72 @@
 /* ====== SIDEBAR STYLES ====== */
+.sidebar {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  /* Main sidebar doesn't scroll, sections do */
+}
+
+.sidebar-header {
+  padding: 24px 20px 16px !important;
+  border: none !important;
+  height: auto !important;
+  flex-shrink: 0;
+}
+
+.sidebar-logo {
+  filter: drop-shadow(0 0 10px rgba(99, 102, 241, 0.3));
+}
+
 .sidebar-section {
-  padding: 0 10px;
+  padding: 0 12px 8px;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  /* Important for flex-basis/growth to work in parent */
+}
+
+/* Playlists section is usually smaller, let it grow slightly */
+.playlists-section {
+  flex-shrink: 0;
+}
+
+/* Artists and Albums sections share remaining space and scroll */
+.sidebar-section.expanded:not(.playlists-section) {
+  flex: 1;
+  min-height: 150px;
 }
 
 .sidebar-title {
-  padding: 15px 15px 10px;
-  font-size: 0.7rem;
-  font-weight: 600;
+  padding: 12px 12px 8px;
+  font-size: 0.75rem;
+  font-weight: 700;
   color: var(--text-dim);
   text-transform: uppercase;
-  letter-spacing: 1.5px;
+  letter-spacing: 1px;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   cursor: pointer;
+  transition: color 0.2s;
+  opacity: 0.8;
+  flex-shrink: 0;
 }
 
 .sidebar-title:hover {
-  color: var(--text-secondary);
+  color: #fff;
+  opacity: 1;
 }
 
 .collapse-icon {
-  width: 12px;
-  height: 12px;
-  transition: transform 0.25s ease;
-  filter: brightness(0) invert(0.4);
+  width: 10px;
+  height: 10px;
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  filter: brightness(0) invert(0.8);
+  opacity: 0.5;
+}
+
+.sidebar-title:hover .collapse-icon {
+  opacity: 1;
 }
 
 .collapse-icon.collapsed {
@@ -32,169 +74,143 @@
 }
 
 .sidebar-list {
-  padding: 0 5px;
-  overflow: hidden;
-  max-height: 1000px;
-  transition: max-height 0.3s ease, opacity 0.25s ease, padding 0.25s ease;
-  opacity: 1;
-}
-
-.sidebar-section.collapsed .sidebar-list {
-  max-height: 0;
-  opacity: 0;
-  padding: 0;
-}
-
-.sidebar-search {
-  padding: 5px 10px 15px;
-  overflow: hidden;
-  max-height: 60px;
-  transition: max-height 0.3s ease, opacity 0.25s ease, padding 0.25s ease;
-  opacity: 1;
-}
-
-.sidebar-section.collapsed .sidebar-search {
-  max-height: 0;
-  opacity: 0;
-  padding: 0;
-}
-
-.sidebar-item {
-  width: 100%;
-  padding: 10px 15px;
-  border-radius: var(--radius-sm);
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  color: var(--text-secondary);
-  font-size: 0.9rem;
-  font-weight: 500;
-  margin-bottom: 2px;
-  border: none;
-  background: none;
-  text-align: left;
-  transition: all 0.2s ease;
-}
-
-.sidebar-item:hover {
-  background: rgba(255, 255, 255, 0.05);
-  color: #fff;
-}
-
-.sidebar-item.active {
-  background: rgba(99, 102, 241, 0.12);
-  color: var(--accent-primary);
-  border-left: 2px solid var(--accent-primary);
-}
-
-.sidebar-item span {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.playlist-icon-emoji {
-  width: 28px;
-  height: 28px;
-  padding: 6px;
-  background: rgba(255, 255, 255, 0.06);
-  border-radius: 8px;
-  flex-shrink: 0;
-  filter: brightness(0) invert(0.7);
-}
-
-.sidebar-item.active .playlist-icon-emoji {
-  background: rgba(99, 102, 241, 0.15);
-  filter: invert(48%) sepia(35%) saturate(2222%) hue-rotate(210deg) brightness(101%) contrast(101%);
-}
-
-.artist-icon {
-  width: 18px;
-  height: 18px;
-  filter: brightness(0) invert(0.5);
-  flex-shrink: 0;
-}
-
-.sidebar-item.active .artist-icon {
-  filter: invert(48%) sepia(35%) saturate(2222%) hue-rotate(210deg) brightness(101%) contrast(101%);
-}
-
-.album-thumb {
-  width: 32px;
-  height: 32px;
-  border-radius: 6px;
-  object-fit: cover;
-  flex-shrink: 0;
-}
-
-.album-thumb-placeholder {
-  width: 24px;
-  height: 24px;
-  padding: 4px;
-  border-radius: 6px;
-  background: var(--bg-hover);
-  flex-shrink: 0;
-  filter: brightness(0) invert(0.4);
-}
-
-/* sidebar-search styles are in the collapse animation section above */
-
-.sidebar-search-input {
-  width: 100%;
-  padding: 10px 14px;
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid var(--glass-border);
-  border-radius: 10px;
-  color: #fff;
-  font-size: 0.85rem;
-  outline: none;
-}
-
-.sidebar-search-input::placeholder {
-  color: var(--text-dim);
-}
-
-.sidebar-search-input:focus {
-  border-color: var(--accent-primary);
-  background: rgba(255, 255, 255, 0.05);
-}
-
-.sidebar-no-results {
-  padding: 20px;
-  text-align: center;
-  color: var(--text-dim);
-  font-size: 0.85rem;
-}
-
-/* Playlists Section */
-.playlists-section {
-  border-bottom: 1px solid var(--glass-border);
-  padding-bottom: 10px;
-  margin-bottom: 5px;
-}
-
-.sidebar-section.expanded {
-  flex: 1;
-  min-height: 0;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
+  gap: 2px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding-right: 4px;
+  /* Space for scrollbar */
+}
+
+/* Hide scrollbar by default, show on hover */
+.sidebar-list::-webkit-scrollbar {
+  width: 3px;
+}
+
+.sidebar-list::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.sidebar-list::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 10px;
+}
+
+.sidebar-section:hover .sidebar-list::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.12);
 }
 
 .sidebar-section.collapsed .sidebar-list {
   display: none;
 }
 
-/* Scrollbar */
-.sidebar-list::-webkit-scrollbar {
-  width: 4px;
+.sidebar-search {
+  padding: 4px 12px 12px;
+  flex-shrink: 0;
 }
 
-.sidebar-list::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.1);
+.sidebar-search-input {
+  width: 100%;
+  padding: 9px 12px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 8px;
+  color: #fff;
+  font-size: 0.8rem;
+  outline: none;
+  transition: all 0.2s;
+}
+
+.sidebar-search-input::placeholder {
+  color: rgba(255, 255, 255, 0.25);
+}
+
+.sidebar-search-input:focus {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(99, 102, 241, 0.4);
+  box-shadow: 0 0 15px rgba(99, 102, 241, 0.1);
+}
+
+.sidebar-item {
+  width: 100%;
+  padding: 8px 12px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 0.85rem;
+  font-weight: 500;
+  border: none;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+}
+
+.sidebar-item span {
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sidebar-item:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: #fff;
+  transform: translateX(2px);
+}
+
+.sidebar-item.active {
+  background: linear-gradient(90deg, rgba(99, 102, 241, 0.12) 0%, rgba(99, 102, 241, 0.04) 100%);
+  color: #fff;
+  font-weight: 600;
+  box-shadow: inset 2px 0 0 var(--accent-primary);
+}
+
+.playlist-icon-emoji {
+  width: 18px;
+  height: 18px;
+  filter: brightness(0) invert(0.9);
+  opacity: 0.6;
+}
+
+.sidebar-item.active .playlist-icon-emoji {
+  filter: invert(48%) sepia(35%) saturate(2222%) hue-rotate(210deg) brightness(110%) contrast(110%);
+  opacity: 1;
+}
+
+.artist-icon {
+  width: 14px;
+  height: 14px;
+  filter: brightness(0) invert(0.9);
+  opacity: 0.5;
+}
+
+.album-thumb {
+  width: 24px;
+  height: 24px;
   border-radius: 4px;
+  object-fit: cover;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
 }
 
-.sidebar-list::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.2);
+.album-thumb-placeholder {
+  width: 24px;
+  height: 24px;
+  padding: 5px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.08);
+  filter: brightness(0) invert(0.9);
+  opacity: 0.5;
+}
+
+.sidebar-no-results {
+  padding: 16px;
+  text-align: center;
+  color: var(--text-dim);
+  font-size: 0.75rem;
+  font-style: italic;
 }

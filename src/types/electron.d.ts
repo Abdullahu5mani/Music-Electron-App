@@ -110,6 +110,7 @@ export interface ElectronAPI {
   onDownloadProgress: (callback: (progress: { percentage: number; downloaded: number; total: number; speed: string; eta: string }) => void) => () => void
   onBinaryDownloadProgress: (callback: (progress: BinaryDownloadProgress) => void) => () => void
   onDownloadTitle: (callback: (title: string) => void) => () => void
+  cancelYouTubeDownload: () => Promise<boolean>
   downloadImage: (url: string, filePath: string) => Promise<{ success: boolean; error?: string }>
   downloadImageWithFallback: (urls: string[], filePath: string) => Promise<{ success: boolean; url?: string; error?: string }>
   writeCoverArt: (filePath: string, imagePath: string) => Promise<{ success: boolean; error?: string }>

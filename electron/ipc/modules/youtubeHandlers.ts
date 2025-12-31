@@ -1,18 +1,18 @@
-import { ipcMain, BrowserWindow } from 'electron'
-import { downloadYouTubeAudio } from '../../youtubeDownloader'
+import { ipcMain, BrowserWindow, app } from 'electron'
+import { downloadYouTubeAudio, cancelActiveDownload } from '../../youtubeDownloader'
 import { getAllBinaryStatuses } from '../../binaryManager'
 import { downloadFpcalc } from '../../fpcalcManager'
 import { downloadWhisper, WHISPER_MODELS, getSelectedModel, setSelectedModelId } from '../../whisperManager'
 import path from 'path'
 import fs from 'fs'
 import https from 'https'
-import { app } from 'electron'
 
 /**
  * Registers IPC handlers for YouTube download operations
- * - YouTube audio download with progress tracking  
+ * - YouTube audio download with progress tracking
  * - Binary status checking (yt-dlp, fpcalc)
  * - Binary installation
+ * - Cancellation of active downloads
  */
 export function registerYoutubeHandlers() {
     // Handle YouTube download
@@ -45,6 +45,11 @@ export function registerYoutubeHandlers() {
                 error: error instanceof Error ? error.message : 'Unknown error',
             }
         }
+    })
+
+    // Handle YouTube download cancellation
+    ipcMain.handle('cancel-youtube-download', () => {
+        return cancelActiveDownload()
     })
 
     // Handle get binary statuses (yt-dlp and fpcalc status)

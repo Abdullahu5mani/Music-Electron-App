@@ -6,13 +6,15 @@ interface DownloadNotificationProps {
   progress: number
   isVisible: boolean
   onClose?: () => void
+  onCancel?: () => void
 }
 
-export function DownloadNotification({ 
-  title, 
-  progress, 
+export function DownloadNotification({
+  title,
+  progress,
   isVisible,
-  onClose 
+  onClose,
+  onCancel
 }: DownloadNotificationProps) {
   const [shouldRender, setShouldRender] = useState(isVisible)
 
@@ -37,7 +39,7 @@ export function DownloadNotification({
           <span className="notification-icon">⬇️</span>
           <span className="notification-title">{title}</span>
           {onClose && (
-            <button 
+            <button
               className="notification-close"
               onClick={onClose}
               aria-label="Close"
@@ -48,12 +50,19 @@ export function DownloadNotification({
         </div>
         <div className="notification-progress">
           <div className="notification-progress-bar">
-            <div 
+            <div
               className="notification-progress-fill"
               style={{ width: `${progress}%` }}
             />
           </div>
-          <span className="notification-progress-text">{Math.round(progress)}%</span>
+          <div className="notification-footer">
+            <span className="notification-progress-text">{Math.round(progress)}%</span>
+            {onCancel && (
+              <button className="notification-cancel" onClick={onCancel}>
+                Cancel
+              </button>
+            )}
+          </div>
         </div>
       </div>
     </div>

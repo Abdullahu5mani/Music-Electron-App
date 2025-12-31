@@ -84,6 +84,7 @@ electron.contextBridge.exposeInMainWorld("electronAPI", {
       electron.ipcRenderer.removeListener("download-title", handler);
     };
   },
+  cancelYouTubeDownload: () => electron.ipcRenderer.invoke("cancel-youtube-download"),
   downloadImage: (url, filePath) => electron.ipcRenderer.invoke("download-image", url, filePath),
   downloadImageWithFallback: (urls, filePath) => electron.ipcRenderer.invoke("download-image-with-fallback", urls, filePath),
   writeCoverArt: (filePath, imagePath) => electron.ipcRenderer.invoke("write-cover-art", filePath, imagePath),

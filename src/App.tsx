@@ -345,6 +345,19 @@ function App() {
     }
   }
 
+  const handleCancelDownload = useCallback(async () => {
+    try {
+      const canceled = await window.electronAPI.cancelYouTubeDownload()
+      if (canceled) {
+        showToastNotification('Download canceled', 'info')
+        setIsDownloading(false)
+        setShowNotification(false)
+      }
+    } catch (error) {
+      console.error('Failed to cancel download:', error)
+    }
+  }, [showToastNotification])
+
   const handleDownload = async (url: string) => {
     const targetFolder = downloadFolder || selectedFolder
     if (!targetFolder) {
@@ -370,11 +383,18 @@ function App() {
         }
         showToastNotification('Download completed!', 'success')
       } else {
-        showToastNotification(`Download failed: ${result?.error || 'Unknown error'}`, 'error')
+        // Only show error if it wasn't a manual cancellation
+        if (result?.error && !result.error.includes('SIGKILL') && !result.error.includes('killed')) {
+          showToastNotification(`Download failed: ${result?.error || 'Unknown error'}`, 'error')
+        }
       }
     } catch (error) {
-      console.error('Download error:', error)
-      showToastNotification(`Download error: ${error}`, 'error')
+      // Ignore errors from manual cancellation
+      const errorMsg = String(error)
+      if (!errorMsg.includes('SIGKILL') && !errorMsg.includes('killed')) {
+        console.error('Download error:', error)
+        showToastNotification(`Download error: ${error}`, 'error')
+      }
     } finally {
       setIsDownloading(false)
       setDownloadProgress(0)
@@ -541,6 +561,7 @@ function App() {
         title={downloadTitle}
         progress={downloadProgress}
         isVisible={showNotification && isDownloading}
+        onCancel={handleCancelDownload}
       />
 
       <NotificationToast

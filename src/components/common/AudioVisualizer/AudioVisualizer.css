@@ -8,8 +8,10 @@
     height: 100%;
     z-index: 0;
     pointer-events: none;
-    opacity: 0.25;
-    /* Much more subtle */
+    opacity: 0.75;
+    /* More visible visualizer */
     border-radius: inherit;
     mix-blend-mode: screen;
+    filter: brightness(1.3) saturate(1.2);
+    /* Add subtle glow */
 }
