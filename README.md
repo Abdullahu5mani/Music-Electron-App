@@ -40,27 +40,27 @@
 
 ### 🎵 Main Interface
 <p align="center">
-  <img src="screenshots/main-interface.gif" alt="Main Interface Demo" width="100%">
+  <img src="Screenshots/main-interface.gif" alt="Main Interface Demo" width="100%">
 </p>
 
 ### 📥 YouTube Downloads
 <p align="center">
-  <img src="screenshots/youtube-download.gif" alt="YouTube Downloading Demo" width="100%">
+  <img src="Screenshots/youtube-download.gif" alt="YouTube Downloading Demo" width="100%">
 </p>
 
 ### 🔍 Song Identification (AcoustID)
 <p align="center">
-  <img src="screenshots/song-identification.gif" alt="Song Identification Demo" width="100%">
+  <img src="Screenshots/song-identification.gif" alt="Song Identification Demo" width="100%">
 </p>
 
 ### 🎤 AI Lyrics Generation
 <p align="center">
-  <img src="screenshots/lyrics-generation.gif" alt="Lyrics Generation Demo" width="100%">
+  <img src="Screenshots/lyrics-generation.gif" alt="Lyrics Generation Demo" width="100%">
 </p>
 
 ### 📂 Playlist Management
 <p align="center">
-  <img src="screenshots/playlist-management.gif" alt="Playlist Management Demo" width="100%">
+  <img src="Screenshots/playlist-management.gif" alt="Playlist Management Demo" width="100%">
 </p>
 
 ---
