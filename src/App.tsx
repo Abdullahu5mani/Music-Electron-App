@@ -330,14 +330,14 @@ function App() {
   }, [togglePlayPause, playNext, playPrevious, volume, setVolume])
 
   const handleSettingsChange = async () => {
-    // Reload settings after save
+    // Reload settings after save and rescan to reflect any changes (including scanSubfolders)
     try {
       const settings = await window.electronAPI?.getSettings()
       if (settings) {
         setDownloadFolder(settings.downloadFolderPath)
-        // If music folder changed, rescan
-        if (settings.musicFolderPath && settings.musicFolderPath !== selectedFolder) {
-          await scanFolder(settings.musicFolderPath)
+        // Always rescan the music folder to reflect settings changes (e.g., scanSubfolders toggle)
+        if (settings.musicFolderPath) {
+          await scanFolder(settings.musicFolderPath, settings.scanSubfolders)
         }
       }
     } catch (error) {

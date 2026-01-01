@@ -14,7 +14,7 @@ interface UseMusicLibraryReturn {
   sortBy: SortOption
   setSortBy: (sortBy: SortOption) => void
   handleSelectFolder: () => Promise<void>
-  scanFolder: (folderPath: string) => Promise<void>
+  scanFolder: (folderPath: string, scanSubfolders?: boolean) => Promise<void>
   updateSingleFile: (filePath: string) => Promise<MusicFile | null>
   isWatching: boolean
 }

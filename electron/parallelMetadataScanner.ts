@@ -124,20 +124,20 @@ export class ParallelMetadataScanner {
             const parsed = await parseFile(filePath)
 
             // Extract album art and convert to base64
-            // Limit size to prevent huge IPC payloads that freeze UI, but allow HQ covers
-            const MAX_ALBUM_ART_SIZE = 2 * 1024 * 1024 // 2MB max for thumbnails (increased from 150KB)
+            // Use a small size limit for thumbnails - browser will scale via CSS
+            // This dramatically reduces IPC payload size and speeds up scanning
+            const MAX_ALBUM_ART_SIZE = 200 * 1024 // 200KB max for thumbnails (optimized for speed)
             let albumArt: string | undefined
             if (parsed.common.picture && parsed.common.picture.length > 0) {
                 const picture = parsed.common.picture[0]
-                // Only include album art if it's reasonably sized
-                // Large covers will be loaded on-demand when viewing song details
+                // Only include album art if it's reasonably sized for thumbnails
+                // The browser handles scaling efficiently via object-fit CSS
                 if (picture.data.length <= MAX_ALBUM_ART_SIZE) {
                     const buffer = Buffer.from(picture.data)
                     albumArt = `data:${picture.format};base64,${buffer.toString('base64')}`
                 } else {
-                    // For massive images (>2MB), we'll use a placeholder
-                    // This prevents extreme IPC payloads but allows standard high-res covers
-                    console.warn(`[MetadataScanner] Skipping large album art (${(picture.data.length / 1024).toFixed(1)}KB) for ${fileName}`)
+                    // For larger images, we skip embedding to keep IPC fast
+                    // Full-res art can be loaded on-demand when viewing song details
                     albumArt = undefined
                 }
             }

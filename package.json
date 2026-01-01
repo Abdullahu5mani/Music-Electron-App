@@ -1,7 +1,7 @@
 {
   "name": "music-sync-app",
   "private": true,
-  "version": "0.1.1",
+  "version": "1.0.0",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/Abdullahu5mani/Music-Electron-App.git"
@@ -11,7 +11,7 @@
   "author": "Abdullahu5mani",
   "scripts": {
     "dev": "vite",
-    "build": "tsc && vite build && electron-builder",
+    "build": "tsc && vite build && electron-builder --config electron-builder.json5",
     "build:web": "tsc && vite build",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
     "preview": "vite preview",

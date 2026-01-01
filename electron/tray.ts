@@ -1,6 +1,7 @@
 import { Tray, Menu, nativeImage, app, BrowserWindow } from 'electron'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import fs from 'node:fs'
 import { createWindow } from './window'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
@@ -93,13 +94,20 @@ export function updateWindowVisibility(_visible: boolean) {
 export function createTray(): Tray {
   // Get the path to the tray icon
   // Windows requires .ico format for system tray icons
-  // In dev: src/assets/logo.ico
-  // In production: the icon is bundled with the app
-  const iconPath = VITE_DEV_SERVER_URL
-    ? path.join(process.env.APP_ROOT, 'src', 'assets', 'logo.ico')
-    : path.join(process.env.APP_ROOT, 'src', 'assets', 'logo.ico')
+  // In development: use src/assets/logo.ico
+  // In production: the icon is bundled in resources/assets/
+  let iconPath: string
+  if (app.isPackaged) {
+    // Production: icon is in resources folder (extraResources)
+    iconPath = path.join(process.resourcesPath, 'assets', 'icons', 'icon.ico')
+  } else {
+    // Development: use src/assets/icons
+    iconPath = path.join(process.env.APP_ROOT, 'src', 'assets', 'icons', 'icon.ico')
+  }
 
   console.log('[Tray] Icon path:', iconPath)
+  console.log('[Tray] Is Packaged:', app.isPackaged)
+  console.log('[Tray] Icon exists:', fs.existsSync(iconPath))
 
   // Create native image from the icon file
   const icon = nativeImage.createFromPath(iconPath)
@@ -107,6 +115,7 @@ export function createTray(): Tray {
   // Check if icon loaded successfully
   if (icon.isEmpty()) {
     console.error('[Tray] Failed to load icon from:', iconPath)
+    console.error('[Tray] Please ensure the icon file exists and is a valid .ico file')
   } else {
     console.log('[Tray] Icon loaded successfully, size:', icon.getSize())
   }

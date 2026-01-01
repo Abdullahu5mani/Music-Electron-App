@@ -1,6 +1,7 @@
 import { BrowserWindow, app } from 'electron'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import fs from 'node:fs'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
@@ -30,10 +31,22 @@ let win: BrowserWindow | null = null
 export function createWindow(): BrowserWindow {
   const isMac = process.platform === 'darwin'
 
-  // Debug: Log the icon path
-  const iconPath = path.join(process.env.APP_ROOT, 'src/assets/logo.ico')
+  // Determine the correct icon path for both development and production
+  // In development: use src/assets/logo.ico
+  // In production: the icon is bundled in resources/assets/
+  let iconPath: string
+  if (app.isPackaged) {
+    // Production: icon is in resources folder (extraResources)
+    iconPath = path.join(process.resourcesPath, 'assets', 'icons', 'icon.ico')
+  } else {
+    // Development: use src/assets/icons
+    iconPath = path.join(process.env.APP_ROOT, 'src', 'assets', 'icons', 'icon.ico')
+  }
+
   console.log('[Window] Icon path:', iconPath)
   console.log('[Window] APP_ROOT:', process.env.APP_ROOT)
+  console.log('[Window] Is Packaged:', app.isPackaged)
+  console.log('[Window] Icon exists:', fs.existsSync(iconPath))
 
   win = new BrowserWindow({
     width: 1228,          // Default width

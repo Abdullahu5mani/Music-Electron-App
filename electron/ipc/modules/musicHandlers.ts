@@ -68,17 +68,31 @@ export function registerMusicHandlers() {
         }
     })
 
+    // Flag to track if a folder selection dialog is already open
+    let isFolderDialogOpen = false
+
     // Handle music folder selection dialog
     ipcMain.handle('select-music-folder', async () => {
-        const result = await dialog.showOpenDialog({
-            properties: ['openDirectory'],
-            title: 'Select Music Folder',
-        })
-
-        if (!result.canceled && result.filePaths.length > 0) {
-            return result.filePaths[0]
+        // Prevent opening multiple dialogs
+        if (isFolderDialogOpen) {
+            console.log('[MusicHandlers] Folder dialog already open, ignoring request')
+            return null
         }
-        return null
+
+        try {
+            isFolderDialogOpen = true
+            const result = await dialog.showOpenDialog({
+                properties: ['openDirectory'],
+                title: 'Select Music Folder',
+            })
+
+            if (!result.canceled && result.filePaths.length > 0) {
+                return result.filePaths[0]
+            }
+            return null
+        } finally {
+            isFolderDialogOpen = false
+        }
     })
 
     // Handle reading metadata for a single file (for in-place updates after tagging)

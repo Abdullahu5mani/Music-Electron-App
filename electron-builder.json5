@@ -5,15 +5,23 @@
   "asar": true,
   "productName": "Music Sync App",
   "directories": {
-    "output": "release/${version}"
+    "output": "release/${version}",
+    "buildResources": "build"
   },
   "files": [
     "dist",
-    "dist-electron",
-    "src/assets/**/*"
+    "dist-electron"
   ],
-  // Icon configuration
-  "icon": "src/assets/logo.ico",
+  // Extra resources are copied outside the ASAR archive for runtime access
+  "extraResources": [
+    {
+      "from": "src/assets",
+      "to": "assets",
+      "filter": ["**/*"]
+    }
+  ],
+  // Icon configuration (used for installer and app icon)
+  "icon": "build/icon.ico",
   // GitHub Releases configuration
   "publish": {
     "provider": "github",
@@ -22,32 +30,47 @@
     "releaseType": "release"
   },
   "mac": {
+    "icon": "build/icon.icns",
     "target": [
-      "dmg"
+      "dmg",
+      "zip"
     ],
-    "artifactName": "${productName}-Mac-${version}-Installer.${ext}"
+    "artifactName": "${productName}-Mac-${version}.${ext}"
   },
   "win": {
+    "icon": "build/icon.ico",
     "target": [
       {
         "target": "nsis",
-        "arch": [
-          "x64"
-        ]
+        "arch": ["x64"]
+      },
+      {
+        "target": "portable",
+        "arch": ["x64"]
       }
     ],
-    "artifactName": "${productName}-Windows-${version}-Setup.${ext}"
+    "artifactName": "${productName}-Windows-${version}-${arch}.${ext}"
+  },
+  "portable": {
+    "artifactName": "${productName}-Windows-${version}-Portable.${ext}"
   },
   "nsis": {
     "oneClick": false,
     "perMachine": false,
     "allowToChangeInstallationDirectory": true,
-    "deleteAppDataOnUninstall": false
+    "deleteAppDataOnUninstall": false,
+    "installerIcon": "build/icon.ico",
+    "uninstallerIcon": "build/icon.ico",
+    "installerHeaderIcon": "build/icon.ico",
+    "artifactName": "${productName}-Windows-${version}-Setup.${ext}"
   },
   "linux": {
+    "icon": "build/icon.png",
     "target": [
-      "AppImage"
+      "AppImage",
+      "tar.gz"
     ],
-    "artifactName": "${productName}-Linux-${version}.${ext}"
+    "artifactName": "${productName}-Linux-${version}.${ext}",
+    "category": "Audio"
   }
 }

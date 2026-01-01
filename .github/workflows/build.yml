@@ -48,21 +48,61 @@ jobs:
 
       - name: Run Tests
         run: npm run test:run
-        continue-on-error: true  # Allow build to continue even if tests fail (remove this once all tests pass)
+        continue-on-error: true  # Allow build to continue even if tests fail
 
       - name: Build React (Vite)
         run: npm run build:web
 
+      # Ensure build folder with icons exists (for electron-builder)
+      - name: Prepare build resources
+        run: |
+          mkdir -p build
+          cp src/assets/icons/icon.ico build/ || true
+          cp src/assets/icons/icon.icns build/ || true
+          cp src/assets/icons/256x256.png build/icon.png || true
+        shell: bash
+
       # Build only (for regular commits to main)
       - name: Build Electron App
         if: ${{ !startsWith(github.ref, 'refs/tags/') }}
-        run: npx electron-builder --publish never
+        run: npx electron-builder --config electron-builder.json5 --publish never
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       # Build AND publish to GitHub Releases (for version tags)
       - name: Build & Release Electron App
         if: ${{ startsWith(github.ref, 'refs/tags/') }}
-        run: npx electron-builder --publish always
+        run: npx electron-builder --config electron-builder.json5 --publish always
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # Upload artifacts for non-release builds (so they can be downloaded from Actions)
+      - name: Upload Windows Artifacts
+        if: ${{ matrix.os == 'windows-latest' && !startsWith(github.ref, 'refs/tags/') }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-build
+          path: |
+            release/**/*.exe
+            release/**/*.exe.blockmap
+          retention-days: 7
+
+      - name: Upload macOS Artifacts
+        if: ${{ matrix.os == 'macos-latest' && !startsWith(github.ref, 'refs/tags/') }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-build
+          path: |
+            release/**/*.dmg
+            release/**/*.zip
+          retention-days: 7
+
+      - name: Upload Linux Artifacts
+        if: ${{ matrix.os == 'ubuntu-latest' && !startsWith(github.ref, 'refs/tags/') }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-build
+          path: |
+            release/**/*.AppImage
+            release/**/*.tar.gz
+          retention-days: 7

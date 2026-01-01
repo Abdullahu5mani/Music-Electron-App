@@ -84,16 +84,30 @@ export function registerSystemHandlers() {
     }
   })
 
+  // Flag to track if a folder selection dialog is already open
+  let isDownloadFolderDialogOpen = false
+
   // Handle download folder selection dialog
   ipcMain.handle('select-download-folder', async () => {
-    const result = await dialog.showOpenDialog({
-      properties: ['openDirectory'],
-      title: 'Select Download Folder',
-    })
-    if (!result.canceled && result.filePaths.length > 0) {
-      return result.filePaths[0]
+    // Prevent opening multiple dialogs
+    if (isDownloadFolderDialogOpen) {
+      console.log('[SystemHandlers] Download folder dialog already open, ignoring request')
+      return null
     }
-    return null
+
+    try {
+      isDownloadFolderDialogOpen = true
+      const result = await dialog.showOpenDialog({
+        properties: ['openDirectory'],
+        title: 'Select Download Folder',
+      })
+      if (!result.canceled && result.filePaths.length > 0) {
+        return result.filePaths[0]
+      }
+      return null
+    } finally {
+      isDownloadFolderDialogOpen = false
+    }
   })
 
   // ==========================================

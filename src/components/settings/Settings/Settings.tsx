@@ -44,6 +44,7 @@ export function Settings({
   const [installProgress, setInstallProgress] = useState<{ message: string; percentage: number } | null>(null)
   const [whisperModels, setWhisperModels] = useState<WhisperModel[]>([])
   const [selectedWhisperModel, setSelectedWhisperModel] = useState<WhisperModel | null>(null)
+  const [isFolderDialogOpen, setIsFolderDialogOpen] = useState(false)
 
   // Load settings when modal opens
   useEffect(() => {
@@ -139,7 +140,9 @@ export function Settings({
   }
 
   const handleSelectMusicFolder = async () => {
+    if (isFolderDialogOpen) return // Prevent multiple dialogs
     try {
+      setIsFolderDialogOpen(true)
       const folderPath = await window.electronAPI?.selectMusicFolder()
       if (folderPath) {
         setSettings(prev => ({ ...prev, musicFolderPath: folderPath }))
@@ -147,11 +150,15 @@ export function Settings({
     } catch (err) {
       setError('Failed to select music folder')
       console.error('Error selecting music folder:', err)
+    } finally {
+      setIsFolderDialogOpen(false)
     }
   }
 
   const handleSelectDownloadFolder = async () => {
+    if (isFolderDialogOpen) return // Prevent multiple dialogs
     try {
+      setIsFolderDialogOpen(true)
       const folderPath = await window.electronAPI?.selectDownloadFolder()
       if (folderPath) {
         setSettings(prev => ({ ...prev, downloadFolderPath: folderPath }))
@@ -159,6 +166,8 @@ export function Settings({
     } catch (err) {
       setError('Failed to select download folder')
       console.error('Error selecting download folder:', err)
+    } finally {
+      setIsFolderDialogOpen(false)
     }
   }
 
@@ -238,8 +247,9 @@ export function Settings({
                     type="button"
                     onClick={handleSelectMusicFolder}
                     className="settings-select-button"
+                    disabled={isFolderDialogOpen}
                   >
-                    Browse
+                    {isFolderDialogOpen ? 'Selecting...' : 'Browse'}
                   </button>
                 </div>
               </div>
@@ -261,8 +271,9 @@ export function Settings({
                     type="button"
                     onClick={handleSelectDownloadFolder}
                     className="settings-select-button"
+                    disabled={isFolderDialogOpen}
                   >
-                    Browse
+                    {isFolderDialogOpen ? 'Selecting...' : 'Browse'}
                   </button>
                 </div>
               </div>

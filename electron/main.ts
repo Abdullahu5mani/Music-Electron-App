@@ -4,6 +4,12 @@ import { registerIpcHandlers } from './ipc/handlers'
 import { createTray, updateWindowVisibility } from './tray'
 import { initializeDatabase, closeDatabase } from './metadataCache'
 
+// Set the AppUserModelId early - CRITICAL for Windows taskbar icon
+// This must match the appId in electron-builder.json5
+if (process.platform === 'win32') {
+  app.setAppUserModelId('com.abdullahu5mani.music-sync-app')
+}
+
 // Remove the menu bar completely
 Menu.setApplicationMenu(null)
 
