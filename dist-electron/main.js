@@ -1,2 +1,2 @@
 import "electron";
-import "./main-CgOS4TOR.js";
+import "./main-Dvn7Ozni.js";

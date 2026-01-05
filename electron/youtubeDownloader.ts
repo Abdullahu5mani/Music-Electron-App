@@ -15,6 +15,34 @@ const DOWNLOAD_DELAY_MS = 10000 // 10 seconds
 // Track state
 let lastDownloadTime: number = 0
 let activeDownloadController: AbortController | null = null
+let activeOutputPath: string | null = null
+
+/**
+ * Cleans up partial download files from the output directory
+ */
+function cleanupPartialFiles(outputPath: string): void {
+  try {
+    if (!fs.existsSync(outputPath)) return
+
+    const files = fs.readdirSync(outputPath)
+    const partialExtensions = ['.part', '.temp', '.ytdl', '.part-Frag']
+
+    for (const file of files) {
+      const isPartial = partialExtensions.some(ext => file.includes(ext))
+      if (isPartial) {
+        const filePath = path.join(outputPath, file)
+        // Only delete recent files (within last 5 minutes) to be safe
+        const stats = fs.statSync(filePath)
+        if (Date.now() - stats.mtimeMs < 300000) {
+          fs.unlinkSync(filePath)
+          console.log(`[Cancel] Cleaned up partial file: ${file}`)
+        }
+      }
+    }
+  } catch (error) {
+    console.error('[Cancel] Error cleaning up partial files:', error)
+  }
+}
 
 /**
  * Cancels the currently active YouTube download
@@ -25,11 +53,19 @@ export function cancelActiveDownload(): boolean {
     try {
       activeDownloadController.abort()
       activeDownloadController = null
-      console.log('Successfully called abort() on active download controller')
+
+      // Clean up any partial files from the output directory
+      if (activeOutputPath) {
+        cleanupPartialFiles(activeOutputPath)
+        activeOutputPath = null
+      }
+
+      console.log('Successfully cancelled download and cleaned up partial files')
       return true
     } catch (error) {
       console.error('Failed to abort download:', error)
       activeDownloadController = null
+      activeOutputPath = null
     }
   } else {
     console.log('No active download controller found to cancel')
@@ -540,6 +576,7 @@ export async function downloadYouTubeAudio(
 
       // Create a new AbortController for this download
       activeDownloadController = new AbortController()
+      activeOutputPath = options.outputPath
 
       console.log(`[YouTube] Starting download for: ${options.url}`)
 
@@ -657,6 +694,7 @@ export async function downloadYouTubeAudio(
           activeDownloadController.signal.removeEventListener('abort', abortHandler)
           activeDownloadController = null
         }
+        activeOutputPath = null
 
         // Standardize error message
         resolve({
@@ -675,6 +713,7 @@ export async function downloadYouTubeAudio(
             activeDownloadController.signal.removeEventListener('abort', abortHandler)
             activeDownloadController = null
           }
+          activeOutputPath = null
           // With --ignore-errors, yt-dlp might exit with code 1 if some videos failed
           // but others succeeded. We consider it "done" and check for files afterwards.
           if (code === 0 || code === 1 || code === null) {
