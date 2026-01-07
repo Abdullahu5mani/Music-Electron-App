@@ -39,6 +39,7 @@ export default defineConfig({
         entry: 'electron/main.ts',
         vite: {
           build: {
+            sourcemap: true, // Enable source maps for debugging
             rollupOptions: {
               // Externalize native modules and packages that need special handling
               external: ['taglib-wasm', 'axios', 'better-sqlite3'],
