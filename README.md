@@ -106,11 +106,11 @@ The output file will be in the `dist/` folder.
 
 ---
 
-## 🏗️ Technical Architecture
+## Technical Architecture
 
 This application leverages several external binaries and APIs to provide its advanced features. All binaries are **automatically downloaded on first use** and managed by the application.
 
-### 📦 Binary Management
+### Binary Management
 
 The app stores downloaded binaries in the user's app data directory:
 - **Windows**: `%APPDATA%\Music-Electron-App\`
@@ -121,7 +121,7 @@ Each binary is downloaded from its official GitHub releases and is platform/arch
 
 ---
 
-## 📥 yt-dlp Integration
+## yt-dlp Integration
 
 ### What is yt-dlp?
 [yt-dlp](https://github.com/yt-dlp/yt-dlp) is a feature-rich command-line audio/video downloader forked from youtube-dl. It supports downloading from YouTube and many other sites.
@@ -159,7 +159,7 @@ To avoid rate limiting from YouTube, the app enforces a **10-second delay** betw
 
 ---
 
-## 🎤 OpenAI Whisper Integration
+## OpenAI Whisper Integration
 
 ### What is Whisper?
 [Whisper.cpp](https://github.com/ggml-org/whisper.cpp) is a high-performance C/C++ port of OpenAI's Whisper automatic speech recognition model. The app uses it to generate lyrics by transcribing audio locally.
@@ -204,7 +204,7 @@ Whisper requires a model file for transcription. Available models (downloaded fr
 
 ---
 
-## 🔍 Song Identification Pipeline
+## Song Identification Pipeline
 
 The app identifies unknown songs using **audio fingerprinting** and **metadata lookup**. This is a multi-step process involving several APIs.
 
@@ -260,7 +260,7 @@ The app identifies unknown songs using **audio fingerprinting** and **metadata l
 
 ---
 
-### 🎵 Step 1: Audio Fingerprinting (Chromaprint/fpcalc)
+### Step 1: Audio Fingerprinting (Chromaprint/fpcalc)
 
 **What is it?**  
 [Chromaprint](https://acoustid.org/chromaprint) is an audio fingerprinting library that generates a unique identifier from audio content. The `fpcalc` binary is the command-line tool.
@@ -294,7 +294,7 @@ fpcalc -json "/path/to/audio.mp3"
 
 ---
 
-### 🔎 Step 2: AcoustID API Lookup
+### Step 2: AcoustID API Lookup
 
 **API Endpoint**: `https://api.acoustid.org/v2/lookup`
 
@@ -330,7 +330,7 @@ fpcalc -json "/path/to/audio.mp3"
 
 ---
 
-### 📚 Step 3: MusicBrainz Metadata Lookup
+### Step 3: MusicBrainz Metadata Lookup
 
 **API**: MusicBrainz Web Service v2  
 **Library Used**: [`musicbrainz-api`](https://www.npmjs.com/package/musicbrainz-api)
@@ -362,7 +362,7 @@ When a song appears on multiple releases (original album, compilations, soundtra
 
 ---
 
-### 🖼️ Step 4: Cover Art Archive
+### Step 4: Cover Art Archive
 
 **API Endpoint**: `https://coverartarchive.org/`
 
@@ -391,7 +391,7 @@ The app tries multiple URLs in order until one succeeds:
 
 ---
 
-## 🌐 API Summary
+## API Summary
 
 | Service | Endpoint | Rate Limit | Purpose |
 |---------|----------|------------|---------|
