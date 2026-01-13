@@ -40,7 +40,7 @@ global.window.electronAPI = {
   getWhisperModels: vi.fn().mockResolvedValue([]),
   getSelectedWhisperModel: vi.fn().mockResolvedValue({ id: 'tiny', name: 'Tiny' }),
   setWhisperModel: vi.fn().mockResolvedValue({ success: true }),
-  processLyrics: vi.fn().mockResolvedValue({ success: true, message: 'Processed', lyrics: 'Test lyrics' }),
+  processLyrics: vi.fn().mockResolvedValue({ success: true, message: 'Processed', lyrics: 'Test lyrics', segments: [{ start: 0, end: 5, text: 'Test lyrics' }] }),
   minimizeWindow: vi.fn(),
   maximizeWindow: vi.fn(),
   closeWindow: vi.fn(),

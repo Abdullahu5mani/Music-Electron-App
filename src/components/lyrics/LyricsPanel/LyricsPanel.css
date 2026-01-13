@@ -1,9 +1,11 @@
 .lyrics-panel-overlay {
     position: fixed;
-    top: 0;
+    top: 32px;
+    /* Below title bar */
     left: 0;
     right: 0;
-    bottom: 0;
+    bottom: 90px;
+    /* Above playback bar - don't block controls */
     background: rgba(0, 0, 0, 0);
     z-index: 1000;
     pointer-events: none;
@@ -127,6 +129,56 @@
     color: rgba(255, 255, 255, 0.9);
     white-space: pre-wrap;
     word-wrap: break-word;
+}
+
+/* Synced Lyrics Container */
+.synced-lyrics {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    padding: 40px 0;
+}
+
+/* Individual lyrics line */
+.lyrics-line {
+    font-size: 1.15rem;
+    line-height: 1.6;
+    padding: 8px 16px;
+    border-radius: 8px;
+    transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+    cursor: default;
+}
+
+/* Future lines - dimmed and waiting */
+.lyrics-line.future {
+    color: rgba(255, 255, 255, 0.35);
+    transform: translateX(0);
+}
+
+/* Past lines - slightly dimmed */
+.lyrics-line.past {
+    color: rgba(255, 255, 255, 0.5);
+    transform: translateX(0);
+}
+
+/* Active line - highlighted with glow effect */
+.lyrics-line.active {
+    color: #fff;
+    font-weight: 600;
+    font-size: 1.25rem;
+    background: linear-gradient(135deg, rgba(102, 126, 234, 0.25) 0%, rgba(118, 75, 162, 0.25) 100%);
+    border-left: 3px solid #667eea;
+    box-shadow:
+        0 0 20px rgba(102, 126, 234, 0.3),
+        inset 0 0 20px rgba(102, 126, 234, 0.05);
+    transform: scale(1.02);
+    text-shadow: 0 0 20px rgba(102, 126, 234, 0.5);
+}
+
+/* Subtle hover effect for all lines */
+.lyrics-line:hover:not(.active) {
+    color: rgba(255, 255, 255, 0.7);
+    background: rgba(255, 255, 255, 0.03);
 }
 
 /* Processing state */

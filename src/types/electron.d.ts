@@ -181,7 +181,12 @@ export interface ElectronAPI {
   fileWatcherStatus: () => Promise<{ isWatching: boolean; watchPath: string | null }>
   fileWatcherIgnore: (filePath: string) => Promise<{ success: boolean }>
   onFileWatcherEvent: (callback: (event: { type: 'added' | 'removed' | 'changed'; files: string[] }) => void) => () => void
-  processLyrics: (filePath: string) => Promise<{ success: boolean; message: string; lyrics?: string }>
+  processLyrics: (filePath: string) => Promise<{
+    success: boolean;
+    message: string;
+    lyrics?: string;
+    segments?: Array<{ start: number; end: number; text: string }>;
+  }>
   onLyricsProgress: (callback: (progress: { step: string; percentage: number }) => void) => () => void
 }
 

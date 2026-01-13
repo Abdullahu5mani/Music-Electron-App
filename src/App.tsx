@@ -185,6 +185,7 @@ function App() {
   // Lyrics panel state
   const [showLyricsPanel, setShowLyricsPanel] = useState(false)
   const [lyricsText, setLyricsText] = useState<string | null>(null)
+  const [lyricsSegments, setLyricsSegments] = useState<Array<{ start: number; end: number; text: string }>>([])
   const [lyricsProgress, setLyricsProgress] = useState<{ step: string; percentage: number } | null>(null)
   const [lyricsSongName, setLyricsSongName] = useState('')
   const [isProcessingLyrics, setIsProcessingLyrics] = useState(false)
@@ -413,6 +414,7 @@ function App() {
     setShowLyricsPanel(true)
     setLyricsSongName(songName)
     setLyricsText(null)
+    setLyricsSegments([])
     setIsProcessingLyrics(true)
     setLyricsProgress({ step: 'Starting...', percentage: 0 })
 
@@ -420,6 +422,7 @@ function App() {
       const result = await window.electronAPI.processLyrics(filePath)
       if (result.success && result.lyrics) {
         setLyricsText(result.lyrics)
+        setLyricsSegments(result.segments || [])
       } else {
         showToastNotification(`Failed: ${result.message}`, 'error')
       }
@@ -597,6 +600,8 @@ function App() {
         onClose={() => setShowLyricsPanel(false)}
         songName={lyricsSongName}
         lyrics={lyricsText}
+        segments={lyricsSegments}
+        currentTime={currentTime}
         progress={lyricsProgress}
         isProcessing={isProcessingLyrics}
       />

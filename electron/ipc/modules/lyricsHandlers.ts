@@ -4,10 +4,27 @@ import fs from 'fs'
 import os from 'os'
 import { spawn } from 'child_process'
 import { isWhisperInstalled, getWhisperPath, getWhisperModelPath } from '../../whisperManager'
+import { getCachedLyrics, cacheLyrics } from '../../lyricsCache'
 import { execFile } from 'child_process'
 import { promisify } from 'util'
 
 const execFileAsync = promisify(execFile)
+
+/**
+ * Parse Whisper timestamp format (HH:MM:SS,mmm or HH:MM:SS.mmm) to seconds
+ */
+function parseTimestamp(timestamp: string): number {
+    // Handle formats like "00:00:00,000" or "00:00:00.000"
+    const match = timestamp.match(/(\d{2}):(\d{2}):(\d{2})[,.](\d{3})/)
+    if (!match) return 0
+
+    const hours = parseInt(match[1], 10)
+    const minutes = parseInt(match[2], 10)
+    const seconds = parseInt(match[3], 10)
+    const milliseconds = parseInt(match[4], 10)
+
+    return hours * 3600 + minutes * 60 + seconds + milliseconds / 1000
+}
 
 // Temp directory for lyrics processing
 const TEMP_DIR_NAME = 'music-app-lyrics'
@@ -83,7 +100,22 @@ export function registerLyricsHandlers() {
 
         try {
             console.log('[LyricsHandler] Processing:', fileName)
-            sendProgress('Starting...', 0)
+            sendProgress('Checking cache...', 0)
+
+            // Check cache first
+            const cached = getCachedLyrics(filePath)
+            if (cached) {
+                console.log('[LyricsHandler] Using cached lyrics for:', fileName)
+                sendProgress('Complete!', 100)
+                return {
+                    success: true,
+                    message: `Lyrics loaded from cache for: ${fileName}`,
+                    lyrics: cached.lyrics,
+                    segments: cached.segments
+                }
+            }
+
+            sendProgress('Starting...', 5)
 
             // Check if whisper is installed
             const whisperReady = await isWhisperInstalled()
@@ -195,31 +227,72 @@ export function registerLyricsHandlers() {
             const whisperPath = getWhisperPath()
             const modelPath = getWhisperModelPath()
 
+            // Output JSON file path (whisper adds .json extension)
+            const jsonOutputPath = wavPath + '.json'
+
             const whisperArgs = [
                 '-m', modelPath,
                 '-f', wavPath,
                 '-l', 'en',
-                '--no-timestamps',
+                '-oj',  // Output JSON with timestamps
                 '--prompt', 'This is a song. Transcribe the sung lyrics word for word.'
             ]
 
-            const { stdout, stderr } = await execFileAsync(whisperPath, whisperArgs, {
+            await execFileAsync(whisperPath, whisperArgs, {
                 timeout: 300000,
                 maxBuffer: 50 * 1024 * 1024
             })
 
-            // Get the transcription text
-            const lyrics = (stdout || stderr).trim()
+            // Parse the JSON output file
+            let lyrics = ''
+            let segments: Array<{ start: number; end: number; text: string }> = []
+
+            if (fs.existsSync(jsonOutputPath)) {
+                try {
+                    const jsonContent = fs.readFileSync(jsonOutputPath, 'utf-8')
+                    const whisperOutput = JSON.parse(jsonContent)
+
+                    // Whisper JSON format: { transcription: [{ timestamps: { from, to }, text }] }
+                    if (whisperOutput.transcription && Array.isArray(whisperOutput.transcription)) {
+                        segments = whisperOutput.transcription.map((seg: any) => ({
+                            start: parseTimestamp(seg.timestamps?.from || '00:00:00,000'),
+                            end: parseTimestamp(seg.timestamps?.to || '00:00:00,000'),
+                            text: (seg.text || '').trim()
+                        })).filter((seg: any) => seg.text.length > 0)
+
+                        // Build full lyrics text from segments
+                        lyrics = segments.map(s => s.text).join('\n')
+                    }
+
+                    console.log('[LyricsHandler] Parsed', segments.length, 'timed segments')
+                } catch (parseError) {
+                    console.error('[LyricsHandler] Failed to parse JSON output:', parseError)
+                }
+
+                // Clean up JSON output file
+                safeDeleteFile(jsonOutputPath)
+            }
 
             // Clean up temp WAV file
             safeDeleteFile(wavPath)
 
             console.log('[LyricsHandler] Step 2 complete: Transcription finished')
             console.log('[LyricsHandler] Lyrics length:', lyrics.length, 'characters')
+            console.log('[LyricsHandler] Segments count:', segments.length)
 
             sendProgress('Complete!', 100)
 
-            return { success: true, message: `Lyrics generated for: ${fileName}`, lyrics }
+            // Cache the results for future use
+            if (lyrics.length > 0) {
+                cacheLyrics(filePath, lyrics, segments)
+            }
+
+            return {
+                success: true,
+                message: `Lyrics generated for: ${fileName}`,
+                lyrics,
+                segments
+            }
 
         } catch (error) {
             console.error('[LyricsHandler] Error:', error)

@@ -1,3 +1,3 @@
 import "electron";
-import "./main-DBzhHrX_.js";
+import "./main-CVpmvcGH.js";
 //# sourceMappingURL=main.js.map
